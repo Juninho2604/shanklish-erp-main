@@ -179,7 +179,6 @@ export async function registerPurchase(input: PurchaseInput): Promise<PurchaseRe
                     inventoryItemId: input.inventoryItemId,
                     costPerUnit: weightedCost,
                     currency: input.currency || 'USD',
-                    supplierId: input.supplierId,
                     reason: `Compra - Nuevo costo promedio ponderado`,
                     createdById: input.userId,
                 },
