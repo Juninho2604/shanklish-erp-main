@@ -7,10 +7,13 @@
  * - Salidas por venta
  */
 
-import { PrismaClient, MovementType, UnitOfMeasure } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+// Tipos locales (en vez de importar de Prisma)
+type MovementType = 'PURCHASE' | 'SALE' | 'PRODUCTION_IN' | 'PRODUCTION_OUT' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'TRANSFER' | 'WASTE';
+type UnitOfMeasure = 'KG' | 'G' | 'L' | 'ML' | 'UNIT' | 'PORTION';
 
 // ============================================================================
 // TIPOS
@@ -117,7 +120,7 @@ export async function registerPurchase(input: PurchaseInput): Promise<PurchaseRe
 
         // 4. Calcular nuevo costo promedio ponderado
         const currentCost = item.costHistory[0];
-        const currentStock = item.stockLevels[0]?.currentStock || new Decimal(0);
+        const currentStock = item.stockLevels[0]?.currentStock || 0;
         const currentCostPerUnit = currentCost ? Number(currentCost.costPerUnit) : 0;
 
         // Promedio ponderado: (stockActual * costoActual + cantidadNueva * costoNuevo) / stockTotal
@@ -240,7 +243,7 @@ export async function registerSale(input: SaleInput): Promise<SaleResult> {
             return { success: false, message: 'Item de inventario no encontrado' };
         }
 
-        const currentStock = item.stockLevels[0]?.currentStock || new Decimal(0);
+        const currentStock = item.stockLevels[0]?.currentStock || 0;
 
         // 2. Verificar stock suficiente
         if (Number(currentStock) < input.quantity) {

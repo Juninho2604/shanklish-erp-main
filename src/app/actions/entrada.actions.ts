@@ -8,7 +8,9 @@
 
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
-import { MovementType, UnitOfMeasure } from '@prisma/client';
+
+// Tipos locales
+type UnitOfMeasure = 'KG' | 'G' | 'L' | 'ML' | 'UNIT' | 'PORTION';
 
 // ============================================================================
 // TIPOS
@@ -17,7 +19,7 @@ import { MovementType, UnitOfMeasure } from '@prisma/client';
 export interface EntradaMercanciaInput {
     inventoryItemId: string;
     quantity: number;
-    unit: UnitOfMeasure;
+    unit: string;
     unitCost: number;
     currency?: string;
     supplierId?: string;

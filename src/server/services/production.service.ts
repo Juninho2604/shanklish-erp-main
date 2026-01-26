@@ -7,10 +7,13 @@
  * - Calcular requerimientos de ingredientes
  */
 
-import { PrismaClient, ProductionOrderStatus, UnitOfMeasure } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+// Tipos locales
+type ProductionOrderStatus = 'DRAFT' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+type UnitOfMeasure = 'KG' | 'G' | 'L' | 'ML' | 'UNIT' | 'PORTION';
 
 // ============================================================================
 // TIPOS
@@ -38,7 +41,7 @@ export interface IngredientRequirement {
     itemName: string;
     requiredQuantity: number;    // Cantidad neta necesaria
     grossQuantity: number;       // Cantidad bruta (con merma)
-    unit: UnitOfMeasure;
+    unit: string;
     availableStock: number;
     sufficient: boolean;
     deficit: number;
@@ -271,7 +274,7 @@ export async function completeProduction(
             itemId: string;
             itemName: string;
             quantity: number;
-            unit: UnitOfMeasure;
+            unit: string;
             unitCost: number;
             totalCost: number;
         }[] = [];
@@ -342,10 +345,9 @@ export async function completeProduction(
                         inventoryItemId: ing.itemId,
                         movementType: 'PRODUCTION_OUT',
                         quantity: ing.quantity,
-                        unit: ing.unit,
+                        unit: ing.unit as any,
                         unitCost: ing.unitCost,
                         totalCost: ing.totalCost,
-                        productionOrderId: order.id,
                         reason: `Producción: ${order.orderNumber}`,
                         createdById: input.userId,
                     },
