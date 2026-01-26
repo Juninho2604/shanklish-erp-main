@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadToStorage } from '@/lib/supabase';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 
-// Detectar si estamos en producción (Vercel)
-const IS_PRODUCTION = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
-
-// Directorio local para desarrollo
-const LOCAL_UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'notas-entrega');
+// Directorio donde se guardan los uploads
+const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'notas-entrega');
 
 export async function POST(request: NextRequest) {
     try {
@@ -41,63 +37,30 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Crear directorio si no existe
+        if (!existsSync(UPLOAD_DIR)) {
+            await mkdir(UPLOAD_DIR, { recursive: true });
+        }
+
         // Generar nombre único
         const timestamp = Date.now();
         const extension = file.name.split('.').pop() || 'jpg';
         const sanitizedRef = referenceNumber?.replace(/[^a-zA-Z0-9]/g, '-') || 'sin-ref';
         const fileName = `nota-${sanitizedRef}-${timestamp}.${extension}`;
+        const filePath = path.join(UPLOAD_DIR, fileName);
 
-        let publicUrl: string;
+        // Guardar archivo
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        await writeFile(filePath, buffer);
 
-        if (IS_PRODUCTION) {
-            // =========================================
-            // PRODUCCIÓN: Usar Supabase Storage
-            // =========================================
-            console.log('📦 Subiendo a Supabase Storage...');
+        const publicUrl = `/uploads/notas-entrega/${fileName}`;
 
-            const result = await uploadToStorage(file, 'notas', fileName.replace(`.${extension}`, ''));
-
-            if (!result.success || !result.url) {
-                return NextResponse.json(
-                    { success: false, error: result.error || 'Error al subir a Supabase' },
-                    { status: 500 }
-                );
-            }
-
-            publicUrl = result.url;
-
-            console.log('✅ Archivo subido a Supabase:', {
-                fileName,
-                url: publicUrl,
-                size: file.size,
-            });
-
-        } else {
-            // =========================================
-            // DESARROLLO: Guardar localmente
-            // =========================================
-            console.log('📁 Guardando localmente...');
-
-            // Crear directorio si no existe
-            if (!existsSync(LOCAL_UPLOAD_DIR)) {
-                await mkdir(LOCAL_UPLOAD_DIR, { recursive: true });
-            }
-
-            const filePath = path.join(LOCAL_UPLOAD_DIR, fileName);
-
-            // Guardar archivo
-            const bytes = await file.arrayBuffer();
-            const buffer = Buffer.from(bytes);
-            await writeFile(filePath, buffer);
-
-            publicUrl = `/uploads/notas-entrega/${fileName}`;
-
-            console.log('✅ Archivo guardado localmente:', {
-                fileName,
-                path: publicUrl,
-                size: file.size,
-            });
-        }
+        console.log('✅ Archivo guardado:', {
+            fileName,
+            size: file.size,
+            path: publicUrl,
+        });
 
         return NextResponse.json({
             success: true,
@@ -107,7 +70,6 @@ export async function POST(request: NextRequest) {
                 url: publicUrl,
                 size: file.size,
                 type: file.type,
-                storage: IS_PRODUCTION ? 'supabase' : 'local',
             },
         });
 
@@ -120,6 +82,5 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// Configuración para archivos grandes (Next.js 13+)
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
