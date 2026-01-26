@@ -247,7 +247,6 @@ export async function completeProduction(
                         },
                     },
                 },
-                outputItem: true,
             },
         });
 
@@ -441,7 +440,7 @@ export async function completeProduction(
 
         return {
             success: true,
-            message: `Producción completada: ${input.actualQuantity} ${order.unit} de ${order.outputItem.name}`,
+            message: `Producción completada: ${input.actualQuantity} ${order.unit} de ${order.recipe.outputItem.name}`,
             productionOrder: {
                 id: result.id,
                 orderNumber: result.orderNumber,
@@ -454,7 +453,7 @@ export async function completeProduction(
                 unit: i.unit,
             })),
             productAdded: {
-                itemName: order.outputItem.name,
+                itemName: order.recipe.outputItem.name,
                 quantity: input.actualQuantity,
                 unit: order.unit,
             },
