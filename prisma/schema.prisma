@@ -1,11 +1,8 @@
 // ============================================================================
 // SHANKLISH CARACAS ERP - PRISMA SCHEMA
 // ============================================================================
-// Diseñado para manejar:
-// - Jerarquía de usuarios con roles y permisos granulares
-// - Inventario multi-nivel (Insumos, Sub-recetas, Productos)
-// - Recetas recursivas (BOM - Bill of Materials)
-// - Histórico de costos para COGS en tiempo real
+// Para LOCAL: DATABASE_URL="file:./dev.db" (SQLite no funciona, usar PostgreSQL local)
+// Para VERCEL: DATABASE_URL con Supabase connection string
 // ============================================================================
 
 generator client {
@@ -15,584 +12,237 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")  // Para migraciones con Supabase pooling
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================================
-// ENUMS
-// ============================================================================
-
-enum UserRole {
-  OWNER          // Nivel 1: Dueños - Acceso total
-  AUDITOR        // Nivel 2: Solo lectura, auditoría
-  ADMIN_MANAGER  // Nivel 3: Gerente Administrativo
-  OPS_MANAGER    // Nivel 4: Gerente Operativo
-  HR_MANAGER     // Nivel 5: RRHH
-  CHEF           // Nivel 6: Chef/Cocinero
-  AREA_LEAD      // Nivel 7: Jefe de Área/Cocina
-}
-
-enum InventoryItemType {
-  RAW_MATERIAL   // Insumos base (harina, leche, especias)
-  SUB_RECIPE     // Productos intermedios (salsas, quesos base, masas)
-  FINISHED_GOOD  // Productos finales de venta
-}
-
-enum UnitOfMeasure {
-  // Peso
-  KG             // Kilogramos
-  G              // Gramos
-  LB             // Libras
-  OZ             // Onzas
-  
-  // Volumen
-  L              // Litros
-  ML             // Mililitros
-  GAL            // Galones
-  
-  // Unidades
-  UNIT           // Unidad individual
-  DOZEN          // Docena
-  
-  // Otros
-  PORTION        // Porción
-}
-
-enum ProductionOrderStatus {
-  DRAFT          // Borrador
-  PENDING        // Pendiente de aprobación
-  APPROVED       // Aprobado
-  IN_PROGRESS    // En producción
-  COMPLETED      // Completado
-  CANCELLED      // Cancelado
-}
-
-enum MovementType {
-  PURCHASE       // Compra/entrada
-  PRODUCTION_IN  // Entrada por producción
-  PRODUCTION_OUT // Salida por producción (uso en receta)
-  SALE           // Venta
-  WASTE          // Merma/desperdicio
-  ADJUSTMENT_IN  // Ajuste positivo de inventario
-  ADJUSTMENT_OUT // Ajuste negativo de inventario
-  TRANSFER       // Transferencia entre ubicaciones
-}
-
-// ============================================================================
-// USERS & AUTHENTICATION
+// USUARIOS Y AUTENTICACIÓN
 // ============================================================================
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  emailVerified   DateTime?
-  passwordHash    String
-  firstName       String
-  lastName        String
-  role            UserRole  @default(AREA_LEAD)
-  isActive        Boolean   @default(true)
-  avatarUrl       String?
-  phone           String?
-  
-  // Área asignada (para AREA_LEAD y CHEF)
-  areaId          String?
-  area            Area?     @relation(fields: [areaId], references: [id])
-  
-  // Auditoría
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  createdById     String?
-  createdBy       User?     @relation("UserCreatedBy", fields: [createdById], references: [id])
-  usersCreated    User[]    @relation("UserCreatedBy")
-  
-  // Sesiones
-  sessions        Session[]
-  
-  // Relaciones de actividad
-  auditLogs       AuditLog[]
-  recipesCreated  Recipe[]          @relation("RecipeCreatedBy")
-  recipesApproved Recipe[]          @relation("RecipeApprovedBy")
-  productionOrders ProductionOrder[] @relation("ProductionCreatedBy")
-  productionApprovals ProductionOrder[] @relation("ProductionApprovedBy")
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  firstName     String
+  lastName      String
+  role          String    @default("CHEF") // OWNER, AUDITOR, ADMIN_MANAGER, OPS_MANAGER, CHEF, AREA_LEAD
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relaciones
   inventoryMovements InventoryMovement[]
-  costHistoryEntries CostHistory[]
+  costHistories      CostHistory[]
+  productionOrders   ProductionOrder[]
 
   @@index([email])
   @@index([role])
-  @@index([areaId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
 }
 
 // ============================================================================
-// AREAS / LOCATIONS
+// ÁREAS DE TRABAJO
 // ============================================================================
 
 model Area {
-  id          String    @id @default(cuid())
-  name        String    @unique  // "Cocina Principal", "Pastelería", "Almacén Seco"
+  id          String   @id @default(cuid())
+  name        String
   description String?
-  isActive    Boolean   @default(true)
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
   // Relaciones
-  users       User[]
   inventoryLocations InventoryLocation[]
-
-  @@index([name])
 }
 
 // ============================================================================
-// SUPPLIERS (Proveedores)
-// ============================================================================
-
-model Supplier {
-  id            String    @id @default(cuid())
-  name          String
-  contactName   String?
-  email         String?
-  phone         String?
-  address       String?
-  taxId         String?   // RIF en Venezuela
-  notes         String?
-  isActive      Boolean   @default(true)
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relaciones
-  inventoryItems InventoryItem[]
-  purchaseOrders PurchaseOrder[]
-  costHistory    CostHistory[]
-
-  @@index([name])
-}
-
-// ============================================================================
-// INVENTORY ITEMS (Productos/Insumos)
+// INVENTARIO
 // ============================================================================
 
 model InventoryItem {
-  id              String            @id @default(cuid())
-  sku             String            @unique  // Código único del producto
+  id              String   @id @default(cuid())
+  sku             String   @unique
   name            String
   description     String?
-  type            InventoryItemType
-  
-  // Unidades de medida
-  baseUnit        UnitOfMeasure     // Unidad base de almacenamiento (KG, L, UNIT)
-  purchaseUnit    UnitOfMeasure?    // Unidad de compra (puede diferir)
-  conversionRate  Decimal?          @db.Decimal(10, 4) // purchaseUnit -> baseUnit
-  
-  // Stock
-  minimumStock    Decimal           @default(0) @db.Decimal(10, 3)
-  maximumStock    Decimal?          @db.Decimal(10, 3)
-  reorderPoint    Decimal?          @db.Decimal(10, 3)
-  
-  // Información adicional
-  shelfLifeDays   Int?              // Vida útil en días
-  storageTemp     String?           // "Refrigerado", "Ambiente", "Congelado"
-  category        String?           // Categoría personalizada
-  isActive        Boolean           @default(true)
-  
-  // Proveedor principal
-  primarySupplierId String?
-  primarySupplier   Supplier?       @relation(fields: [primarySupplierId], references: [id])
-  
-  // Auditoría
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  // === RELACIONES ===
-  
-  // Stock por ubicación
+  type            String   // RAW_MATERIAL, SUB_RECIPE, FINISHED_GOOD
+  category        String?
+  baseUnit        String   // KG, L, UNIT, G, ML, PORTION
+  purchaseUnit    String?
+  conversionRate  Float?
+  minimumStock    Float    @default(0)
+  reorderPoint    Float    @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relaciones
   stockLevels     InventoryLocation[]
-  
-  // Historial de movimientos
   movements       InventoryMovement[]
-  
-  // Historial de costos
   costHistory     CostHistory[]
-  
-  // Como ingrediente en recetas
-  usedInRecipes   RecipeIngredient[]  @relation("IngredientItem")
-  
-  // Si es SUB_RECIPE o FINISHED_GOOD, tiene su propia receta
-  recipe          Recipe?             @relation("ItemRecipe")
-  
-  // Ordenes de producción
-  productionOrders ProductionOrder[]
+  recipeIngredients RecipeIngredient[]
+  outputRecipes   Recipe[]            @relation("RecipeOutput")
 
   @@index([sku])
   @@index([type])
-  @@index([name])
+  @@index([category])
 }
-
-// ============================================================================
-// INVENTORY LOCATIONS (Stock por ubicación)
-// ============================================================================
 
 model InventoryLocation {
   id              String        @id @default(cuid())
-  
   inventoryItemId String
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  
   areaId          String
   area            Area          @relation(fields: [areaId], references: [id])
+  currentStock    Float         @default(0)
+  lastCountDate   DateTime?
   
-  currentStock    Decimal       @db.Decimal(10, 3)
-  reservedStock   Decimal       @default(0) @db.Decimal(10, 3) // Stock reservado para producción
-  
-  lastCountDate   DateTime?     // Último inventario físico
-  lastCountQty    Decimal?      @db.Decimal(10, 3)
-  
-  updatedAt       DateTime      @updatedAt
-
   @@unique([inventoryItemId, areaId])
   @@index([inventoryItemId])
   @@index([areaId])
 }
 
 // ============================================================================
-// INVENTORY MOVEMENTS (Movimientos de inventario)
+// MOVIMIENTOS DE INVENTARIO
 // ============================================================================
 
 model InventoryMovement {
-  id              String        @id @default(cuid())
-  
+  id              String   @id @default(cuid())
   inventoryItemId String
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
   
-  movementType    MovementType
-  quantity        Decimal       @db.Decimal(10, 3) // Siempre positivo
-  unit            UnitOfMeasure
+  movementType    String   // PURCHASE, SALE, PRODUCTION_IN, PRODUCTION_OUT, ADJUSTMENT_IN, ADJUSTMENT_OUT, TRANSFER, WASTE
+  quantity        Float
+  unit            String
   
-  // Costo (para cálculo de COGS)
-  unitCost        Decimal?      @db.Decimal(12, 4)
-  totalCost       Decimal?      @db.Decimal(12, 2)
+  // Costo
+  unitCost        Float?
+  totalCost       Float?
   
-  // Referencias opcionales
-  productionOrderId String?
-  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  // Documento de soporte
+  referenceNumber String?
+  documentUrl     String?
+  documentType    String?
   
-  purchaseOrderId   String?
-  purchaseOrder     PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
-  
-  // Documento de soporte (Nota de Entrega de Profit)
-  referenceNumber   String?       // Número de nota de entrega o factura
-  documentUrl       String?       // URL de la imagen del documento (almacenado en /public/uploads)
-  documentType      String?       // "nota_entrega", "factura", "guia"
-  
-  // Notas y razón
-  reason          String?       // Razón del movimiento (para ajustes y mermas)
+  // Notas
+  reason          String?
   notes           String?
   
   // Auditoría
-  createdAt       DateTime      @default(now())
+  createdAt       DateTime @default(now())
   createdById     String
-  createdBy       User          @relation(fields: [createdById], references: [id])
+  createdBy       User     @relation(fields: [createdById], references: [id])
 
   @@index([inventoryItemId])
   @@index([movementType])
   @@index([createdAt])
-  @@index([productionOrderId])
-  @@index([referenceNumber])
 }
 
 // ============================================================================
-// RECIPES (Recetas / BOM - Bill of Materials)
-// ============================================================================
-
-model Recipe {
-  id              String            @id @default(cuid())
-  
-  // Producto que esta receta produce
-  outputItemId    String            @unique
-  outputItem      InventoryItem     @relation("ItemRecipe", fields: [outputItemId], references: [id])
-  
-  // Información de la receta
-  name            String
-  description     String?
-  instructions    String?           // Instrucciones de preparación
-  
-  // Rendimiento
-  outputQuantity  Decimal           @db.Decimal(10, 3) // Cantidad producida
-  outputUnit      UnitOfMeasure
-  
-  // Yield (Rendimiento/Merma)
-  // yieldPercentage = (output real / output teórico) * 100
-  // Ejemplo: Si la receta indica 1kg pero típicamente obtienes 950g, yield = 95%
-  yieldPercentage Decimal           @default(100) @db.Decimal(5, 2)
-  
-  // Tiempos
-  prepTimeMinutes Int?              // Tiempo de preparación
-  cookTimeMinutes Int?              // Tiempo de cocción
-  restTimeMinutes Int?              // Tiempo de reposo
-  
-  // Versión y estado
-  version         Int               @default(1)
-  isActive        Boolean           @default(true)
-  isApproved      Boolean           @default(false)
-  
-  // Auditoría
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  createdById     String
-  createdBy       User              @relation("RecipeCreatedBy", fields: [createdById], references: [id])
-  
-  approvedAt      DateTime?
-  approvedById    String?
-  approvedBy      User?             @relation("RecipeApprovedBy", fields: [approvedById], references: [id])
-  
-  // Ingredientes de la receta
-  ingredients     RecipeIngredient[]
-  
-  // Órdenes de producción basadas en esta receta
-  productionOrders ProductionOrder[]
-
-  @@index([outputItemId])
-  @@index([name])
-  @@index([isActive, isApproved])
-}
-
-// ============================================================================
-// RECIPE INGREDIENTS (Ingredientes de receta - BOM Lines)
-// ============================================================================
-
-model RecipeIngredient {
-  id              String        @id @default(cuid())
-  
-  recipeId        String
-  recipe          Recipe        @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  
-  // El ingrediente (puede ser RAW_MATERIAL o SUB_RECIPE)
-  // Esto permite la recursividad: un producto puede usar otro producto como ingrediente
-  ingredientItemId String
-  ingredientItem  InventoryItem @relation("IngredientItem", fields: [ingredientItemId], references: [id])
-  
-  // Cantidad requerida
-  quantity        Decimal       @db.Decimal(10, 4)
-  unit            UnitOfMeasure
-  
-  // Porcentaje de pérdida/merma esperada para ESTE ingrediente
-  // Ejemplo: Si cortas cebolla y pierdes 10% en cáscara/puntas
-  wastePercentage Decimal       @default(0) @db.Decimal(5, 2)
-  
-  // Cantidad bruta necesaria = quantity / (1 - wastePercentage/100)
-  // Esto se calcula automáticamente al planificar producción
-  
-  // Notas del ingrediente
-  notes           String?       // "Bien picado", "A temperatura ambiente"
-  isOptional      Boolean       @default(false)
-  
-  // Orden de uso en la receta
-  sortOrder       Int           @default(0)
-  
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  @@unique([recipeId, ingredientItemId])
-  @@index([recipeId])
-  @@index([ingredientItemId])
-}
-
-// ============================================================================
-// COST HISTORY (Histórico de costos)
+// HISTORIAL DE COSTOS
 // ============================================================================
 
 model CostHistory {
-  id              String        @id @default(cuid())
-  
+  id              String   @id @default(cuid())
   inventoryItemId String
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
   
-  // Costo por unidad base
-  costPerUnit     Decimal       @db.Decimal(12, 4)
-  currency        String        @default("USD") // O "VES" para bolívares
+  costPerUnit     Float
+  currency        String   @default("USD")
+  isCalculated    Boolean  @default(false)
+  costBreakdown   String?  // JSON string
   
-  // Para insumos: de dónde viene el costo
-  supplierId      String?
-  supplier        Supplier?     @relation(fields: [supplierId], references: [id])
+  effectiveFrom   DateTime @default(now())
+  effectiveTo     DateTime?
   
-  // Para productos elaborados (SUB_RECIPE, FINISHED_GOOD)
-  // Estos se calculan automáticamente basándose en la receta
-  isCalculated    Boolean       @default(false)
-  
-  // Desglose de costos calculados (JSON para flexibilidad)
-  // { ingredientsCost, laborCost, overheadCost }
-  costBreakdown   Json?
-  
-  // Vigencia
-  effectiveFrom   DateTime      @default(now())
-  effectiveTo     DateTime?     // NULL = vigente actual
-  
-  // Razón del cambio
-  reason          String?       // "Actualización de precio", "Nueva cotización", etc.
-  
-  // Auditoría
-  createdAt       DateTime      @default(now())
+  reason          String?
   createdById     String
-  createdBy       User          @relation(fields: [createdById], references: [id])
+  createdBy       User     @relation(fields: [createdById], references: [id])
 
   @@index([inventoryItemId])
   @@index([effectiveFrom])
-  @@index([inventoryItemId, effectiveFrom])
 }
 
 // ============================================================================
-// PRODUCTION ORDERS (Órdenes de producción)
+// RECETAS
+// ============================================================================
+
+model Recipe {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  
+  outputItemId    String
+  outputItem      InventoryItem @relation("RecipeOutput", fields: [outputItemId], references: [id])
+  outputQuantity  Float    @default(1)
+  outputUnit      String
+  
+  yieldPercentage Float    @default(100)
+  prepTime        Int?
+  cookTime        Int?
+  
+  isApproved      Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  version         Int      @default(1)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relaciones
+  ingredients     RecipeIngredient[]
+  productionOrders ProductionOrder[]
+
+  @@index([outputItemId])
+}
+
+model RecipeIngredient {
+  id              String   @id @default(cuid())
+  recipeId        String
+  recipe          Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  
+  ingredientItemId String
+  ingredientItem   InventoryItem @relation(fields: [ingredientItemId], references: [id])
+  
+  quantity        Float
+  unit            String
+  wastePercentage Float    @default(0)
+  notes           String?
+  sortOrder       Int      @default(0)
+
+  @@unique([recipeId, ingredientItemId])
+  @@index([recipeId])
+}
+
+// ============================================================================
+// ÓRDENES DE PRODUCCIÓN
 // ============================================================================
 
 model ProductionOrder {
-  id              String                @id @default(cuid())
-  orderNumber     String                @unique
+  id              String   @id @default(cuid())
+  orderNumber     String   @unique
   
-  // Producto a producir
-  outputItemId    String
-  outputItem      InventoryItem         @relation(fields: [outputItemId], references: [id])
-  
-  // Receta usada
   recipeId        String
-  recipe          Recipe                @relation(fields: [recipeId], references: [id])
+  recipe          Recipe   @relation(fields: [recipeId], references: [id])
   
-  // Cantidad
-  plannedQuantity Decimal               @db.Decimal(10, 3)
-  actualQuantity  Decimal?              @db.Decimal(10, 3) // Se llena al completar
-  unit            UnitOfMeasure
+  outputItemId    String
+  plannedQuantity Float
+  actualQuantity  Float?
+  unit            String
   
-  // Estado
-  status          ProductionOrderStatus @default(DRAFT)
-  priority        Int                   @default(0)
+  status          String   @default("DRAFT") // DRAFT, APPROVED, IN_PROGRESS, COMPLETED, CANCELLED
+  priority        Int      @default(0)
   
-  // Fechas
   scheduledDate   DateTime?
   startedAt       DateTime?
   completedAt     DateTime?
   
-  // Costos
-  plannedCost     Decimal?              @db.Decimal(12, 2)
-  actualCost      Decimal?              @db.Decimal(12, 2)
+  actualYieldPercentage Float?
+  actualCost      Float?
   
-  // Rendimiento real vs esperado
-  actualYieldPercentage Decimal?        @db.Decimal(5, 2)
-  
-  // Notas
   notes           String?
   
-  // Auditoría
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  
+  createdAt       DateTime @default(now())
   createdById     String
-  createdBy       User                  @relation("ProductionCreatedBy", fields: [createdById], references: [id])
-  
-  approvedAt      DateTime?
-  approvedById    String?
-  approvedBy      User?                 @relation("ProductionApprovedBy", fields: [approvedById], references: [id])
-  
-  // Movimientos de inventario asociados
-  inventoryMovements InventoryMovement[]
+  createdBy       User     @relation(fields: [createdById], references: [id])
 
-  @@index([outputItemId])
   @@index([status])
   @@index([scheduledDate])
-  @@index([orderNumber])
-}
-
-// ============================================================================
-// PURCHASE ORDERS (Órdenes de compra)
-// ============================================================================
-
-model PurchaseOrder {
-  id              String            @id @default(cuid())
-  orderNumber     String            @unique
-  
-  supplierId      String
-  supplier        Supplier          @relation(fields: [supplierId], references: [id])
-  
-  status          String            @default("DRAFT") // DRAFT, SENT, PARTIAL, RECEIVED, CANCELLED
-  
-  orderDate       DateTime          @default(now())
-  expectedDate    DateTime?
-  receivedDate    DateTime?
-  
-  subtotal        Decimal           @db.Decimal(12, 2)
-  taxAmount       Decimal           @default(0) @db.Decimal(12, 2)
-  totalAmount     Decimal           @db.Decimal(12, 2)
-  currency        String            @default("USD")
-  
-  notes           String?
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  // Líneas del pedido
-  lines           PurchaseOrderLine[]
-  
-  // Movimientos de inventario cuando se recibe
-  inventoryMovements InventoryMovement[]
-
-  @@index([supplierId])
-  @@index([status])
-  @@index([orderDate])
-}
-
-model PurchaseOrderLine {
-  id              String        @id @default(cuid())
-  
-  purchaseOrderId String
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  
-  description     String        // Descripción del item (puede no estar en inventario aún)
-  quantity        Decimal       @db.Decimal(10, 3)
-  unit            UnitOfMeasure
-  unitPrice       Decimal       @db.Decimal(12, 4)
-  totalPrice      Decimal       @db.Decimal(12, 2)
-  
-  receivedQuantity Decimal?     @db.Decimal(10, 3)
-  
-  notes           String?
-
-  @@index([purchaseOrderId])
-}
-
-// ============================================================================
-// AUDIT LOG (Registro de auditoría)
-// ============================================================================
-
-model AuditLog {
-  id          String   @id @default(cuid())
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  
-  action      String   // CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, etc.
-  entityType  String   // Recipe, InventoryItem, ProductionOrder, etc.
-  entityId    String
-  
-  // Cambios (JSON con before/after para updates)
-  changes     Json?
-  
-  // Metadatos
-  ipAddress   String?
-  userAgent   String?
-  
-  createdAt   DateTime @default(now())
-
-  @@index([userId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-  @@index([action])
 }
