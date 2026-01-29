@@ -13,7 +13,29 @@
  * para "Impresión silenciosa" en sus argumentos de inicio (--kiosk-printing en Chrome).
  */
 
-// ... interfaces ...
+// Interfaces para tipado
+interface ReceiptItem {
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    sku?: string;
+    modifiers: string[];
+}
+
+interface ReceiptData {
+    orderNumber: string;
+    orderType: 'RESTAURANT' | 'DELIVERY';
+    date: Date | string;
+    cashierName: string;
+    customerName?: string;
+    customerAddress?: string;
+    items: ReceiptItem[];
+    subtotal?: number;
+    discount?: number;
+    total: number;
+    serviceFee?: number;
+}
 
 export function printReceipt(data: ReceiptData) {
     // Ventana para el Recibo del Cliente (Nota de Entrega)

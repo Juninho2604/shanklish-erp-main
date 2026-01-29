@@ -19,7 +19,7 @@ export default async function RolesConfigPage() {
     // Usamos el rol "raw" string para validación simple aquí, o la utilidad hasPermission
     // pero por ahora dejamos que la acción maneje el error detallado o el componente renderice estado vacío
 
-    let users = [];
+    let users: any[] = [];
     try {
         users = await getUsers();
     } catch (e) {

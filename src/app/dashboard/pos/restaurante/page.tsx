@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
+import PrintTicket from '@/components/pos/PrintTicket';
 import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
 
-// ============================================================================
-// INTERFACE TYPES
 // ============================================================================
 
 interface ModifierOption {
@@ -45,6 +45,107 @@ interface SelectedModifier {
 }
 
 export default function POSRestaurantPage() {
+    // Hooks de Impresion
+    const ticketRef = useRef<HTMLDivElement>(null);
+
+    const handlePrintTicket = () => {
+        const printContent = ticketRef.current;
+        if (!printContent) return;
+
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentWindow?.document;
+        if (doc) {
+            doc.open();
+            doc.write(`
+                <html>
+                <head>
+                    <title>Factura</title>
+                    <style>
+                        @page { size: 80mm auto; margin: 0; }
+                        body { 
+                            width: 72mm; 
+                            min-width: 72mm; 
+                            max-width: 72mm; 
+                            margin: 0 auto; 
+                            padding: 2mm; 
+                            font-family: 'Times New Roman', serif; 
+                        }
+                        * { box-sizing: border-box; }
+                        
+                        .text-center { text-align: center; }
+                        .text-right { text-align: right; }
+                        .font-bold { font-weight: bold; }
+                        .italic { font-style: italic; }
+                        .uppercase { text-transform: uppercase; }
+                        .leading-tight { line-height: 1.1; }
+                        
+                        .flex { display: flex; }
+                        .flex-col { display: flex; flex-direction: column; }
+                        .justify-between { justify-content: space-between; }
+                        .justify-end { justify-content: flex-end; }
+                        .items-end { align-items: flex-end; }
+                        .flex-1 { flex: 1; }
+                        
+                        /* Dimensiones */
+                        .w-full { width: 100%; }
+                        .w-8 { width: 8mm; display: inline-block; text-align: right; margin-right: 2px; }
+                        .w-12 { width: 12mm; display: inline-block; }
+                        .w-14 { width: 14mm; display: inline-block; text-align: right; }
+                        .w-16 { width: 16mm; display: inline-block; text-align: right; }
+                        /* w-48 ajustado para que ocupe todo el ancho disponible en ticket pequeño */
+                        .w-48 { width: 100%; } 
+                        
+                        /* Espaciado */
+                        .mb-1 { margin-bottom: 3px; }
+                        .mb-2 { margin-bottom: 6px; }
+                        .mb-4 { margin-bottom: 12px; }
+                        .mt-1 { margin-top: 3px; }
+                        .mt-2 { margin-top: 6px; }
+                        .mt-8 { margin-top: 24px; }
+                        .mr-2 { margin-right: 6px; }
+                        .pb-2 { padding-bottom: 6px; }
+                        .pl-10 { padding-left: 10mm; }
+                        .my-2 { margin-top: 6px; margin-bottom: 6px; }
+                        
+                        /* Bordes */
+                        .border-b { border-bottom: 1px solid #000; }
+                        .border-t { border-top: 1px dashed #000; }
+                        .border-dashed { border-style: dashed; }
+                        
+                        /* Tipografia Tailwind Escapada */
+                        .text-\\[10px\\] { font-size: 10px; }
+                        .text-\\[11px\\] { font-size: 11px; }
+                        .text-\\[12px\\] { font-size: 12px; }
+                        .text-\\[14px\\] { font-size: 14px; }
+                        .text-3xl { font-size: 20px; }
+                        .font-serif { font-family: 'Times New Roman', serif; }
+                        
+                        .hidden { display: none; }
+                    </style>
+                </head>
+                <body>
+                    ${printContent.innerHTML}
+                </body>
+                </html>
+            `);
+            doc.close();
+
+            setTimeout(() => {
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+                setTimeout(() => document.body.removeChild(iframe), 5000);
+            }, 500);
+        }
+    };
+
     const [categories, setCategories] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -534,6 +635,61 @@ export default function POSRestaurantPage() {
                             <button onClick={handlePinSubmit} className="flex-1 py-3 bg-amber-500 text-black rounded font-bold">OK</button>
                         </div>
                     </div>
+                </div>
+            )}
+            {/* Modal de Éxito / Factura */}
+            {lastOrder && (
+                <div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-4">
+                    <div className="bg-white text-black w-full max-w-md rounded-2xl p-8 text-center shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <span className="text-5xl">✅</span>
+                        </div>
+
+                        <h2 className="text-3xl font-black mb-2 font-serif text-gray-900">¡Orden Exitosa!</h2>
+                        <p className="text-xl text-gray-600 font-serif mb-8">Orden #{lastOrder.orderNumber}</p>
+
+                        <div className="flex flex-col gap-4">
+                            <button
+                                onClick={() => handlePrintTicket()}
+                                className="w-full py-5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold text-xl flex items-center justify-center gap-3 shadow-lg transition-all"
+                            >
+                                <span>🖨️</span> IMPRIMIR FACTURA
+                            </button>
+
+                            <button
+                                onClick={() => setLastOrder(null)}
+                                className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl font-bold text-lg border-2 border-gray-200"
+                            >
+                                Nueva Orden
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Componente Oculto para Impresión */}
+            {lastOrder && (
+                <div style={{ display: 'none' }}>
+                    <PrintTicket
+                        ref={ticketRef}
+                        data={{
+                            orderNumber: lastOrder.orderNumber,
+                            orderType: 'RESTAURANT', // Siempre es restaurant aqui
+                            items: lastOrder.itemsSnapshot.map(i => ({
+                                name: i.name,
+                                quantity: i.quantity,
+                                unitPrice: i.unitPrice,
+                                lineTotal: i.total,
+                                modifiers: i.modifiers.map((m: string) => ({ name: m, priceAdjustment: 0 })) // Snapshot simple
+                            })),
+                            subtotal: lastOrder.subtotal,
+                            total: lastOrder.total,
+                            paymentMethod: 'CASH', // TODO: Pasar método real si se guardó en lastOrder
+                            amountPaid: lastOrder.total, // fallback
+                            change: 0,
+                            date: new Date()
+                        }}
+                    />
                 </div>
             )}
         </div>

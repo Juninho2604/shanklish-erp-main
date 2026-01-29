@@ -59,134 +59,111 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data }, ref)
     return (
         <div
             ref={ref}
-            className="hidden print:block bg-white text-black p-4 font-mono text-sm"
+            className="hidden print:block bg-white text-black p-2 font-serif text-[11px] leading-tight"
             style={{ width: '80mm', maxWidth: '80mm' }}
         >
             {/* Header */}
             <div className="text-center mb-4">
-                <h1 className="text-xl font-bold">SHANKLISH</h1>
-                <p className="text-xs">Quesos Artesanales & Comida Libanesa</p>
-                <p className="text-xs mt-1">Tu dirección aquí</p>
-                <p className="text-xs">Tel: 0412-XXX-XXXX</p>
+                <div className="text-3xl font-bold italic font-serif mb-1">Shanklish</div>
+                <div className="text-[10px] mb-2">- Caracas -</div>
+                <div className="font-bold text-[12px]">SHANKLISH CARACAS, C.A</div>
+                <div className="font-bold text-[12px]">J-41308727-8</div>
+                <div className="font-bold text-[12px] mt-2">RECIBO DE PAGO</div>
             </div>
 
-            {/* Línea divisora */}
-            <div className="border-t border-dashed border-gray-400 my-2"></div>
-
-            {/* Info de la orden */}
-            <div className="mb-3">
+            {/* Info Orden */}
+            <div className="mb-2">
                 <div className="flex justify-between">
-                    <span className="font-bold">Orden:</span>
-                    <span className="font-bold text-lg">{data.orderNumber}</span>
+                    <span>Numero:</span>
+                    <span className="font-bold">{data.orderNumber}</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                    <span>Fecha:</span>
-                    <span>{formatDate(data.date)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                    <span>Hora:</span>
-                    <span>{formatTime(data.date)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                    <span>Tipo:</span>
-                    <span>{data.orderType === 'RESTAURANT' ? 'Restaurante' : 'Delivery'}</span>
+                <div className="flex justify-between">
+                    <span>Fecha</span>
+                    <span>{data.date.toLocaleString('es-VE')}</span>
                 </div>
             </div>
 
-            {/* Cliente (si aplica) */}
-            {(data.customerName || data.customerPhone || data.customerAddress) && (
-                <>
-                    <div className="border-t border-dashed border-gray-400 my-2"></div>
-                    <div className="mb-3 text-xs">
-                        {data.customerName && (
-                            <div><span className="font-bold">Cliente:</span> {data.customerName}</div>
-                        )}
-                        {data.customerPhone && (
-                            <div><span className="font-bold">Tel:</span> {data.customerPhone}</div>
-                        )}
-                        {data.customerAddress && (
-                            <div><span className="font-bold">Dir:</span> {data.customerAddress}</div>
-                        )}
-                    </div>
-                </>
-            )}
+            {/* Cliente */}
+            <div className="mb-2 uppercase font-bold text-[12px] border-b border-black border-dashed pb-2">
+                {data.customerName || 'CLIENTE GENERICO'}
+                <div className="font-normal">{data.orderType}</div>
+            </div>
 
-            {/* Línea divisora */}
-            <div className="border-t border-dashed border-gray-400 my-2"></div>
+            {/* Encabezados Tabla */}
+            <div className="flex text-[10px] font-bold mb-1">
+                <span className="w-12 text-center">Codigo</span>
+                <span className="flex-1 text-center">Descripcion</span>
+                <span className="w-16 text-right">Monto</span>
+            </div>
 
             {/* Items */}
-            <div className="mb-3">
-                <div className="font-bold mb-2 text-center">DETALLE DE PRODUCTOS</div>
+            <div className="mb-2">
                 {data.items.map((item, idx) => (
                     <div key={idx} className="mb-2">
-                        <div className="flex justify-between">
-                            <span className="flex-1">
-                                <span className="font-bold">{item.quantity}x</span> {item.name}
-                            </span>
-                            <span className="font-bold">${item.lineTotal.toFixed(2)}</span>
+                        {/* Línea 1: Código y Nombre */}
+                        <div className="flex">
+                            <span className="w-8 text-[10px] pt-0.5 text-center">{(idx + 1).toString().padStart(2, '0')}</span>
+                            <span className="flex-1 uppercase font-bold text-[11px]">{item.name}</span>
                         </div>
+                        {/* Línea 2: Cálculo */}
+                        <div className="flex justify-end text-[11px]">
+                            <span className="mr-2">{item.quantity.toFixed(2)}</span>
+                            <span className="mr-2">X</span>
+                            <span className="mr-2">$ {item.unitPrice.toFixed(2)}</span>
+                            <span className="mr-2">=</span>
+                            <span className="w-14 text-right">$ {item.lineTotal.toFixed(2)}</span>
+                        </div>
+                        {/* Modificadores */}
                         {item.modifiers.length > 0 && (
-                            <div className="text-xs pl-4 text-gray-600">
-                                {item.modifiers.map((mod, midx) => (
-                                    <div key={midx}>
-                                        • {mod.name}
-                                        {mod.priceAdjustment > 0 && ` (+$${mod.priceAdjustment.toFixed(2)})`}
-                                    </div>
-                                ))}
+                            <div className="text-[10px] pl-10 italic text-gray-800">
+                                {item.modifiers.map(m => m.name).join(', ')}
                             </div>
                         )}
+                        {/* Nota */}
                         {item.notes && (
-                            <div className="text-xs pl-4 italic text-gray-600">
-                                Nota: {item.notes}
-                            </div>
+                            <div className="text-[10px] pl-10 italic">({item.notes})</div>
                         )}
                     </div>
                 ))}
             </div>
 
-            {/* Línea divisora */}
-            <div className="border-t border-dashed border-gray-400 my-2"></div>
+            <div className="border-t border-black my-2"></div>
 
             {/* Totales */}
-            <div className="mb-3">
-                <div className="flex justify-between text-lg font-bold">
-                    <span>TOTAL:</span>
-                    <span>${data.total.toFixed(2)}</span>
+            <div className="flex flex-col items-end text-[12px]">
+                {/* Descuento si existe */}
+                {/* 
+                <div className="flex justify-between w-full">
+                    <span>Descuento:</span>
+                    <span>$ 0.00</span>
+                </div> 
+                */}
+
+                <div className="flex justify-between w-48 font-bold text-[14px] mt-1">
+                    <span>Total:</span>
+                    <span>$ {data.total.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                    <span>Método de pago:</span>
-                    <span>{getPaymentMethodLabel(data.paymentMethod)}</span>
+
+                {/* Servicio (Simulado o real, en la imagen sale) */}
+                <div className="flex justify-between w-48 mt-1 text-[11px]">
+                    <span>10 % Servicio:</span>
+                    <span>$ {(data.total * 0.10).toFixed(2)}</span>
                 </div>
-                {data.paymentMethod === 'CASH' && (
-                    <>
-                        <div className="flex justify-between text-xs">
-                            <span>Pagó con:</span>
-                            <span>${data.amountPaid.toFixed(2)}</span>
-                        </div>
-                        {data.change > 0 && (
-                            <div className="flex justify-between font-bold">
-                                <span>Cambio:</span>
-                                <span>${data.change.toFixed(2)}</span>
-                            </div>
-                        )}
-                    </>
-                )}
+                <div className="flex justify-between w-48 font-bold mt-1 text-[12px]">
+                    <span>Total Sugerido:</span>
+                    <span>$ {(data.total * 1.10).toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between w-48 mt-2 text-[10px] italic">
+                    <span>Pagado ({getPaymentMethodLabel(data.paymentMethod)}):</span>
+                    <span>$ {data.amountPaid.toFixed(2)}</span>
+                </div>
             </div>
 
-            {/* Línea divisora */}
-            <div className="border-t border-dashed border-gray-400 my-2"></div>
-
-            {/* Footer */}
-            <div className="text-center text-xs">
-                <p className="font-bold">¡Gracias por su compra!</p>
-                <p>Síguenos en @shanklish</p>
-                <p className="mt-2 text-[10px] text-gray-500">
-                    Este documento no tiene validez fiscal
-                </p>
+            <div className="mt-8 text-center text-[10px]">
+                GRACIAS POR SU COMPRA
             </div>
-
-            {/* Espacio para corte */}
-            <div className="h-8"></div>
+            <div className="h-4"></div>
         </div>
     );
 });

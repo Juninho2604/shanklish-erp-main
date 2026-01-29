@@ -284,32 +284,38 @@ export async function createSalesOrderAction(
                     where: { id: item.menuItemId },
                     select: {
                         name: true,
-                        recipe: {
-                            include: {
-                                ingredients: {
-                                    include: { ingredientItem: true }
-                                }
-                            }
-                        }
+                        recipeId: true
                     }
                 });
 
-                if (menuItem?.recipe && menuItem.recipe.isActive) {
-                    // 2. Descontar ingredientes
-                    for (const ingredient of menuItem.recipe.ingredients) {
-                        // Cantidad total = CantidadIngrediente * CantidadItemsVendidos
-                        const totalQty = ingredient.quantity * item.quantity;
+                // 2. Si tiene recipeId, buscar la receta completa
+                if (menuItem?.recipeId) {
+                    const recipe = await prisma.recipe.findUnique({
+                        where: { id: menuItem.recipeId },
+                        include: {
+                            ingredients: {
+                                include: { ingredientItem: true }
+                            }
+                        }
+                    });
 
-                        await registerSale({
-                            inventoryItemId: ingredient.ingredientItemId,
-                            quantity: totalQty,
-                            unit: ingredient.unit as any,
-                            areaId: areaId, // Usamos el área de venta
-                            orderId: newOrder.id,
-                            userId: session.id,
-                            notes: `Venta POS: ${item.quantity}x ${menuItem.name}`,
-                            allowNegative: true // Permitir negativos
-                        });
+                    if (recipe && recipe.isActive) {
+                        // 3. Descontar ingredientes
+                        for (const ingredient of recipe.ingredients) {
+                            // Cantidad total = CantidadIngrediente * CantidadItemsVendidos
+                            const totalQty = ingredient.quantity * item.quantity;
+
+                            await registerSale({
+                                inventoryItemId: ingredient.ingredientItemId,
+                                quantity: totalQty,
+                                unit: ingredient.unit as any,
+                                areaId: areaId, // Usamos el área de venta
+                                orderId: newOrder.id,
+                                userId: session.id,
+                                notes: `Venta POS: ${item.quantity}x ${menuItem.name}`,
+                                allowNegative: true // Permitir negativos
+                            });
+                        }
                     }
                 }
             }
