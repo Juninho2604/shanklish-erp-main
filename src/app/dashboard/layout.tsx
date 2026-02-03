@@ -15,12 +15,12 @@ export default async function DashboardLayout({
             <Sidebar initialUser={session} />
 
             {/* Main content area */}
-            <div className="pl-64">
+            <div className="md:pl-64">
                 {/* Navbar */}
                 <Navbar />
 
                 {/* Page content */}
-                <main className="min-h-[calc(100vh-4rem)] p-6">
+                <main className="min-h-[calc(100vh-4rem)] p-4 md:p-6">
                     {children}
                 </main>
             </div>
