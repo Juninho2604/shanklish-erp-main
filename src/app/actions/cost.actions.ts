@@ -208,7 +208,7 @@ export async function processCostImportAction(
         const result = await prisma.$transaction(async (tx) => {
             let updatedCount = 0;
 
-            for (const [itemId, costData] of latestCostByItem) {
+            for (const [itemId, costData] of Array.from(latestCostByItem)) {
                 // Close current cost (set effectiveTo)
                 await tx.costHistory.updateMany({
                     where: {
