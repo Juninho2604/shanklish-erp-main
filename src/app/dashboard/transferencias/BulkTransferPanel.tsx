@@ -8,6 +8,7 @@ import {
     executeBulkTransferAction
 } from '@/app/actions/requisition.actions';
 import { formatNumber, cn } from '@/lib/utils';
+import { Trash2 } from 'lucide-react';
 
 interface Area {
     id: string;
@@ -32,6 +33,7 @@ export default function BulkTransferPanel({ areasList }: Props) {
     const [sourceAreaId, setSourceAreaId] = useState('');
     const [targetAreaId, setTargetAreaId] = useState('');
     const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
+    const [excludedIds, setExcludedIds] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isExecuting, setIsExecuting] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -61,6 +63,7 @@ export default function BulkTransferPanel({ areasList }: Props) {
             });
         } else {
             setPreviewItems([]);
+            setExcludedIds([]);
             setMessage(null);
         }
     }, [selectedCategory, sourceAreaId]);
@@ -85,7 +88,8 @@ export default function BulkTransferPanel({ areasList }: Props) {
             selectedCategory,
             sourceAreaId,
             targetAreaId,
-            user?.id || ''
+            user?.id || '',
+            excludedIds
         );
 
         if (res.success) {
@@ -179,14 +183,24 @@ export default function BulkTransferPanel({ areasList }: Props) {
                             <tr>
                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Producto</th>
                                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Stock a Transferir</th>
+                                <th className="w-10 px-4 py-2"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {previewItems.map(item => (
+                            {previewItems.filter(i => !excludedIds.includes(i.id)).map(item => (
                                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                     <td className="px-4 py-2 text-gray-900 dark:text-white">{item.name}</td>
                                     <td className="px-4 py-2 text-right font-mono text-purple-600">
                                         {formatNumber(item.currentStock)} {item.unit}
+                                    </td>
+                                    <td className="px-4 py-2 text-center">
+                                        <button
+                                            onClick={() => setExcludedIds([...excludedIds, item.id])}
+                                            className="text-gray-400 hover:text-red-500 transition-colors"
+                                            title="Excluir item de la transferencia"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -218,7 +232,7 @@ export default function BulkTransferPanel({ areasList }: Props) {
                         <span className="animate-spin">⏳</span> Ejecutando...
                     </span>
                 ) : (
-                    <span>⚡ Transferir {previewItems.length} items de "{selectedCategory}"</span>
+                    <span>⚡ Transferir {previewItems.length - excludedIds.length} items de "{selectedCategory}"</span>
                 )}
             </button>
         </div>

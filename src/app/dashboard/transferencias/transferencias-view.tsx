@@ -5,6 +5,21 @@ import { useAuthStore } from '@/stores/auth.store';
 import { createRequisition, approveRequisition, rejectRequisition } from '@/app/actions/requisition.actions';
 import { formatNumber, cn } from '@/lib/utils';
 import { UserRole } from '@/types';
+import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
 
 // Tipos locales para props
 interface Item {
@@ -40,6 +55,97 @@ interface Props {
     itemsList: Item[];
     areasList: Area[];
     initialRequisitions: Requisition[];
+}
+
+interface TransferItemRowProps {
+    index: number;
+    item: { id: string, name: string, quantity: number, unit: string };
+    itemsList: Item[];
+    onUpdate: (index: number, updates: Partial<{ id: string, name: string, quantity: number, unit: string }>) => void;
+    onRemove: (index: number) => void;
+}
+
+function TransferItemRow({ index, item, itemsList, onUpdate, onRemove }: TransferItemRowProps) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <tr>
+            <td className="p-2">
+                <Popover open={open} onOpenChange={setOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={open}
+                            className="w-full justify-between border-gray-200 bg-white font-normal dark:border-gray-600 dark:bg-gray-800"
+                        >
+                            {item.id
+                                ? itemsList.find((i) => i.id === item.id)?.name
+                                : "Seleccionar Item..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                        <Command>
+                            <CommandInput placeholder="Buscar item..." />
+                            <CommandList>
+                                <CommandEmpty>No se encontró el item.</CommandEmpty>
+                                <CommandGroup>
+                                    {itemsList.map((i) => (
+                                        <CommandItem
+                                            key={i.id}
+                                            value={i.name}
+                                            onSelect={() => {
+                                                onUpdate(index, {
+                                                    id: i.id,
+                                                    name: i.name,
+                                                    unit: i.baseUnit
+                                                });
+                                                setOpen(false);
+                                            }}
+                                        >
+                                            <Check
+                                                className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    item.id === i.id ? "opacity-100" : "opacity-0"
+                                                )}
+                                            />
+                                            {i.name}
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            </CommandList>
+                        </Command>
+                    </PopoverContent>
+                </Popover>
+            </td>
+            <td className="p-2">
+                <input
+                    type="number"
+                    min="0"
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={e => {
+                        const val = parseFloat(e.target.value);
+                        onUpdate(index, { quantity: isNaN(val) ? 0 : val });
+                    }}
+                    placeholder="0"
+                    className="w-full rounded border border-gray-200 px-3 py-2 text-center focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800"
+                />
+            </td>
+            <td className="p-2 text-center text-gray-500 font-mono text-xs">
+                {item.unit}
+            </td>
+            <td className="p-2 text-center">
+                <button
+                    onClick={() => onRemove(index)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    title="Eliminar fila"
+                >
+                    <Trash2 className="h-4 w-4" />
+                </button>
+            </td>
+        </tr>
+    );
 }
 
 export default function TransferenciasView({ itemsList, areasList, initialRequisitions }: Props) {
@@ -251,63 +357,25 @@ export default function TransferenciasView({ itemsList, areasList, initialRequis
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
                                     {requestItems.map((item, index) => (
-                                        <tr key={index}>
-                                            <td className="p-2">
-                                                <select
-                                                    value={item.id}
-                                                    onChange={e => {
-                                                        const selected = itemsList.find(i => i.id === e.target.value);
-                                                        const newItems = [...requestItems];
-                                                        newItems[index] = {
-                                                            ...newItems[index],
-                                                            id: e.target.value,
-                                                            name: selected?.name || '',
-                                                            unit: selected?.baseUnit || '-'
-                                                        };
-                                                        setRequestItems(newItems);
-                                                    }}
-                                                    className="w-full rounded border border-gray-200 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800"
-                                                >
-                                                    <option value="">Seleccionar Item...</option>
-                                                    {itemsList.map(i => (
-                                                        <option key={i.id} value={i.id}>{i.name}</option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            <td className="p-2">
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={item.quantity === 0 ? '' : item.quantity}
-                                                    onChange={e => {
-                                                        const val = parseFloat(e.target.value);
-                                                        const newItems = [...requestItems];
-                                                        newItems[index].quantity = isNaN(val) ? 0 : val;
-                                                        setRequestItems(newItems);
-                                                    }}
-                                                    placeholder="0"
-                                                    className="w-full rounded border border-gray-200 px-3 py-2 text-center focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800"
-                                                />
-                                            </td>
-                                            <td className="p-2 text-center text-gray-500 font-mono text-xs">
-                                                {item.unit}
-                                            </td>
-                                            <td className="p-2 text-center">
-                                                <button
-                                                    onClick={() => {
-                                                        if (requestItems.length > 1) {
-                                                            const newItems = requestItems.filter((_, i) => i !== index);
-                                                            setRequestItems(newItems);
-                                                        } else {
-                                                            setRequestItems([{ id: '', name: '', quantity: 0, unit: '-' }]);
-                                                        }
-                                                    }}
-                                                    className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <TransferItemRow
+                                            key={index}
+                                            index={index}
+                                            item={item}
+                                            itemsList={itemsList}
+                                            onUpdate={(idx, updates) => {
+                                                const newItems = [...requestItems];
+                                                newItems[idx] = { ...newItems[idx], ...updates };
+                                                setRequestItems(newItems);
+                                            }}
+                                            onRemove={(idx) => {
+                                                if (requestItems.length > 1) {
+                                                    const newItems = requestItems.filter((_, i) => i !== idx);
+                                                    setRequestItems(newItems);
+                                                } else {
+                                                    setRequestItems([{ id: '', name: '', quantity: 0, unit: '-' }]);
+                                                }
+                                            }}
+                                        />
                                     ))}
                                 </tbody>
                             </table>

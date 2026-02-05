@@ -240,7 +240,7 @@ export async function approveRequisition(input: ApproveRequisitionInput): Promis
                     }
                 });
             }
-        });
+        }, { timeout: 120000 });
 
         revalidatePath('/dashboard/inventario');
         return { success: true, message: 'Transferencia aprobada y ejecutada' };
@@ -377,7 +377,8 @@ export async function executeBulkTransferAction(
     category: string,
     sourceAreaId: string,
     targetAreaId: string,
-    userId: string
+    userId: string,
+    excludedItemIds: string[] = []
 ): Promise<ActionResult> {
     try {
         if (sourceAreaId === targetAreaId) {
@@ -392,14 +393,15 @@ export async function executeBulkTransferAction(
             if (owner) executorId = owner.id;
         }
 
-        // Obtener items con stock en origen
+        // Obtener items con stock en origen (excluyendo los indicados)
         const locationsToTransfer = await prisma.inventoryLocation.findMany({
             where: {
                 areaId: sourceAreaId,
                 currentStock: { gt: 0 },
                 inventoryItem: {
                     category: { equals: category, mode: 'insensitive' },
-                    isActive: true
+                    isActive: true,
+                    id: { notIn: excludedItemIds }
                 }
             },
             include: {

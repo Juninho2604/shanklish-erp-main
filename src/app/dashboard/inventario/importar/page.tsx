@@ -6,7 +6,7 @@ import { createAuditAction } from '@/app/actions/audit.actions';
 import { parseUploadAction, processImportAction, type ImportPreviewResult } from '@/app/actions/import.actions';
 import { getAreasForSelect } from '@/app/actions/entrada.actions';
 import { toast } from 'react-hot-toast';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 
 export default function ImportPage() {

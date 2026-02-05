@@ -6,6 +6,9 @@ import { useAuthStore } from '@/stores/auth.store';
 import { formatNumber, formatCurrency, getStockStatus, cn } from '@/lib/utils';
 import { InventoryItemType } from '@/types';
 import { ItemEditDialog } from './edit-item-dialog';
+import { deleteInventoryItemAction } from '@/app/actions/inventory.actions';
+import { Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 type FilterType = 'ALL' | InventoryItemType;
 type StockFilter = 'ALL' | 'LOW' | 'OK';
@@ -16,7 +19,7 @@ interface InventoryViewProps {
 }
 
 export default function InventoryView({ initialItems, initialAreas = [] }: InventoryViewProps) {
-    const { canViewCosts } = useAuthStore();
+    const { canViewCosts, hasRole } = useAuthStore();
     const showCosts = canViewCosts();
 
     // Filtros
@@ -29,6 +32,28 @@ export default function InventoryView({ initialItems, initialAreas = [] }: Inven
 
     // Estado para edición
     const [editingItem, setEditingItem] = useState<any | null>(null);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+    const handleDelete = async (item: any) => {
+        if (!confirm(`¿Estás seguro de eliminar el producto "${item.name}"? Esta acción no se puede deshacer.`)) return;
+
+        setIsDeleting(item.id);
+        try {
+            const res = await deleteInventoryItemAction(item.id);
+            if (res.success) {
+                toast.success('Producto eliminado correctamente');
+                // Optimistically update UI or wait for revalidate
+                window.location.reload();
+            } else {
+                toast.error(res.message);
+            }
+        } catch (error) {
+            toast.error('Error al eliminar el producto');
+            console.error(error);
+        } finally {
+            setIsDeleting(null);
+        }
+    };
 
     // Obtener categorías únicas
     const uniqueCategories = useMemo(() => {
@@ -176,6 +201,12 @@ export default function InventoryView({ initialItems, initialAreas = [] }: Inven
                             className="inline-flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2.5 text-sm font-medium text-purple-700 transition-all hover:bg-purple-100 dark:border-purple-900 dark:bg-purple-900/20 dark:text-purple-300"
                         >
                             📅 Cierre Diario
+                        </Link>
+                        <Link
+                            href="/dashboard/inventario/historial"
+                            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition-all hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-900/20 dark:text-blue-300"
+                        >
+                            📜 Historial
                         </Link>
                     </div>
                 </div>
@@ -403,6 +434,20 @@ export default function InventoryView({ initialItems, initialAreas = [] }: Inven
                                             >
                                                 ✏️
                                             </button>
+                                            {hasRole(['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER']) && (
+                                                <button
+                                                    onClick={() => handleDelete(item)}
+                                                    disabled={isDeleting === item.id}
+                                                    className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 disabled:opacity-50"
+                                                    title="Eliminar ítem (Solo Gerentes)"
+                                                >
+                                                    {isDeleting === item.id ? (
+                                                        <span className="animate-spin">⏳</span>
+                                                    ) : (
+                                                        <Trash2 className="h-4 w-4" />
+                                                    )}
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 );

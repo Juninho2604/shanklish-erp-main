@@ -5,7 +5,25 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuthStore } from '@/stores/auth.store';
 import { formatCurrency, formatNumber, cn } from '@/lib/utils';
+
 import { registrarEntradaMercancia } from '@/app/actions/entrada.actions';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    CommandSeparator,
+} from '@/components/ui/command';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import QuickItemModal from './QuickItemModal';
+import { Button } from '@/components/ui/button';
 
 // Tipos
 interface UploadedFile {
@@ -56,8 +74,16 @@ export default function EntradaMercanciaForm({ itemsList, areasList }: Props) {
     const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
     const [showPreview, setShowPreview] = useState(false);
 
+
+    const [isQuickItemModalOpen, setIsQuickItemModalOpen] = useState(false);
+
+    // Lista local para actualizar cuando se crea uno nuevo sin recargar
+    const [localItems, setLocalItems] = useState(itemsList);
+    // Estado para el combobox
+    const [openCombobox, setOpenCombobox] = useState(false);
+
     // Obtener item seleccionado
-    const selectedItemData = itemsList.find(i => i.id === selectedItem);
+    const selectedItemData = localItems.find(i => i.id === selectedItem);
 
     // Auto-llenar costo actual cuando se selecciona item
     useEffect(() => {
@@ -116,7 +142,7 @@ export default function EntradaMercanciaForm({ itemsList, areasList }: Props) {
     const addItem = () => {
         if (!selectedItem || quantity <= 0) return;
 
-        const item = itemsList.find(i => i.id === selectedItem);
+        const item = localItems.find(i => i.id === selectedItem);
         if (!item) return;
 
         // Verificar si ya existe
@@ -421,18 +447,65 @@ export default function EntradaMercanciaForm({ itemsList, areasList }: Props) {
                                     <label className="mb-1 block text-xs font-medium text-gray-500">
                                         Insumo
                                     </label>
-                                    <select
-                                        value={selectedItem}
-                                        onChange={(e) => setSelectedItem(e.target.value)}
-                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
-                                    >
-                                        <option value="">Seleccionar...</option>
-                                        {itemsList.map(item => (
-                                            <option key={item.id} value={item.id}>
-                                                {item.name} ({item.baseUnit})
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                                        Insumo
+                                    </label>
+                                    <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openCombobox}
+                                                className="w-full justify-between border-gray-200 bg-white font-normal dark:border-gray-600 dark:bg-gray-800"
+                                            >
+                                                {selectedItem
+                                                    ? localItems.find((item) => item.id === selectedItem)?.name
+                                                    : "Seleccionar..."}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[300px] p-0" align="start">
+                                            <Command>
+                                                <CommandInput placeholder="Buscar insumo..." />
+                                                <CommandList>
+                                                    <CommandEmpty>No se encontró el insumo.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        <CommandItem
+                                                            onSelect={() => {
+                                                                setIsQuickItemModalOpen(true);
+                                                                setOpenCombobox(false);
+                                                            }}
+                                                            className="text-amber-600 font-medium cursor-pointer"
+                                                        >
+                                                            <Plus className="mr-2 h-4 w-4" />
+                                                            Crear "{selectedItem || 'Nuevo'}"
+                                                        </CommandItem>
+                                                    </CommandGroup>
+                                                    <CommandSeparator />
+                                                    <CommandGroup heading="Insumos Existentes">
+                                                        {localItems.map((item) => (
+                                                            <CommandItem
+                                                                key={item.id}
+                                                                value={item.name}
+                                                                onSelect={() => {
+                                                                    setSelectedItem(item.id === selectedItem ? "" : item.id);
+                                                                    setOpenCombobox(false);
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        selectedItem === item.id ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                {item.name} ({item.baseUnit})
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
 
                                 <div>
@@ -714,6 +787,17 @@ export default function EntradaMercanciaForm({ itemsList, areasList }: Props) {
                     </div>
                 </div>
             )}
+
+            {/* Modal de creación rápida */}
+            <QuickItemModal
+                isOpen={isQuickItemModalOpen}
+                onClose={() => setIsQuickItemModalOpen(false)}
+                onSuccess={(newItem) => {
+                    setLocalItems([...localItems, newItem]);
+                    setSelectedItem(newItem.id);
+                }}
+            />
         </div>
     );
 }
+
