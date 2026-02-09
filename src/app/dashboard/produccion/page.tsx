@@ -2,19 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
-<<<<<<< HEAD
-import { formatNumber, formatCurrency, cn } from '@/lib/utils';
-=======
 import { formatNumber, cn } from '@/lib/utils';
->>>>>>> 1cf4d73748cdbebc15fd96dbb5cc3ee900ab789c
 import {
     quickProductionAction,
     calculateRequirementsAction,
     getProductionRecipesAction,
-<<<<<<< HEAD
-=======
     getProductionHistoryAction,
->>>>>>> 1cf4d73748cdbebc15fd96dbb5cc3ee900ab789c
     getProductionAreasAction,
     IngredientRequirement,
     ProductionActionResult,
@@ -56,14 +49,10 @@ export default function ProduccionPage() {
     // Estado
     const [activeTab, setActiveTab] = useState<'nueva' | 'historial'>('nueva');
     const [recipes, setRecipes] = useState<RecipeOption[]>([]);
-<<<<<<< HEAD
-    const [areas, setAreas] = useState<{ id: string; name: string }[]>([]);
-=======
     const [areas, setAreas] = useState<AreaOption[]>([]);
     const [productionHistory, setProductionHistory] = useState<ProductionRecord[]>([]);
 
     // Formulario
->>>>>>> 1cf4d73748cdbebc15fd96dbb5cc3ee900ab789c
     const [selectedRecipe, setSelectedRecipe] = useState('');
     const [quantity, setQuantity] = useState<number>(0);
     const [areaId, setAreaId] = useState('');
@@ -77,26 +66,6 @@ export default function ProduccionPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<ProductionActionResult | null>(null);
 
-<<<<<<< HEAD
-    // Historial de producciones
-    const [productionHistory, setProductionHistory] = useState<{
-        orderNumber: string;
-        product: string;
-        quantity: number;
-        unit: string;
-        timestamp: Date;
-    }[]>([]);
-
-    // Cargar recetas y áreas al inicio
-    useEffect(() => {
-        getProductionRecipesAction().then(setRecipes);
-        getProductionAreasAction().then(loadedAreas => {
-            setAreas(loadedAreas);
-            // Seleccionar Centro de Producción por defecto si existe
-            const prodArea = loadedAreas.find(a => a.name.toLowerCase().includes('produccion') || a.name.toLowerCase().includes('producción'));
-            if (prodArea) setAreaId(prodArea.id);
-            else if (loadedAreas.length > 0) setAreaId(loadedAreas[0].id);
-=======
     // Cargar datos al inicio
     useEffect(() => {
         Promise.all([
@@ -116,7 +85,6 @@ export default function ProduccionPage() {
                 );
                 setAreaId(prodArea?.id || areasData[0].id);
             }
->>>>>>> 1cf4d73748cdbebc15fd96dbb5cc3ee900ab789c
         });
     }, []);
 
@@ -256,126 +224,6 @@ export default function ProduccionPage() {
                                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 text-white shadow-lg">
                                     <ChefHat className="h-6 w-6" />
                                 </div>
-<<<<<<< HEAD
-                            </div>
-
-                            {/* Área */}
-                            <div>
-                                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Área de Producción
-                                </label>
-                                <select
-                                    value={areaId}
-                                    onChange={(e) => setAreaId(e.target.value)}
-                                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                >
-                                    {areas.map(area => (
-                                        <option key={area.id} value={area.id}>
-                                            {area.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* Notas */}
-                            <div className="sm:col-span-2">
-                                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Notas (opcional)
-                                </label>
-                                <textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Ej: Lote #45, Temperatura perfecta"
-                                    rows={2}
-                                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Tabla de ingredientes a consumir */}
-                    {requirements.length > 0 && (
-                        <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-                                <h3 className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white">
-                                    <span>📋</span>
-                                    Ingredientes que se consumirán
-                                </h3>
-                                <p className="text-sm text-gray-500">
-                                    Estos insumos se descontarán automáticamente del inventario
-                                </p>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
-                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                                Ingrediente
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                                Necesario
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                                Disponible
-                                            </th>
-                                            <th className="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                                Estado
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {requirements.map((req) => (
-                                            <tr key={req.itemId} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                                <td className="px-6 py-4">
-                                                    <span className="font-medium text-gray-900 dark:text-white">
-                                                        {req.itemName}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className="font-mono text-gray-900 dark:text-white">
-                                                        {formatNumber(req.gross, 3)} {req.unit}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className={cn(
-                                                        'font-mono',
-                                                        req.sufficient ? 'text-gray-500' : 'text-red-600'
-                                                    )}>
-                                                        {formatNumber(req.available, 3)} {req.unit}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    {req.sufficient ? (
-                                                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                                            ✓ OK
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                                            ✗ Falta {formatNumber(req.gross - req.available, 3)}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Resultado */}
-                    {result && (
-                        <div className={cn(
-                            'rounded-xl p-6',
-                            result.success
-                                ? 'border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20'
-                                : 'border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-                        )}>
-                            <div className="flex items-start gap-3">
-                                <span className="text-2xl">{result.success ? '✅' : '❌'}</span>
-=======
->>>>>>> 1cf4d73748cdbebc15fd96dbb5cc3ee900ab789c
                                 <div>
                                     <h2 className="font-semibold text-gray-900 dark:text-white">
                                         Registrar Producción
