@@ -374,9 +374,8 @@ export async function completeProteinProcessingAction(
                         movementType: 'PRODUCTION',
                         quantity: -processing.frozenWeight,
                         unit: processing.sourceItem.baseUnit,
-                        areaId: processing.areaId,
-                        referenceType: 'PROTEIN_PROCESSING',
-                        referenceId: processing.id,
+                        documentType: 'PROTEIN_PROCESSING',
+                        referenceNumber: processing.code, // Usamos el código legible
                         notes: `Desposte: ${processing.code}`,
                         createdById: session.id
                     }
@@ -418,9 +417,8 @@ export async function completeProteinProcessingAction(
                             movementType: 'PRODUCTION',
                             quantity: subProduct.weight,
                             unit: subProduct.unitType,
-                            areaId: processing.areaId,
-                            referenceType: 'PROTEIN_PROCESSING',
-                            referenceId: processing.id,
+                            documentType: 'PROTEIN_PROCESSING',
+                            referenceNumber: processing.code,
                             notes: `Subproducto de desposte: ${processing.code} - ${subProduct.name}`,
                             createdById: session.id
                         }
