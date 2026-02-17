@@ -61,6 +61,15 @@ export default function EntradaMercanciaForm({ itemsList, areasList }: Props) {
     const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
     const [showPreview, setShowPreview] = useState(false);
 
+    // OCR State
+    const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+    const [ocrSuggestions, setOcrSuggestions] = useState<any[]>([]);
+    const [showOcrModal, setShowOcrModal] = useState(false);
+
+    // Import OCR Action (dynamic import to avoid server-client issues if not used)
+    // import { processHandwrittenNotesAction } from '@/app/actions/ocr.actions';
+
+
 
     const [isQuickItemModalOpen, setIsQuickItemModalOpen] = useState(false);
 
@@ -134,6 +143,71 @@ export default function EntradaMercanciaForm({ itemsList, areasList }: Props) {
             setIsUploading(false);
         }
     };
+
+    const handleOCRProcess = async () => {
+        if (!uploadedFile) {
+            alert('Primero sube una imagen');
+            return;
+        }
+        if (!uploadedFile.type.startsWith('image/')) {
+            alert('Solo se pueden procesar imágenes (JPG, PNG) con IA, no PDFs.');
+            return;
+        }
+
+        setIsProcessingOCR(true);
+        try {
+            // Fetch the image to get blob/base64
+            const response = await fetch(uploadedFile.url);
+            const blob = await response.blob();
+
+            // Convert to base64
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = async () => {
+                const base64data = reader.result as string;
+
+                // Call Server Action
+                const { processHandwrittenNotesAction } = await import('@/app/actions/ocr.actions');
+                const result = await processHandwrittenNotesAction(base64data);
+
+                if (result.success) {
+                    setOcrSuggestions(result.suggestions);
+                    setShowOcrModal(true);
+                } else {
+                    alert('Error OCR: ' + result.message);
+                }
+                setIsProcessingOCR(false);
+            };
+
+        } catch (error) {
+            console.error('Error procesando OCR', error);
+            alert('Error al procesar la imagen con IA');
+            setIsProcessingOCR(false);
+        }
+    };
+
+    const acceptOcrItem = (suggestion: any) => {
+        if (!suggestion.match) return;
+
+        const item = localItems.find(i => i.id === suggestion.match.item.id);
+        if (!item) return;
+
+        // Add to main list
+        const newItem: EntradaItem = {
+            id: `ocr-${Date.now()}-${Math.random()}`,
+            itemId: item.id,
+            itemName: item.name,
+            quantity: suggestion.detectedQuantity || 1,
+            unit: item.baseUnit,
+            unitCost: item.currentCost || 0,
+            totalCost: (suggestion.detectedQuantity || 1) * (item.currentCost || 0),
+        };
+
+        if (!entradaItems.some(e => e.itemId === newItem.itemId)) {
+            setEntradaItems(prev => [...prev, newItem]);
+        }
+    };
+
 
     // Agregar item a la lista
     const addItem = () => {
@@ -736,6 +810,79 @@ export default function EntradaMercanciaForm({ itemsList, areasList }: Props) {
                                 title="Documento"
                             />
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Resultados OCR */}
+            {showOcrModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                    <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
+                        <div className="border-b border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                🤖 Resultados del Análisis IA
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                                Revisa los items detectados. La IA puede equivocarse con la caligrafía difícil.
+                            </p>
+                        </div>
+
+                        <div className="max-h-[60vh] overflow-y-auto p-4">
+                            {ocrSuggestions.length === 0 ? (
+                                <p className="text-center text-gray-500">No se detectaron items legibles.</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {ocrSuggestions.map((sugg, idx) => (
+                                        <div key={idx} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-700/50">
+                                            <div>
+                                                <p className="font-mono text-xs text-gray-400">
+                                                    Detectado: "{sugg.originalText}"
+                                                </p>
+                                                <div className="flex items-center gap-2">
+                                                    {sugg.match ? (
+                                                        <>
+                                                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                                                {sugg.match.item.name}
+                                                            </span>
+                                                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-800">
+                                                                {sugg.detectedQuantity} {sugg.match.item.baseUnit}
+                                                            </span>
+                                                            {sugg.match.score > 0.3 && (
+                                                                <span className="text-xs text-amber-500" title="Confianza baja">⚠️</span>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-red-400">No encontrado en inventario</span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {sugg.match && (
+                                                <button
+                                                    onClick={() => {
+                                                        acceptOcrItem(sugg);
+                                                        // Eliminar de la lista visual temporalmente o marcar como agregado
+                                                        setOcrSuggestions(prev => prev.filter((_, i) => i !== idx));
+                                                    }}
+                                                    className="rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                                >
+                                                    Agregar
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+                            <button
+                                onClick={() => setShowOcrModal(false)}
+                                className="rounded-lg bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
