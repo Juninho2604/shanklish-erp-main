@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores/ui.store';
 import { ROLE_INFO } from '@/lib/constants/roles';
 import { UserRole } from '@/types';
 import { logoutAction } from '@/app/actions/auth.actions';
+import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
 
 interface NavItem {
     label: string;
@@ -110,7 +111,7 @@ const posNavigation: NavItem[] = [
         label: 'Historial Ventas',
         href: '/dashboard/sales',
         icon: '📈',
-        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CHEF', 'AREA_LEAD'],
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CHEF'],
     },
     {
         label: 'Comandera Cocina',
@@ -327,6 +328,8 @@ export function Sidebar({ initialUser }: SidebarProps) {
                                 </span>
                             )}
                         </div>
+
+                        <ChangePasswordDialog />
 
                         {/* Botón Logout */}
                         <form action={logoutAction}>
