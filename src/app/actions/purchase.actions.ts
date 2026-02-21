@@ -4,8 +4,11 @@
  * SHANKLISH CARACAS ERP - Purchase Order Actions
  * 
  * Server Actions para gestión de Órdenes de Compra
+ * - Configuración masiva de stock mínimo / punto de reorden
  * - Generación automática basada en stock mínimo
- * - Permite gestionar proveedores y órdenes de compra
+ * - Vista por categoría
+ * - Recepción parcial vinculada a OC
+ * - Entrada excepcional independiente
  */
 
 import { revalidatePath } from 'next/cache';
@@ -25,7 +28,8 @@ export interface LowStockItem {
     currentStock: number;
     minimumStock: number;
     reorderPoint: number;
-    suggestedQuantity: number; // Cantidad sugerida a pedir
+    suggestedQuantity: number;
+    isCritical: boolean;
 }
 
 export interface CreatePurchaseOrderInput {
@@ -46,6 +50,107 @@ export interface ReceiveItemInput {
     unitCost?: number;
 }
 
+export interface StockConfigItem {
+    id: string;
+    minimumStock: number;
+    reorderPoint: number;
+}
+
+// ============================================================================
+// ACTION: CONFIGURAR STOCK MÍNIMO EN LOTE
+// ============================================================================
+
+/**
+ * Actualiza minimumStock y reorderPoint para múltiples items a la vez.
+ * Esto es necesario para que el sistema de alertas de stock bajo funcione.
+ */
+export async function updateStockLevelsAction(
+    items: StockConfigItem[]
+): Promise<{ success: boolean; message: string; updatedCount?: number }> {
+    const session = await getSession();
+    if (!session?.id) {
+        return { success: false, message: 'No autorizado' };
+    }
+
+    try {
+        // Actualizar en lotes paralelos (evita timeout de transacción en BD remota)
+        const BATCH_SIZE = 10;
+        let updatedCount = 0;
+
+        for (let i = 0; i < items.length; i += BATCH_SIZE) {
+            const batch = items.slice(i, i + BATCH_SIZE);
+            await Promise.all(
+                batch.map(item =>
+                    prisma.inventoryItem.update({
+                        where: { id: item.id },
+                        data: {
+                            minimumStock: item.minimumStock,
+                            reorderPoint: item.reorderPoint
+                        }
+                    })
+                )
+            );
+            updatedCount += batch.length;
+        }
+
+        revalidatePath('/dashboard/compras');
+        revalidatePath('/dashboard/inventario');
+
+        return {
+            success: true,
+            message: `Se actualizaron ${updatedCount} productos correctamente`,
+            updatedCount
+        };
+    } catch (error) {
+        console.error('Error en updateStockLevelsAction:', error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Error al actualizar niveles de stock'
+        };
+    }
+}
+
+// ============================================================================
+// ACTION: OBTENER TODOS LOS ITEMS CON SU CONFIGURACIÓN DE STOCK
+// ============================================================================
+
+/**
+ * Obtiene todos los items de materia prima con su stock actual,
+ * mínimo y punto de reorden para configuración masiva.
+ */
+export async function getAllItemsWithStockConfigAction() {
+    try {
+        const items = await prisma.inventoryItem.findMany({
+            where: {
+                isActive: true,
+                type: 'RAW_MATERIAL'
+            },
+            include: {
+                stockLevels: true
+            },
+            orderBy: [
+                { category: 'asc' },
+                { name: 'asc' }
+            ]
+        });
+
+        return items.map(item => ({
+            id: item.id,
+            name: item.name,
+            sku: item.sku,
+            category: item.category || 'Sin Categoría',
+            baseUnit: item.baseUnit,
+            currentStock: item.stockLevels.reduce((sum, loc) => sum + loc.currentStock, 0),
+            minimumStock: item.minimumStock,
+            reorderPoint: item.reorderPoint,
+            isCritical: item.isCritical
+        }));
+    } catch (error) {
+        console.error('Error en getAllItemsWithStockConfigAction:', error);
+        return [];
+    }
+}
+
 // ============================================================================
 // ACTION: OBTENER ITEMS CON STOCK BAJO (PARA GENERAR ORDEN AUTOMÁTICA)
 // ============================================================================
@@ -56,34 +161,33 @@ export interface ReceiveItemInput {
  */
 export async function getLowStockItemsAction(): Promise<LowStockItem[]> {
     try {
-        // Obtener todos los items activos con sus ubicaciones
         const items = await prisma.inventoryItem.findMany({
             where: {
                 isActive: true,
-                type: 'RAW_MATERIAL' // Solo materias primas se compran
+                type: 'RAW_MATERIAL'
             },
             include: {
                 stockLevels: true
             },
-            orderBy: { name: 'asc' }
+            orderBy: [
+                { category: 'asc' },
+                { name: 'asc' }
+            ]
         });
 
         const lowStockItems: LowStockItem[] = [];
 
         for (const item of items) {
-            // Calcular stock global
             const totalStock = item.stockLevels.reduce((sum, loc) => sum + loc.currentStock, 0);
 
-            // Verificar si está bajo
             const isBelowReorder = item.reorderPoint > 0 && totalStock < item.reorderPoint;
             const isBelowMinimum = item.minimumStock > 0 && totalStock < item.minimumStock;
 
             if (isBelowReorder || isBelowMinimum) {
-                // Calcular cantidad sugerida: llevar al punto de reorden + 20% buffer
+                // Cantidad sugerida: llegar al punto de reorden + 20% buffer
                 const targetStock = Math.max(item.reorderPoint, item.minimumStock * 1.5);
                 const suggestedQty = Math.max(0, targetStock - totalStock);
 
-                // Redondear hacia arriba para unidades enteras si aplica
                 const roundedQty = item.baseUnit === 'UNIT'
                     ? Math.ceil(suggestedQty)
                     : parseFloat(suggestedQty.toFixed(2));
@@ -97,13 +201,16 @@ export async function getLowStockItemsAction(): Promise<LowStockItem[]> {
                     currentStock: totalStock,
                     minimumStock: item.minimumStock,
                     reorderPoint: item.reorderPoint,
-                    suggestedQuantity: roundedQty
+                    suggestedQuantity: roundedQty,
+                    isCritical: totalStock <= 0 || (item.minimumStock > 0 && totalStock <= item.minimumStock * 0.25)
                 });
             }
         }
 
-        // Ordenar por urgencia (los más críticos primero)
+        // Ordenar: críticos primero, luego por ratio
         lowStockItems.sort((a, b) => {
+            if (a.isCritical && !b.isCritical) return -1;
+            if (!a.isCritical && b.isCritical) return 1;
             const aRatio = a.currentStock / (a.minimumStock || 1);
             const bRatio = b.currentStock / (b.minimumStock || 1);
             return aRatio - bRatio;
@@ -196,7 +303,7 @@ export async function createPurchaseOrderAction(
                 expectedDate: input.expectedDate,
                 notes: input.notes,
                 subtotal,
-                totalAmount: subtotal, // Sin impuestos por ahora
+                totalAmount: subtotal,
                 createdById: session.id,
                 items: {
                     create: itemsData
@@ -238,7 +345,7 @@ export async function getPurchaseOrdersAction(status?: string) {
                 items: {
                     include: {
                         inventoryItem: {
-                            select: { name: true, sku: true }
+                            select: { name: true, sku: true, category: true, baseUnit: true }
                         }
                     }
                 },
@@ -261,8 +368,11 @@ export async function getPurchaseOrdersAction(status?: string) {
             createdBy: `${order.createdBy.firstName} ${order.createdBy.lastName}`,
             items: order.items.map(item => ({
                 id: item.id,
+                inventoryItemId: item.inventoryItemId,
                 itemName: item.inventoryItem.name,
                 itemSku: item.inventoryItem.sku,
+                category: item.inventoryItem.category || 'Sin Categoría',
+                baseUnit: item.inventoryItem.baseUnit,
                 quantityOrdered: item.quantityOrdered,
                 quantityReceived: item.quantityReceived,
                 unit: item.unit,
@@ -295,7 +405,7 @@ export async function getPurchaseOrderByIdAction(orderId: string) {
                 items: {
                     include: {
                         inventoryItem: {
-                            select: { id: true, name: true, sku: true, baseUnit: true }
+                            select: { id: true, name: true, sku: true, baseUnit: true, category: true }
                         }
                     }
                 }
@@ -334,13 +444,13 @@ export async function sendPurchaseOrderAction(orderId: string): Promise<{ succes
 }
 
 // ============================================================================
-// ACTION: RECIBIR ITEMS DE UNA ORDEN DE COMPRA
+// ACTION: RECIBIR ITEMS DE UNA ORDEN DE COMPRA (PARCIAL O TOTAL)
 // ============================================================================
 
 export async function receivePurchaseOrderItemsAction(
     orderId: string,
     items: ReceiveItemInput[],
-    areaId: string // Área donde se recibirá la mercancía
+    areaId: string
 ): Promise<{ success: boolean; message: string }> {
     const session = await getSession();
     if (!session?.id) {
@@ -348,108 +458,117 @@ export async function receivePurchaseOrderItemsAction(
     }
 
     try {
-        await prisma.$transaction(async (tx) => {
-            let allReceived = true;
+        let receivedCount = 0;
 
-            for (const item of items) {
-                if (item.quantityReceived <= 0) continue;
+        // Procesar item por item (sin transacción interactiva para evitar timeout en BD remota)
+        for (const item of items) {
+            if (item.quantityReceived <= 0) continue;
 
-                // Obtener el item de la orden
-                const orderItem = await tx.purchaseOrderItem.findUnique({
-                    where: { id: item.purchaseOrderItemId },
-                    include: { inventoryItem: true }
-                });
-
-                if (!orderItem) continue;
-
-                // Actualizar cantidad recibida
-                const newReceivedQty = orderItem.quantityReceived + item.quantityReceived;
-                await tx.purchaseOrderItem.update({
-                    where: { id: item.purchaseOrderItemId },
-                    data: { quantityReceived: newReceivedQty }
-                });
-
-                // Verificar si aún falta por recibir
-                if (newReceivedQty < orderItem.quantityOrdered) {
-                    allReceived = false;
-                }
-
-                // Registrar movimiento de inventario
-                const unitCost = item.unitCost || orderItem.unitPrice || 0;
-                await tx.inventoryMovement.create({
-                    data: {
-                        inventoryItemId: orderItem.inventoryItemId,
-                        movementType: 'PURCHASE',
-                        quantity: item.quantityReceived,
-                        unit: orderItem.unit,
-                        unitCost: unitCost,
-                        totalCost: item.quantityReceived * unitCost,
-                        createdById: session.id,
-                        reason: `Recepción de Orden de Compra`,
-                        referenceNumber: orderId
-                    }
-                });
-
-                // Actualizar stock en ubicación
-                await tx.inventoryLocation.upsert({
-                    where: {
-                        inventoryItemId_areaId: {
-                            inventoryItemId: orderItem.inventoryItemId,
-                            areaId: areaId
-                        }
-                    },
-                    create: {
-                        inventoryItemId: orderItem.inventoryItemId,
-                        areaId: areaId,
-                        currentStock: item.quantityReceived,
-                        lastCountDate: new Date()
-                    },
-                    update: {
-                        currentStock: { increment: item.quantityReceived },
-                        lastCountDate: new Date()
-                    }
-                });
-
-                // Actualizar historial de costos si hay costo
-                if (unitCost > 0) {
-                    await tx.costHistory.create({
-                        data: {
-                            inventoryItemId: orderItem.inventoryItemId,
-                            costPerUnit: unitCost,
-                            effectiveFrom: new Date(),
-                            reason: 'Actualización por Orden de Compra',
-                            createdById: session.id
-                        }
-                    });
-                }
-            }
-
-            // Actualizar estado de la orden
-            const order = await tx.purchaseOrder.findUnique({
-                where: { id: orderId },
-                include: { items: true }
+            const orderItem = await prisma.purchaseOrderItem.findUnique({
+                where: { id: item.purchaseOrderItemId },
+                include: { inventoryItem: true }
             });
 
-            if (order) {
-                const allItemsReceived = order.items.every(
-                    item => item.quantityReceived >= item.quantityOrdered
-                );
+            if (!orderItem) continue;
 
-                await tx.purchaseOrder.update({
-                    where: { id: orderId },
+            // Actualizar cantidad recibida
+            const newReceivedQty = orderItem.quantityReceived + item.quantityReceived;
+            await prisma.purchaseOrderItem.update({
+                where: { id: item.purchaseOrderItemId },
+                data: { quantityReceived: newReceivedQty }
+            });
+
+            receivedCount++;
+
+            // Registrar movimiento de inventario
+            const unitCost = item.unitCost || orderItem.unitPrice || 0;
+            await prisma.inventoryMovement.create({
+                data: {
+                    inventoryItemId: orderItem.inventoryItemId,
+                    movementType: 'PURCHASE',
+                    quantity: item.quantityReceived,
+                    unit: orderItem.unit,
+                    unitCost: unitCost,
+                    totalCost: item.quantityReceived * unitCost,
+                    createdById: session.id,
+                    reason: `Recepción OC - Orden ${orderId.slice(0, 8)}`,
+                    referenceNumber: orderId
+                }
+            });
+
+            // Actualizar stock
+            await prisma.inventoryLocation.upsert({
+                where: {
+                    inventoryItemId_areaId: {
+                        inventoryItemId: orderItem.inventoryItemId,
+                        areaId: areaId
+                    }
+                },
+                create: {
+                    inventoryItemId: orderItem.inventoryItemId,
+                    areaId: areaId,
+                    currentStock: item.quantityReceived,
+                    lastCountDate: new Date()
+                },
+                update: {
+                    currentStock: { increment: item.quantityReceived },
+                    lastCountDate: new Date()
+                }
+            });
+
+            // Actualizar historial de costos si hay costo
+            if (unitCost > 0) {
+                await prisma.costHistory.create({
                     data: {
-                        status: allItemsReceived ? 'RECEIVED' : 'PARTIAL',
-                        receivedDate: allItemsReceived ? new Date() : undefined,
-                        receivedById: session.id
+                        inventoryItemId: orderItem.inventoryItemId,
+                        costPerUnit: unitCost,
+                        effectiveFrom: new Date(),
+                        reason: 'Actualización por Orden de Compra',
+                        createdById: session.id
                     }
                 });
             }
-        }, { timeout: 60000 });
+        }
+
+        // Actualizar estado de la orden
+        const updatedOrder = await prisma.purchaseOrder.findUnique({
+            where: { id: orderId },
+            include: { items: true }
+        });
+
+        if (updatedOrder) {
+            const allItemsReceived = updatedOrder.items.every(
+                item => item.quantityReceived >= item.quantityOrdered
+            );
+
+            const anyItemReceived = updatedOrder.items.some(
+                item => item.quantityReceived > 0
+            );
+
+            let newStatus = updatedOrder.status;
+            if (allItemsReceived) {
+                newStatus = 'RECEIVED';
+            } else if (anyItemReceived) {
+                newStatus = 'PARTIAL';
+            }
+
+            await prisma.purchaseOrder.update({
+                where: { id: orderId },
+                data: {
+                    status: newStatus,
+                    receivedDate: allItemsReceived ? new Date() : undefined,
+                    receivedById: session.id
+                }
+            });
+        }
 
         revalidatePath('/dashboard/compras');
         revalidatePath('/dashboard/inventario');
 
-        return { success: true, message: 'Mercancía recibida exitosamente' };
+        return {
+            success: true,
+            message: `Se recibieron ${receivedCount} item(s) exitosamente`
+        };
     } catch (error) {
         console.error('Error en receivePurchaseOrderItemsAction:', error);
         return { success: false, message: 'Error al recibir mercancía' };
@@ -554,6 +673,28 @@ export async function createSupplierAction(input: {
 }
 
 // ============================================================================
+// ACTION: OBTENER ÁREAS PARA RECEPCIÓN
+// ============================================================================
+
+export async function getAreasForReceivingAction() {
+    try {
+        const areas = await prisma.area.findMany({
+            where: { isActive: true },
+            select: {
+                id: true,
+                name: true,
+                description: true,
+            },
+            orderBy: { name: 'asc' },
+        });
+        return areas;
+    } catch (error) {
+        console.error('Error en getAreasForReceivingAction:', error);
+        return [];
+    }
+}
+
+// ============================================================================
 // ACTION: EXPORTAR ORDEN DE COMPRA A TEXTO (para WhatsApp/Email)
 // ============================================================================
 
@@ -566,7 +707,7 @@ export async function exportPurchaseOrderTextAction(orderId: string): Promise<st
                 items: {
                     include: {
                         inventoryItem: {
-                            select: { name: true }
+                            select: { name: true, category: true }
                         }
                     }
                 }
@@ -587,14 +728,23 @@ export async function exportPurchaseOrderTextAction(orderId: string): Promise<st
         if (order.expectedDate) {
             text += `*Entrega esperada:* ${new Date(order.expectedDate).toLocaleDateString('es-VE')}\n`;
         }
-        text += `\n📦 *ITEMS:*\n`;
-        text += `━━━━━━━━━━━━━━━━━━━━\n`;
 
+        // Agrupar por categoría
+        const byCategory: Record<string, typeof order.items> = {};
         for (const item of order.items) {
-            text += `• ${item.inventoryItem.name}: ${item.quantityOrdered} ${item.unit}\n`;
+            const cat = item.inventoryItem.category || 'Otros';
+            if (!byCategory[cat]) byCategory[cat] = [];
+            byCategory[cat].push(item);
         }
 
-        text += `━━━━━━━━━━━━━━━━━━━━\n`;
+        for (const [category, catItems] of Object.entries(byCategory)) {
+            text += `\n📦 *${category}:*\n`;
+            for (const item of catItems) {
+                text += `• ${item.inventoryItem.name}: ${item.quantityOrdered} ${item.unit}\n`;
+            }
+        }
+
+        text += `\n━━━━━━━━━━━━━━━━━━━━\n`;
         text += `*Total Items:* ${order.items.length}\n`;
 
         if (order.notes) {

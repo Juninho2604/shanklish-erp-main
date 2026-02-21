@@ -10,7 +10,7 @@ export default async function DailyInventoryPage() {
     return (
         <div className="container mx-auto p-4 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">📅 Cierre Diario de Inventario</h1>
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">📅 Inventario Diario de Alimentos</h1>
             </div>
             <DailyInventoryManager initialAreas={areas} />
         </div>

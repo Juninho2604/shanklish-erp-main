@@ -96,6 +96,9 @@ model Area {
 
   // Procesamiento de Proteínas
   proteinProcessings ProteinProcessing[]
+
+  // Items críticos por área
+  criticalItems    AreaCriticalItem[]
 }
 
 // ============================================================================
@@ -145,10 +148,29 @@ model InventoryItem {
   proteinSources     ProteinProcessing[] @relation("ProteinSource")
   proteinOutputs     ProteinSubProduct[] @relation("ProteinOutput")
 
+  // Items críticos por área
+  areaCriticalItems  AreaCriticalItem[]
+
   @@index([sku])
   @@index([type])
   @@index([category])
   @@index([name])
+}
+
+// ============================================================================
+// ITEMS CRÍTICOS POR ÁREA (Lista independiente por ubicación)
+// ============================================================================
+
+model AreaCriticalItem {
+  id              String        @id @default(cuid())
+  areaId          String
+  area            Area          @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([areaId, inventoryItemId])
+  @@index([areaId])
 }
 
 model InventoryLocation {

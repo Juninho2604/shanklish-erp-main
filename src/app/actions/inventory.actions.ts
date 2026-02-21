@@ -100,6 +100,7 @@ export async function updateInventoryItemAction(id: string, data: any) {
                 name: data.name,
                 sku: data.sku,
                 category: data.category,
+                baseUnit: data.baseUnit,
                 minimumStock: data.minimumStock,
                 reorderPoint: data.reorderPoint
             }

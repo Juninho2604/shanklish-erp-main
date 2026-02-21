@@ -26,6 +26,12 @@ const navigation: NavItem[] = [
         roles: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER', 'CHEF', 'AREA_LEAD'] // Todos MENOS Cajeras
     },
     {
+        label: 'Inventario Diario',
+        href: '/dashboard/inventario/diario',
+        icon: '📅',
+        roles: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD']
+    },
+    {
         label: 'Inventario',
         href: '/dashboard/inventario',
         icon: '📦',
