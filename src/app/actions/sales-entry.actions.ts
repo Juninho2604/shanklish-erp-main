@@ -11,6 +11,7 @@
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
+import { registerSale } from '@/server/services/inventory.service';
 
 // ============================================================================
 // TIPOS
@@ -175,9 +176,61 @@ export async function createSalesEntryAction(
             total: total
         });
 
+        // ====================================================================
+        // GESTIÓN DE INVENTARIO (Descargo de Recetas)
+        // ====================================================================
+        try {
+            // Recorrer los items vendidos
+            for (const item of input.items) {
+                // 1. Buscar si el producto tiene receta
+                const menuItem = await prisma.menuItem.findUnique({
+                    where: { id: item.menuItemId },
+                    select: {
+                        name: true,
+                        recipeId: true
+                    }
+                });
+
+                // 2. Si tiene recipeId, buscar la receta completa
+                if (menuItem?.recipeId) {
+                    const recipe = await prisma.recipe.findUnique({
+                        where: { id: menuItem.recipeId },
+                        include: {
+                            ingredients: {
+                                include: { ingredientItem: true }
+                            }
+                        }
+                    });
+
+                    if (recipe && recipe.isActive) {
+                        // 3. Descontar ingredientes
+                        for (const ingredient of recipe.ingredients) {
+                            // Cantidad total = CantidadIngrediente * CantidadItemsVendidos
+                            const totalQty = ingredient.quantity * item.quantity;
+
+                            await registerSale({
+                                inventoryItemId: ingredient.ingredientItemId,
+                                quantity: totalQty,
+                                unit: ingredient.unit as any,
+                                areaId: input.areaId, // Usamos el área de venta
+                                orderId: result.id,
+                                userId: session.id,
+                                notes: `Carga Manual: ${item.quantity}x ${menuItem.name}`,
+                                allowNegative: true // Permitir negativos
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (invError) {
+            console.error('Error descontando inventario de carga manual:', invError);
+            // No fallamos la venta, la registramos igual.
+        }
+
         revalidatePath('/dashboard/ventas');
         revalidatePath('/dashboard/pos');
         revalidatePath('/dashboard');
+        revalidatePath('/dashboard/inventario');
 
         return {
             success: true,
