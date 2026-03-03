@@ -8,6 +8,7 @@ export interface CreateAuditInput {
     name: string;
     notes?: string;
     areaId?: string;
+    effectiveDate?: string; // ISO date string (YYYY-MM-DD) para auditorías retroactivas
     items: {
         inventoryItemId: string;
         countedStock: number;
@@ -82,6 +83,7 @@ export async function createAuditAction(input: CreateAuditInput) {
                     notes: input.notes,
                     areaId: input.areaId,
                     status: 'DRAFT',
+                    effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null,
                     createdById: userId
                 }
             });
@@ -229,25 +231,65 @@ export async function approveAuditAction(input: ApproveAuditInput) {
                 }
             });
 
+            // === SOPORTE PARA AUDITORÍA RETROACTIVA ===
+            // Si la auditoría tiene effectiveDate, buscamos los movimientos que ocurrieron DESPUÉS
+            // de esa fecha para sumarlos al stock contado (así no se pierden entradas/transferencias de hoy)
+            const isRetroactive = audit.effectiveDate !== null;
+
+            // Calcular movimientos post-auditoría por item (solo si es retroactiva)
+            const postAuditMovements: Map<string, number> = new Map();
+            if (isRetroactive && audit.effectiveDate) {
+                const movements = await tx.inventoryMovement.findMany({
+                    where: {
+                        createdAt: { gt: audit.effectiveDate },
+                        inventoryItemId: { in: audit.items.map(i => i.inventoryItemId) }
+                    }
+                });
+                for (const mov of movements) {
+                    const current = postAuditMovements.get(mov.inventoryItemId) || 0;
+                    // ADJUSTMENT_IN, PURCHASE, PRODUCTION_IN, TRANSFER_IN suman
+                    // ADJUSTMENT_OUT, SALE, PRODUCTION_OUT, TRANSFER_OUT restan
+                    const isInbound = ['ADJUSTMENT_IN', 'PURCHASE', 'PRODUCTION_IN', 'PRODUCTION'].includes(mov.movementType) && mov.quantity > 0;
+                    const delta = isInbound ? Math.abs(mov.quantity) : -Math.abs(mov.quantity);
+                    postAuditMovements.set(mov.inventoryItemId, current + delta);
+                }
+            }
+
             // Process items with differences
             for (const item of audit.items) {
-                if (Math.abs(item.difference) > 0.0001) {
-                    const movementType = item.difference > 0 ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT';
+                // Para auditoría retroactiva: el stock final = stock contado + movimientos posteriores
+                const postMovement = postAuditMovements.get(item.inventoryItemId) || 0;
+                const finalStock = isRetroactive ? item.countedStock + postMovement : item.countedStock;
+
+                // Obtener stock actual del sistema para calcular la diferencia real
+                const currentLocation = await tx.inventoryLocation.findFirst({
+                    where: {
+                        inventoryItemId: item.inventoryItemId,
+                        areaId: areaToUse!
+                    }
+                });
+                const currentStock = currentLocation?.currentStock || 0;
+                const realDifference = finalStock - currentStock;
+
+                if (Math.abs(realDifference) > 0.0001) {
+                    const movementType = realDifference > 0 ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT';
 
                     await tx.inventoryMovement.create({
                         data: {
                             inventoryItemId: item.inventoryItemId,
                             movementType: movementType as any,
-                            quantity: Math.abs(item.difference),
+                            quantity: Math.abs(realDifference),
                             unit: 'UNIT',
-                            reason: `Auditoría: ${audit.name}`,
-                            notes: `Ajuste automático por aprobación de auditoría #${audit.id}`,
+                            reason: `Auditoría${isRetroactive ? ' retroactiva' : ''}: ${audit.name}`,
+                            notes: isRetroactive
+                                ? `Ajuste por auditoría retroactiva. Conteo: ${item.countedStock}, Mov. posteriores: ${postMovement > 0 ? '+' : ''}${postMovement.toFixed(2)}, Stock final: ${finalStock.toFixed(2)}`
+                                : `Ajuste automático por aprobación de auditoría #${audit.id}`,
                             createdById: userId,
-                            totalCost: item.costSnapshot ? item.costSnapshot * Math.abs(item.difference) : 0
+                            totalCost: item.costSnapshot ? item.costSnapshot * Math.abs(realDifference) : 0
                         }
                     });
 
-                    // Use pre-fetched areaId instead of querying inside loop
+                    // Actualizar el stock al valor final calculado
                     await tx.inventoryLocation.upsert({
                         where: {
                             inventoryItemId_areaId: {
@@ -258,10 +300,10 @@ export async function approveAuditAction(input: ApproveAuditInput) {
                         create: {
                             inventoryItemId: item.inventoryItemId,
                             areaId: areaToUse!,
-                            currentStock: item.countedStock
+                            currentStock: finalStock
                         },
                         update: {
-                            currentStock: { increment: item.difference }
+                            currentStock: finalStock
                         }
                     });
                 }

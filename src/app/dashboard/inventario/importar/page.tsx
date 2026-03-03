@@ -18,6 +18,7 @@ export default function ImportPage() {
     const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isDraft, setIsDraft] = useState(false);
+    const [effectiveDate, setEffectiveDate] = useState('');
 
     // NEW: Area selector state
     const [areas, setAreas] = useState<{ id: string; name: string }[]>([]);
@@ -67,9 +68,10 @@ export default function ImportPage() {
 
             setIsProcessing(true);
             const res = await createAuditAction({
-                name: `Importación ${importType} - ${new Date().toLocaleDateString()}`,
+                name: `Importación ${importType} - ${effectiveDate || new Date().toLocaleDateString()}`,
                 items: auditItems,
-                areaId: selectedAreaId || undefined
+                areaId: selectedAreaId || undefined,
+                effectiveDate: effectiveDate || undefined
             });
 
             setIsProcessing(false);
@@ -418,6 +420,19 @@ export default function ImportPage() {
                                 Cargar como Borrador (Auditoría)
                             </span>
                         </label>
+
+                        {isDraft && (
+                            <div className="flex items-center gap-2 ml-4">
+                                <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Fecha efectiva:</label>
+                                <input
+                                    type="date"
+                                    value={effectiveDate}
+                                    onChange={e => setEffectiveDate(e.target.value)}
+                                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                                <span className="text-xs text-gray-400">(dejar vacío = hoy)</span>
+                            </div>
+                        )}
 
                         <div className="flex items-center gap-3">
                             <Button

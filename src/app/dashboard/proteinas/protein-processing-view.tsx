@@ -12,6 +12,8 @@ import {
     completeProteinProcessingAction,
     cancelProteinProcessingAction,
     getProteinProcessingStatsAction,
+    getTemplateBySourceItemAction,
+    getCompletedProcessingsForChainAction,
     SubProductInput
 } from '@/app/actions/protein-processing.actions';
 import { createQuickItem } from '@/app/actions/inventory.actions';
@@ -61,8 +63,42 @@ export default function ProteinProcessingView() {
     const [newItemUnit, setNewItemUnit] = useState<string>('KG');
     const [newItemType, setNewItemType] = useState<string>('RAW_MATERIAL');
 
-    // Lista combinada de items para seleccionar en subproductos (Filtrado por materias primas/sub recetas)
-    const availableSubItems = proteinItems.filter(i => true); // Por ahora todos, idealmente filtrar.
+    // Estado para plantilla activa
+    const [activeTemplate, setActiveTemplate] = useState<any>(null);
+    const [loadingTemplate, setLoadingTemplate] = useState(false);
+
+    // Estado para procesamiento en cadena (P5)
+    const [processingStep, setProcessingStep] = useState('LIMPIEZA');
+    const [parentProcessingId, setParentProcessingId] = useState('');
+    const [completedProcessings, setCompletedProcessings] = useState<any[]>([]);
+
+    // Cargar plantilla cuando cambia el sourceItem
+    useEffect(() => {
+        if (sourceItemId) {
+            setLoadingTemplate(true);
+            getTemplateBySourceItemAction(sourceItemId).then(template => {
+                setActiveTemplate(template);
+                setLoadingTemplate(false);
+                if (template) {
+                    toast.success(`📋 Plantilla "${template.name}" cargada con ${template.allowedOutputs.length} subproductos`);
+                }
+            });
+        } else {
+            setActiveTemplate(null);
+        }
+    }, [sourceItemId]);
+
+    // Lista de items filtrada: si hay plantilla, solo mostrar los outputs permitidos; si no, todos
+    const availableSubItems = activeTemplate
+        ? activeTemplate.allowedOutputs.map((o: any) => ({
+            id: o.outputItem.id,
+            name: o.outputItem.name,
+            sku: o.outputItem.sku,
+            baseUnit: o.outputItem.baseUnit,
+            expectedWeight: o.expectedWeight,
+            expectedUnits: o.expectedUnits,
+        }))
+        : proteinItems;
 
     // Cargar datos iniciales
     useEffect(() => {
@@ -71,18 +107,20 @@ export default function ProteinProcessingView() {
 
     async function loadData() {
         setIsLoading(true);
-        const [itemsData, areasData, suppliersData, processingsData, statsData] = await Promise.all([
+        const [itemsData, areasData, suppliersData, processingsData, statsData, completedData] = await Promise.all([
             getProteinItemsAction(),
             getProcessingAreasAction(),
             getSuppliersAction(),
             getProteinProcessingsAction(),
-            getProteinProcessingStatsAction()
+            getProteinProcessingStatsAction(),
+            getCompletedProcessingsForChainAction()
         ]);
         setProteinItems(itemsData);
         setAreas(areasData);
         setSuppliers(suppliersData);
         setProcessings(processingsData);
         setStats(statsData);
+        setCompletedProcessings(completedData);
 
         if (areasData.length > 0) {
             setAreaId(areasData[0].id);
@@ -195,6 +233,8 @@ export default function ProteinProcessingView() {
             areaId,
             notes: notes || undefined,
             reportedWaste: reportedWaste || undefined,
+            processingStep: processingStep || 'LIMPIEZA',
+            parentProcessingId: parentProcessingId || undefined,
             subProducts: subProducts.map(sp => ({
                 name: sp.name,
                 weight: sp.weight,
@@ -226,6 +266,8 @@ export default function ProteinProcessingView() {
         setNotes('');
         setReportedWaste(0);
         setSubProducts([]);
+        setProcessingStep('LIMPIEZA');
+        setParentProcessingId('');
     }
 
     // Ver detalle
@@ -489,6 +531,70 @@ export default function ProteinProcessingView() {
                                 />
                             </div>
 
+                            {/* Paso del Procesamiento (P5) */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Paso del Procesamiento</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { value: 'LIMPIEZA', label: '🧹 Limpieza', color: 'blue' },
+                                        { value: 'MASERADO', label: '🥘 Maserado', color: 'purple' },
+                                        { value: 'DISTRIBUCION', label: '📦 Distribución', color: 'green' },
+                                        { value: 'CUSTOM', label: '⚙️ Otro', color: 'gray' },
+                                    ].map(step => (
+                                        <button
+                                            key={step.value}
+                                            type="button"
+                                            onClick={() => setProcessingStep(step.value)}
+                                            className={cn(
+                                                'rounded-lg px-3 py-2 text-xs font-medium border transition-all',
+                                                processingStep === step.value
+                                                    ? `bg-${step.color}-100 border-${step.color}-500 text-${step.color}-800 ring-2 ring-${step.color}-200`
+                                                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                                            )}
+                                        >
+                                            {step.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Encadenar con procesamiento previo (P5) */}
+                            {processingStep !== 'LIMPIEZA' && completedProcessings.length > 0 && (
+                                <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3 dark:border-purple-800 dark:bg-purple-900/10">
+                                    <label className="block text-sm font-medium text-purple-800 dark:text-purple-300 mb-1">
+                                        🔗 Encadenar con procesamiento anterior
+                                    </label>
+                                    <select
+                                        value={parentProcessingId}
+                                        onChange={(e) => {
+                                            setParentProcessingId(e.target.value);
+                                            // Auto-fill frozen weight from parent's total output
+                                            if (e.target.value) {
+                                                const parent = completedProcessings.find(p => p.id === e.target.value);
+                                                if (parent) {
+                                                    setFrozenWeight(parent.totalSubProducts);
+                                                    // Auto-select the first sub-product as source item
+                                                    if (parent.subProducts.length > 0 && parent.subProducts[0].outputItemId) {
+                                                        setSourceItemId(parent.subProducts[0].outputItemId);
+                                                    }
+                                                }
+                                            }
+                                        }}
+                                        className="w-full rounded-lg border border-purple-200 bg-white px-4 py-2.5 text-sm dark:border-purple-700 dark:bg-gray-800"
+                                    >
+                                        <option value="">Sin encadenar (nuevo procesamiento)</option>
+                                        {completedProcessings.map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.code} — {p.sourceItem.name} ({p.processingStep}) — {p.totalSubProducts.toFixed(2)} kg output
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-purple-600 dark:text-purple-400">
+                                        El peso de entrada se auto-llenará con la salida del paso anterior
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Producto a procesar */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Producto a Procesar*</label>
@@ -674,23 +780,35 @@ export default function ProteinProcessingView() {
 
                                 <div className="flex flex-col sm:flex-row gap-2">
                                     <div className="flex-1">
+                                        {activeTemplate && (
+                                            <div className="mb-2 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                                                📋 Usando plantilla: <strong>{activeTemplate.name}</strong> ({activeTemplate.allowedOutputs.length} subproductos permitidos)
+                                            </div>
+                                        )}
                                         <Combobox
-                                            items={proteinItems.map(item => ({
+                                            items={availableSubItems.map((item: any) => ({
                                                 value: item.id,
-                                                label: `${item.name} (${item.baseUnit})`
+                                                label: `${item.name} (${item.baseUnit})${item.expectedWeight ? ` ~${item.expectedWeight}kg` : ''}`
                                             }))}
                                             value={newSubProductItemId}
                                             onChange={(val) => {
-                                                const item = proteinItems.find(i => i.id === val);
+                                                const item = availableSubItems.find((i: any) => i.id === val);
                                                 setNewSubProductItemId(val);
                                                 if (item) {
                                                     setNewSubProductName(item.name);
                                                     setNewSubProductUnitType(item.baseUnit);
+                                                    // Pre-fill expected weight from template if available
+                                                    if (item.expectedWeight && newSubProductWeight === 0) {
+                                                        setNewSubProductWeight(item.expectedWeight);
+                                                    }
+                                                    if (item.expectedUnits) {
+                                                        setNewSubProductUnits(item.expectedUnits);
+                                                    }
                                                 }
                                             }}
-                                            placeholder="-- Seleccionar item existente --"
+                                            placeholder={activeTemplate ? "-- Seleccionar subproducto de plantilla --" : "-- Seleccionar item existente --"}
                                             searchPlaceholder="Buscar item..."
-                                            emptyMessage="No se encontró el item."
+                                            emptyMessage={activeTemplate ? "No hay más subproductos en esta plantilla." : "No se encontró el item."}
                                         />
                                     </div>
                                     <div className="flex gap-2">

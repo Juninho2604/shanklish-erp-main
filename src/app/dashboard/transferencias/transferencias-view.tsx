@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
-import { createRequisition, dispatchRequisition, approveRequisition, rejectRequisition } from '@/app/actions/requisition.actions';
+import { createRequisition, dispatchRequisition, approveRequisition, rejectRequisition, receiveRequisition } from '@/app/actions/requisition.actions';
 import { formatNumber, cn } from '@/lib/utils';
 import { UserRole } from '@/types';
 import { Trash2 } from 'lucide-react';
@@ -29,10 +29,13 @@ interface Requisition {
     requestedBy: { firstName: string; lastName: string };
     processedBy: { firstName: string; lastName: string } | null;
     dispatchedBy?: { firstName: string; lastName: string } | null;
+    receivedBy?: { firstName: string; lastName: string } | null;
     dispatchedAt?: Date | null;
+    receivedAt?: Date | null;
     targetArea: { name: string };
     sourceArea: { name: string } | null;
     createdAt: Date;
+    notes?: string | null;
     items: {
         inventoryItemId: string;
         inventoryItem: { name: string; sku: string; baseUnit: string };
@@ -138,6 +141,10 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
 
     // --- ESTADOS DE DESPACHO ESCALONADO ---
     const [dispatchQuantities, setDispatchQuantities] = useState<Record<string, number>>({});
+
+    // --- ESTADOS DE RECEPCIÓN (Jefe de Cocina) ---
+    const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({});
+    const [receiveNotes, setReceiveNotes] = useState('');
 
     // --- ESTADOS DE CREACIÓN RÁPIDA ---
     const [showQuickCreate, setShowQuickCreate] = useState(false);
@@ -251,6 +258,33 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
             window.location.reload();
         } else {
             alert('Error: ' + res.message);
+        }
+        setIsSubmitting(false);
+    };
+
+    // Recibir (Jefe de Cocina) — verifica cantidades recibidas
+    const handleReceive = async (req: Requisition) => {
+        if (!confirm(`¿Confirmas la recepción de ${req.code}?`)) return;
+        setIsSubmitting(true);
+
+        const items = req.items.map(i => ({
+            inventoryItemId: i.inventoryItemId,
+            receivedQuantity: receiveQuantities[i.inventoryItemId] ?? (i.sentQuantity ?? i.dispatchedQuantity ?? i.quantity)
+        }));
+
+        const res = await receiveRequisition({
+            requisitionId: req.id,
+            receivedById: user?.id || '',
+            items,
+            notes: receiveNotes || undefined
+        });
+
+        if (res.success) {
+            alert('✅ Recepción confirmada.');
+            setReceiveNotes('');
+            window.location.reload();
+        } else {
+            alert('❌ Error: ' + res.message);
         }
         setIsSubmitting(false);
     };
@@ -507,7 +541,7 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
                                     <div>
                                         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
                                             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs dark:bg-blue-900">2</span>
-                                            Despachadas — Esperando Confirmación ({dispatchedReqs.length})
+                                            Despachadas — Esperando Recepción ({dispatchedReqs.length})
                                         </h3>
                                         <div className="space-y-3">
                                             {dispatchedReqs.map(req => (
@@ -526,7 +560,7 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
                                                                 {req.dispatchedAt && ` • ${new Date(req.dispatchedAt).toLocaleString('es-VE')}`}
                                                             </p>
                                                         </div>
-                                                        <div className="flex gap-2">
+                                                        <div className="flex flex-wrap gap-2">
                                                             <button
                                                                 onClick={() => handleReject(req)}
                                                                 disabled={isSubmitting}
@@ -535,32 +569,55 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
                                                                 ❌ Rechazar
                                                             </button>
                                                             <button
+                                                                onClick={() => handleReceive(req)}
+                                                                disabled={isSubmitting}
+                                                                className="min-h-[44px] rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-purple-600 disabled:opacity-50"
+                                                            >
+                                                                📋 Confirmar Recepción
+                                                            </button>
+                                                            <button
                                                                 onClick={() => handleApprove(req)}
                                                                 disabled={isSubmitting}
                                                                 className="min-h-[44px] rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-emerald-600 disabled:opacity-50"
                                                             >
-                                                                ✅ Confirmar Recepción
+                                                                ✅ Aprobar Directo
                                                             </button>
                                                         </div>
                                                     </div>
 
                                                     <div className="mt-4 border-t border-blue-200 pt-3 dark:border-blue-800">
-                                                        <p className="mb-2 text-xs font-semibold text-gray-500">ITEMS DESPACHADOS:</p>
-                                                        <ul className="grid gap-2 sm:grid-cols-2">
-                                                            {req.items.map(item => (
-                                                                <li key={item.inventoryItemId} className="flex justify-between rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-800">
-                                                                    <span className="text-gray-700 dark:text-gray-300">{item.inventoryItem.name}</span>
-                                                                    <div className="flex items-center gap-2">
-                                                                        {(item.sentQuantity ?? item.dispatchedQuantity) !== item.quantity && (
-                                                                            <span className="text-xs text-gray-400 line-through">{formatNumber(item.quantity)}</span>
-                                                                        )}
-                                                                        <span className="font-mono font-medium text-blue-600">
-                                                                            {formatNumber(item.sentQuantity ?? item.dispatchedQuantity ?? item.quantity)} {item.inventoryItem.baseUnit}
-                                                                        </span>
+                                                        <p className="mb-2 text-xs font-semibold text-gray-500">ITEMS DESPACHADOS (verificar cantidades recibidas):</p>
+                                                        <div className="grid gap-2 sm:grid-cols-2">
+                                                            {req.items.map(item => {
+                                                                const dispatchedQty = item.sentQuantity ?? item.dispatchedQuantity ?? item.quantity;
+                                                                return (
+                                                                    <div key={item.inventoryItemId} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 dark:bg-gray-800">
+                                                                        <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{item.inventoryItem.name}</span>
+                                                                        <div className="flex items-center gap-2 ml-2">
+                                                                            <span className="text-xs text-gray-400">Enviado: {formatNumber(dispatchedQty)}</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                inputMode="decimal"
+                                                                                min={0}
+                                                                                defaultValue={dispatchedQty}
+                                                                                onChange={e => setReceiveQuantities(prev => ({ ...prev, [item.inventoryItemId]: parseFloat(e.target.value) || 0 }))}
+                                                                                className="w-20 rounded border border-gray-200 px-2 py-1 text-center text-sm font-mono dark:border-gray-600 dark:bg-gray-700 min-h-[36px]"
+                                                                            />
+                                                                            <span className="text-xs text-gray-500">{item.inventoryItem.baseUnit}</span>
+                                                                        </div>
                                                                     </div>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="mt-3">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Notas de recepción (opcional)..."
+                                                                value={receiveNotes}
+                                                                onChange={e => setReceiveNotes(e.target.value)}
+                                                                className="w-full rounded border border-gray-200 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -662,11 +719,12 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
                                                             <span className={cn(
                                                                 "rounded-full px-2 py-0.5 text-xs font-medium",
                                                                 req.status === 'COMPLETED' ? "bg-emerald-100 text-emerald-800" :
-                                                                    req.status === 'REJECTED' ? "bg-red-100 text-red-800" :
-                                                                        req.status === 'DISPATCHED' ? "bg-blue-100 text-blue-800" :
-                                                                            "bg-gray-100 text-gray-800"
+                                                                    req.status === 'RECEIVED' ? "bg-purple-100 text-purple-800" :
+                                                                        req.status === 'REJECTED' ? "bg-red-100 text-red-800" :
+                                                                            req.status === 'DISPATCHED' ? "bg-blue-100 text-blue-800" :
+                                                                                "bg-gray-100 text-gray-800"
                                                             )}>
-                                                                {req.status === 'COMPLETED' ? '✅ Completado' : req.status === 'REJECTED' ? '❌ Rechazado' : req.status === 'DISPATCHED' ? '📦 Despachado' : req.status}
+                                                                {req.status === 'COMPLETED' ? '✅ Completado' : req.status === 'RECEIVED' ? '📋 Recibido' : req.status === 'REJECTED' ? '❌ Rechazado' : req.status === 'DISPATCHED' ? '📦 Despachado' : req.status}
                                                             </span>
                                                             <span className="text-xs text-gray-400">
                                                                 {req.items.length} items

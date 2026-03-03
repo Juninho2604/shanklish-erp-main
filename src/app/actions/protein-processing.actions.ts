@@ -38,6 +38,9 @@ export interface CreateProteinProcessingInput {
     notes?: string;
     reportedWaste?: number; // Desperdicio manual
     subProducts: SubProductInput[];
+    // Procesamiento en cadena
+    processingStep?: string; // LIMPIEZA, MASERADO, DISTRIBUCION, CUSTOM
+    parentProcessingId?: string; // ID del procesamiento padre
 }
 
 // ============================================================================
@@ -57,14 +60,15 @@ export async function getProteinItemsAction() {
                     { category: { contains: 'CERDO', mode: 'insensitive' } },
                     { category: { contains: 'RES', mode: 'insensitive' } },
                     { category: { contains: 'PESCADO', mode: 'insensitive' } },
-                    { name: { contains: 'RES', mode: 'insensitive' } },
                     { name: { contains: 'POLLO', mode: 'insensitive' } },
-                    { name: { contains: 'CERDO', mode: 'insensitive' } },
                     { name: { contains: 'LOMO', mode: 'insensitive' } },
+                    { name: { contains: 'LOMITO', mode: 'insensitive' } },
                     { name: { contains: 'COSTILLA', mode: 'insensitive' } },
                     { name: { contains: 'PECHUGA', mode: 'insensitive' } },
                     { name: { contains: 'MUSLO', mode: 'insensitive' } },
-                    { type: 'RAW_MATERIAL' }
+                    { name: { contains: 'CARNE', mode: 'insensitive' } },
+                    { name: { contains: 'KAFTA', mode: 'insensitive' } },
+                    { name: { contains: 'MASERADA', mode: 'insensitive' } },
                 ]
             },
             orderBy: { name: 'asc' }
@@ -171,6 +175,8 @@ export async function createProteinProcessingAction(
                     wastePercentage: Math.max(0, wastePercentage),
                     yieldPercentage,
                     status: 'DRAFT',
+                    processingStep: input.processingStep || 'LIMPIEZA',
+                    parentProcessingId: input.parentProcessingId || null,
                     areaId: input.areaId,
                     notes: input.notes,
                     reportedWaste: input.reportedWaste || null,
@@ -756,5 +762,89 @@ export async function deleteProcessingTemplateAction(templateId: string): Promis
     } catch (error) {
         console.error('Error eliminando plantilla:', error);
         return { success: false, message: 'Error al eliminar plantilla' };
+    }
+}
+
+// ============================================================================
+// ACTION: OBTENER PROCESAMIENTOS COMPLETADOS PARA ENCADENAR
+// ============================================================================
+
+export async function getCompletedProcessingsForChainAction() {
+    try {
+        const processings = await prisma.proteinProcessing.findMany({
+            where: {
+                status: 'COMPLETED'
+            },
+            select: {
+                id: true,
+                code: true,
+                processDate: true,
+                processingStep: true,
+                sourceItem: { select: { id: true, name: true } },
+                subProducts: {
+                    select: {
+                        id: true,
+                        name: true,
+                        weight: true,
+                        outputItemId: true,
+                        outputItem: { select: { id: true, name: true } }
+                    }
+                },
+                totalSubProducts: true,
+                frozenWeight: true,
+                drainedWeight: true
+            },
+            orderBy: { processDate: 'desc' },
+            take: 50
+        });
+        return processings;
+    } catch (error) {
+        console.error('Error en getCompletedProcessingsForChainAction:', error);
+        return [];
+    }
+}
+
+// ============================================================================
+// ACTION: OBTENER CADENA COMPLETA DE UN PROCESAMIENTO
+// ============================================================================
+
+export async function getProcessingChainAction(processingId: string) {
+    try {
+        const processing = await prisma.proteinProcessing.findUnique({
+            where: { id: processingId },
+            include: {
+                sourceItem: { select: { name: true } },
+                subProducts: {
+                    include: {
+                        outputItem: { select: { name: true } }
+                    }
+                },
+                parentProcessing: {
+                    select: {
+                        id: true,
+                        code: true,
+                        processingStep: true,
+                        sourceItem: { select: { name: true } },
+                        totalSubProducts: true
+                    }
+                },
+                childProcessings: {
+                    select: {
+                        id: true,
+                        code: true,
+                        processingStep: true,
+                        status: true,
+                        sourceItem: { select: { name: true } },
+                        totalSubProducts: true,
+                        frozenWeight: true
+                    },
+                    orderBy: { createdAt: 'asc' }
+                }
+            }
+        });
+        return processing;
+    } catch (error) {
+        console.error('Error en getProcessingChainAction:', error);
+        return null;
     }
 }

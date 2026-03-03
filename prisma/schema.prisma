@@ -38,6 +38,7 @@ model User {
   requisitionsRequested Requisition[] @relation("RequisitionRequester")
   requisitionsProcessed Requisition[] @relation("RequisitionProcessor")
   requisitionsDispatched Requisition[] @relation("RequisitionDispatcher")
+  requisitionsReceived  Requisition[] @relation("RequisitionReceiver")
 
   // POS - Ventas
   salesOrders    SalesOrder[] @relation("SalesOrderCreator")
@@ -387,6 +388,14 @@ model ProteinProcessing {
   // Estado
   status          String    @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED, CANCELLED
   
+  // Paso del procesamiento en cadena
+  processingStep  String    @default("LIMPIEZA") // LIMPIEZA, MASERADO, DISTRIBUCION, CUSTOM
+  
+  // Encadenamiento: referencia al procesamiento padre (si es un paso posterior)
+  parentProcessingId String?
+  parentProcessing   ProteinProcessing?  @relation("ProcessingChain", fields: [parentProcessingId], references: [id])
+  childProcessings   ProteinProcessing[] @relation("ProcessingChain")
+  
   // Área donde se realiza el procesamiento
   areaId          String
   area            Area      @relation(fields: [areaId], references: [id])
@@ -408,6 +417,7 @@ model ProteinProcessing {
   @@index([processDate])
   @@index([status])
   @@index([sourceItemId])
+  @@index([parentProcessingId])
 }
 
 model ProteinSubProduct {
@@ -505,10 +515,15 @@ model Requisition {
   processedBy   User?    @relation("RequisitionProcessor", fields: [processedById], references: [id])
   processedAt   DateTime?
 
-  // Quién despacha (Jefe de Producción) - NUEVO para flujo escalonado
+  // Quién despacha (Jefe de Producción) - para flujo escalonado
   dispatchedById String?
   dispatchedBy   User?    @relation("RequisitionDispatcher", fields: [dispatchedById], references: [id])
   dispatchedAt   DateTime?
+
+  // Quién recibe (Jefe de Cocina / Receptor) - verificación de recepción
+  receivedById   String?
+  receivedBy     User?    @relation("RequisitionReceiver", fields: [receivedById], references: [id])
+  receivedAt     DateTime?
   
   notes       String?
 
@@ -860,6 +875,9 @@ model InventoryAudit {
   notes       String?
   areaId      String?
   area        Area?    @relation(fields: [areaId], references: [id])
+  
+  // Fecha efectiva: permite cargar auditorías retroactivas (ej: inventario del domingo cargado el lunes)
+  effectiveDate DateTime? // Si no se especifica, se usa createdAt
   
   // Auditoría del registro
   createdAt   DateTime @default(now())

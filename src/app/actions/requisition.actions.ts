@@ -45,8 +45,8 @@ export interface ActionResult {
 export async function getRequisitions(filter: 'ALL' | 'PENDING' | 'COMPLETED' = 'ALL') {
     try {
         const whereClause: any = {};
-        if (filter === 'PENDING') whereClause.status = 'PENDING';
-        if (filter === 'COMPLETED') whereClause.status = { in: ['APPROVED', 'COMPLETED', 'REJECTED'] };
+        if (filter === 'PENDING') whereClause.status = { in: ['PENDING', 'DISPATCHED'] };
+        if (filter === 'COMPLETED') whereClause.status = { in: ['APPROVED', 'COMPLETED', 'RECEIVED', 'REJECTED'] };
 
         const requisitions = await prisma.requisition.findMany({
             where: whereClause,
@@ -54,6 +54,7 @@ export async function getRequisitions(filter: 'ALL' | 'PENDING' | 'COMPLETED' = 
                 requestedBy: { select: { firstName: true, lastName: true } },
                 processedBy: { select: { firstName: true, lastName: true } },
                 dispatchedBy: { select: { firstName: true, lastName: true } },
+                receivedBy: { select: { firstName: true, lastName: true } },
                 targetArea: { select: { name: true } },
                 sourceArea: { select: { name: true } },
                 items: {
@@ -344,6 +345,71 @@ export async function rejectRequisition(requisitionId: string, userId: string): 
     } catch (error) {
         console.error('Error rejecting:', error);
         return { success: false, message: 'Error al rechazar solicitud' };
+    }
+}
+
+// 4. RECIBIR TRANSFERENCIA (Jefe de Cocina / Receptor)
+export async function receiveRequisition(input: {
+    requisitionId: string;
+    receivedById: string;
+    items: { inventoryItemId: string; receivedQuantity: number }[];
+    notes?: string;
+}): Promise<ActionResult> {
+    try {
+        const req = await prisma.requisition.findUnique({
+            where: { id: input.requisitionId },
+            include: { items: true }
+        });
+
+        if (!req) return { success: false, message: 'Requisición no encontrada' };
+        if (req.status !== 'DISPATCHED' && req.status !== 'COMPLETED') {
+            return { success: false, message: 'Esta solicitud no está en estado de recepción' };
+        }
+
+        // Validar usuario
+        let receiverId = input.receivedById;
+        const userExists = await prisma.user.findUnique({ where: { id: receiverId } });
+        if (!userExists) {
+            const owner = await prisma.user.findFirst({ where: { role: 'OWNER' } });
+            if (owner) receiverId = owner.id;
+        }
+
+        await prisma.$transaction(async (tx) => {
+            // Actualizar estado
+            await tx.requisition.update({
+                where: { id: input.requisitionId },
+                data: {
+                    status: 'RECEIVED',
+                    receivedById: receiverId,
+                    receivedAt: new Date(),
+                    notes: input.notes
+                        ? (req.notes ? `${req.notes}\n[RECEPCIÓN]: ${input.notes}` : `[RECEPCIÓN]: ${input.notes}`)
+                        : req.notes
+                }
+            });
+
+            // Actualizar cantidades recibidas por item
+            for (const item of input.items) {
+                const reqItem = req.items.find(i => i.inventoryItemId === item.inventoryItemId);
+                if (!reqItem) continue;
+
+                await tx.requisitionItem.updateMany({
+                    where: {
+                        requisitionId: input.requisitionId,
+                        inventoryItemId: item.inventoryItemId
+                    },
+                    data: {
+                        receivedQuantity: item.receivedQuantity
+                    }
+                });
+            }
+        });
+
+        revalidatePath('/dashboard/transferencias');
+        return { success: true, message: 'Recepción confirmada exitosamente' };
+    } catch (error) {
+        console.error('Error receiving:', error);
+        return { success: false, message: 'Error al registrar recepción' };
     }
 }
 
