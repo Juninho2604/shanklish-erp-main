@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
-import { createRequisition, dispatchRequisition, approveRequisition, rejectRequisition, receiveRequisition } from '@/app/actions/requisition.actions';
+import { createRequisition, dispatchRequisition, approveRequisition, rejectRequisition, receiveRequisition, completeRequisition } from '@/app/actions/requisition.actions';
 import { formatNumber, cn } from '@/lib/utils';
 import { UserRole } from '@/types';
 import { Trash2 } from 'lucide-react';
@@ -282,6 +282,22 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
         if (res.success) {
             alert('✅ Recepción confirmada.');
             setReceiveNotes('');
+            window.location.reload();
+        } else {
+            alert('❌ Error: ' + res.message);
+        }
+        setIsSubmitting(false);
+    };
+
+    // Completar (marcar transferencia recibida como cerrada)
+    const handleComplete = async (req: Requisition) => {
+        if (!confirm(`¿Marcar la transferencia ${req.code} como completada?`)) return;
+        setIsSubmitting(true);
+
+        const res = await completeRequisition(req.id, user?.id || '');
+
+        if (res.success) {
+            alert('✅ Transferencia marcada como completada.');
             window.location.reload();
         } else {
             alert('❌ Error: ' + res.message);
@@ -715,7 +731,7 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
                                                         {req.processedBy?.firstName || '-'}
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
                                                             <span className={cn(
                                                                 "rounded-full px-2 py-0.5 text-xs font-medium",
                                                                 req.status === 'COMPLETED' ? "bg-emerald-100 text-emerald-800" :
@@ -729,6 +745,15 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
                                                             <span className="text-xs text-gray-400">
                                                                 {req.items.length} items
                                                             </span>
+                                                            {req.status === 'RECEIVED' && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleComplete(req); }}
+                                                                    disabled={isSubmitting}
+                                                                    className="rounded-lg bg-emerald-500 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50"
+                                                                >
+                                                                    ✅ Completar
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>

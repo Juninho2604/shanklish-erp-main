@@ -413,6 +413,42 @@ export async function receiveRequisition(input: {
     }
 }
 
+// 5. MARCAR COMO COMPLETADO (cierre final de transferencia recibida)
+export async function completeRequisition(requisitionId: string, completedById: string): Promise<ActionResult> {
+    try {
+        const req = await prisma.requisition.findUnique({
+            where: { id: requisitionId }
+        });
+
+        if (!req) return { success: false, message: 'Requisición no encontrada' };
+        if (req.status !== 'RECEIVED') {
+            return { success: false, message: 'Solo se pueden completar transferencias en estado Recibido' };
+        }
+
+        let userId = completedById;
+        const userExists = await prisma.user.findUnique({ where: { id: userId } });
+        if (!userExists) {
+            const owner = await prisma.user.findFirst({ where: { role: 'OWNER' } });
+            if (owner) userId = owner.id;
+        }
+
+        await prisma.requisition.update({
+            where: { id: requisitionId },
+            data: {
+                status: 'COMPLETED',
+                processedById: userId,
+                processedAt: new Date()
+            }
+        });
+
+        revalidatePath('/dashboard/transferencias');
+        return { success: true, message: `Transferencia ${req.code} marcada como completada` };
+    } catch (error) {
+        console.error('Error completing requisition:', error);
+        return { success: false, message: error instanceof Error ? error.message : 'Error al completar transferencia' };
+    }
+}
+
 // ============================================================================
 // TRANSFERENCIA MASIVA POR CATEGORÍA
 // ============================================================================
