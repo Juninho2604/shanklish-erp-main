@@ -14,12 +14,17 @@ import WhatsAppPurchaseOrderParser from '@/components/whatsapp-purchase-order-pa
 type ViewMode = 'orders' | 'create' | 'auto' | 'config' | 'receive' | 'whatsapp';
 
 interface OrderItem {
+    rowId: string; // ID único por fila (permite duplicados del mismo producto)
     inventoryItemId: string;
     name: string;
     category: string;
     quantity: number;
     unit: string;
     unitPrice: number;
+}
+
+function genRowId() {
+    return `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export default function PurchaseOrderView() {
@@ -78,23 +83,24 @@ export default function PurchaseOrderView() {
 
     function addFromSuggestion(item: LowStockItem) {
         if (orderItems.some(oi => oi.inventoryItemId === item.id)) return;
-        setOrderItems([...orderItems, { inventoryItemId: item.id, name: item.name, category: item.category || 'Sin Categoría', quantity: item.suggestedQuantity, unit: item.baseUnit, unitPrice: 0 }]);
+        setOrderItems([...orderItems, { rowId: genRowId(), inventoryItemId: item.id, name: item.name, category: item.category || 'Sin Categoría', quantity: item.suggestedQuantity, unit: item.baseUnit, unitPrice: 0 }]);
     }
 
     function addAllSuggestions() {
         const newItems = lowStockItems.filter(item => !orderItems.some(oi => oi.inventoryItemId === item.id))
-            .map(item => ({ inventoryItemId: item.id, name: item.name, category: item.category || 'Sin Categoría', quantity: item.suggestedQuantity, unit: item.baseUnit, unitPrice: 0 }));
+            .map(item => ({ rowId: genRowId(), inventoryItemId: item.id, name: item.name, category: item.category || 'Sin Categoría', quantity: item.suggestedQuantity, unit: item.baseUnit, unitPrice: 0 }));
         setOrderItems([...orderItems, ...newItems]);
     }
 
     function addManualItem(item: any) {
         if (orderItems.some(oi => oi.inventoryItemId === item.id)) return;
-        setOrderItems([...orderItems, { inventoryItemId: item.id, name: item.name, category: item.category || 'Sin Categoría', quantity: 1, unit: item.baseUnit, unitPrice: 0 }]);
+        setOrderItems([...orderItems, { rowId: genRowId(), inventoryItemId: item.id, name: item.name, category: item.category || 'Sin Categoría', quantity: 1, unit: item.baseUnit, unitPrice: 0 }]);
         setSearchQuery('');
     }
 
     function handleWhatsAppOrderReady(items: { inventoryItemId: string; name: string; category: string; quantity: number; unit: string }[], supplierName?: string, extractedNotes?: string) {
         const newOrderItems: OrderItem[] = items.map(i => ({
+            rowId: genRowId(),
             inventoryItemId: i.inventoryItemId,
             name: i.name,
             category: i.category,
@@ -113,12 +119,12 @@ export default function PurchaseOrderView() {
         setViewMode('create');
     }
 
-    function updateItemQuantity(itemId: string, quantity: number) {
-        setOrderItems(orderItems.map(item => item.inventoryItemId === itemId ? { ...item, quantity } : item));
+    function updateItemQuantity(rowId: string, quantity: number) {
+        setOrderItems(prev => prev.map(item => item.rowId === rowId ? { ...item, quantity } : item));
     }
 
-    function removeItem(itemId: string) {
-        setOrderItems(orderItems.filter(item => item.inventoryItemId !== itemId));
+    function removeItem(rowId: string) {
+        setOrderItems(prev => prev.filter(item => item.rowId !== rowId));
     }
 
     async function handleCreateOrder() {
@@ -454,11 +460,11 @@ export default function PurchaseOrderView() {
                                     <div key={cat}>
                                         <div className="bg-amber-50 dark:bg-amber-900/20 px-3 py-1 border-b border-amber-200 dark:border-amber-800"><span className="text-xs font-semibold text-amber-700">{cat}</span></div>
                                         {items.map(item => (
-                                            <div key={item.inventoryItemId} className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
+                                            <div key={item.rowId} className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
                                                 <span className="flex-1 text-sm truncate">{item.name}</span>
-                                                <input type="number" value={item.quantity} onChange={e => updateItemQuantity(item.inventoryItemId, parseFloat(e.target.value) || 0)} className="w-16 px-1.5 py-1 text-sm rounded border border-gray-200 text-center" min="0" step="0.1" />
+                                                <input type="number" value={item.quantity} onChange={e => updateItemQuantity(item.rowId, parseFloat(e.target.value) || 0)} className="w-16 px-1.5 py-1 text-sm rounded border border-gray-200 text-center" min="0" step="0.1" />
                                                 <span className="text-xs text-gray-500 w-8">{item.unit}</span>
-                                                <button onClick={() => removeItem(item.inventoryItemId)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
+                                                <button type="button" onClick={() => removeItem(item.rowId)} className="text-red-500 hover:text-red-700 text-sm flex-shrink-0">✕</button>
                                             </div>
                                         ))}
                                     </div>
