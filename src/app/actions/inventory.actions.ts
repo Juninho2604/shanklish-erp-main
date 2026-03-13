@@ -10,11 +10,15 @@ export async function createQuickItem(data: {
     type: string;
     categoryId?: string;
     userId: string;
-    cost?: number; // Optional initial cost
+    cost?: number;
+    // Nuevos campos para stock inicial durante creación en transferencias
+    sourceAreaId?: string;   // Área donde está actualmente el producto
+    initialStock?: number;   // Stock total que hay en esa área ahora mismo
+    isFinalProduct?: boolean; // Si es FINISHED_GOOD → también crear stub de receta
 }) {
     try {
         // Generate a SKU
-        const skuPrefix = data.name.substring(0, 3).toUpperCase();
+        const skuPrefix = data.name.substring(0, 3).toUpperCase().replace(/\s/g, '');
         const count = await prisma.inventoryItem.count();
         const sku = `${skuPrefix}-${String(count + 1).padStart(4, '0')}`;
 
@@ -27,9 +31,66 @@ export async function createQuickItem(data: {
                 baseUnit: data.unit,
                 category: data.categoryId,
                 isActive: true,
-                description: 'Creado desde Entrada Rápida',
+                description: 'Creado en flujo de transferencia (migración)',
             },
         });
+
+        // Si se indicó área de origen + stock inicial → crear InventoryLocation y movimiento ADJUSTMENT_IN
+        if (data.sourceAreaId && data.initialStock && data.initialStock > 0) {
+            // Crear o actualizar la ubicación del inventario en esa área
+            await prisma.inventoryLocation.upsert({
+                where: {
+                    inventoryItemId_areaId: {
+                        inventoryItemId: item.id,
+                        areaId: data.sourceAreaId
+                    }
+                },
+                create: {
+                    inventoryItemId: item.id,
+                    areaId: data.sourceAreaId,
+                    currentStock: data.initialStock,
+                    lastCountDate: new Date(),
+                },
+                update: {
+                    currentStock: data.initialStock,
+                    lastCountDate: new Date(),
+                }
+            });
+
+            // Registrar movimiento de entrada inicial
+            await prisma.inventoryMovement.create({
+                data: {
+                    inventoryItemId: item.id,
+                    movementType: 'ADJUSTMENT_IN',
+                    quantity: data.initialStock,
+                    unit: data.unit,
+                    reason: 'Stock inicial — Creado durante transferencia (migración)',
+                    notes: `Producto nuevo. Stock inicial registrado en el área de origen.`,
+                    createdById: data.userId,
+                }
+            });
+        }
+
+        // Si es producto terminado (FINISHED_GOOD) → crear stub de receta vacía
+        if (data.type === 'FINISHED_GOOD' || data.isFinalProduct) {
+            try {
+                const recipe = await prisma.recipe.create({
+                    data: {
+                        name: data.name,
+                        description: `Receta de ${data.name} — completar ingredientes`,
+                        outputItemId: item.id,
+                        outputQuantity: 1,
+                        outputUnit: data.unit,
+                        yieldPercentage: 100,
+                        isApproved: true,
+                        createdById: data.userId,
+                    }
+                });
+                console.log(`Receta stub creada para ${data.name}: ${recipe.id}`);
+            } catch (recipeErr) {
+                console.warn('No se pudo crear receta stub:', recipeErr);
+            }
+        }
 
         // If cost is provided, add an initial cost history
         if (data.cost && data.cost > 0) {
@@ -46,8 +107,10 @@ export async function createQuickItem(data: {
 
         revalidatePath('/dashboard/inventario/entrada');
         revalidatePath('/dashboard/transferencias');
+        revalidatePath('/dashboard/inventario');
         revalidatePath('/dashboard/compras');
         revalidatePath('/dashboard/proteinas');
+        revalidatePath('/dashboard/recetas');
 
         return { success: true, message: 'Item creado exitosamente', item };
     } catch (error) {

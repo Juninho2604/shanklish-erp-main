@@ -804,20 +804,25 @@ export default function TransferenciasView({ itemsList: initialItemsList, areasL
                 open={showQuickCreate}
                 onClose={() => setShowQuickCreate(false)}
                 initialName={quickCreateName}
+                initialTransferQuantity={requestItems[quickCreateRowIndex]?.quantity || undefined}
                 userId={user?.id || ''}
-                onItemCreated={(newItem) => {
-                    // Agregar al listado local
+                areasList={areasList}
+                sourceAreaId={sourceAreaId || undefined}
+                onItemCreated={(newItem, transferQuantity) => {
+                    // Agregar al listado local para que aparezca en futuros combos
                     setItemsList(prev => [...prev, { id: newItem.id, name: newItem.name, baseUnit: newItem.baseUnit }]);
                     // Auto-seleccionar en la fila que gatilló la creación
+                    // Si el usuario indicó cantidad a transferir, usarla; si no, mantener la que había
                     const newItems = [...requestItems];
                     newItems[quickCreateRowIndex] = {
                         ...newItems[quickCreateRowIndex],
                         id: newItem.id,
                         name: newItem.name,
-                        unit: newItem.baseUnit
+                        unit: newItem.baseUnit,
+                        ...(transferQuantity !== undefined && { quantity: transferQuantity }),
                     };
                     setRequestItems(newItems);
-                    setMsg({ type: 'success', text: `✅ Producto "${newItem.name}" creado y seleccionado` });
+                    setMsg({ type: 'success', text: `✅ Producto "${newItem.name}" creado y agregado a la solicitud` });
                 }}
             />
         </div>
