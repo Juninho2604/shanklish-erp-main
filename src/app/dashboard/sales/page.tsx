@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSalesHistoryAction, getDailyZReportAction, type ZReportData } from '@/app/actions/sales.actions';
+import { getSalesHistoryAction, getDailyZReportAction, voidSalesOrderAction, type ZReportData } from '@/app/actions/sales.actions';
+import { validateManagerPinAction } from '@/app/actions/pos.actions';
+import { printReceipt } from '@/lib/print-command';
 
 export default function SalesHistoryPage() {
     const [sales, setSales] = useState<any[]>([]);
@@ -9,46 +11,126 @@ export default function SalesHistoryPage() {
     const [zReport, setZReport] = useState<ZReportData | null>(null);
     const [showZReport, setShowZReport] = useState(false);
 
-    useEffect(() => {
-        loadData();
-    }, []);
+    // --- ANULACIÓN ---
+    const [voidTarget, setVoidTarget] = useState<any | null>(null);
+    const [voidStep, setVoidStep] = useState<'reason' | 'pin'>('reason');
+    const [voidReason, setVoidReason] = useState('');
+    const [voidPin, setVoidPin] = useState('');
+    const [voidPinError, setVoidPinError] = useState('');
+    const [voidLoading, setVoidLoading] = useState(false);
+
+    // --- FILTROS ---
+    const [showCancelled, setShowCancelled] = useState(false);
+    const [filterDate, setFilterDate] = useState('');
+
+    useEffect(() => { loadData(); }, []);
 
     const loadData = async () => {
         setIsLoading(true);
         const result = await getSalesHistoryAction();
-        if (result.success && result.data) {
-            setSales(result.data);
-        }
+        if (result.success && result.data) setSales(result.data as any[]);
         setIsLoading(false);
     };
 
     const handleGenerateZReport = async () => {
         const result = await getDailyZReportAction();
-        if (result.success && result.data) {
-            setZReport(result.data);
-            setShowZReport(true);
+        if (result.success && result.data) { setZReport(result.data); setShowZReport(true); }
+        else alert('Error generando reporte');
+    };
+
+    // ---- REIMPRESIÓN ----
+    const handleReprint = (sale: any) => {
+        printReceipt({
+            orderNumber: sale.orderNumber,
+            orderType: sale.orderType as 'RESTAURANT' | 'DELIVERY',
+            date: sale.createdAt,
+            cashierName: `${sale.createdBy?.firstName || 'Cajera'} ${sale.createdBy?.lastName || ''}`.trim(),
+            customerName: sale.customerName || undefined,
+            customerAddress: sale.customerAddress || undefined,
+            subtotal: sale.subtotal,
+            discount: sale.discount,
+            total: sale.total,
+            items: (sale.items || []).map((item: any) => ({
+                name: item.itemName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                total: item.lineTotal,
+                modifiers: (item.modifiers || []).map((m: any) => m.name)
+            }))
+        });
+    };
+
+    // ---- ANULACIÓN ----
+    const openVoidModal = (sale: any) => {
+        setVoidTarget(sale);
+        setVoidStep('reason');
+        setVoidReason('');
+        setVoidPin('');
+        setVoidPinError('');
+    };
+
+    const handleVoidPinConfirm = async () => {
+        setVoidPinError('');
+        setVoidLoading(true);
+        const res = await validateManagerPinAction(voidPin);
+        if (res.success && res.data) {
+            await executeVoid(res.data.managerId, res.data.managerName);
         } else {
-            alert('Error generando reporte');
+            setVoidPinError('PIN inválido o sin permisos suficientes');
+            setVoidLoading(false);
         }
     };
 
+    const executeVoid = async (managerId: string, managerName: string) => {
+        if (!voidTarget) return;
+        const res = await voidSalesOrderAction({
+            orderId: voidTarget.id,
+            voidReason,
+            authorizedById: managerId,
+            authorizedByName: managerName
+        });
+        setVoidLoading(false);
+        if (res.success) {
+            alert(`✅ ${res.message}`);
+            setVoidTarget(null);
+            loadData();
+        } else {
+            alert(`❌ ${res.message}`);
+        }
+    };
+
+    // ---- BADGES ----
     const getPaymentBadge = (method: string) => {
-        switch (method) {
-            case 'CASH': return <span className="bg-green-900 text-green-300 px-2 py-1 rounded text-xs font-bold">EFECTIVO</span>;
-            case 'CARD': return <span className="bg-blue-900 text-blue-300 px-2 py-1 rounded text-xs font-bold">PUNTO</span>;
-            case 'TRANSFER': return <span className="bg-indigo-900 text-indigo-300 px-2 py-1 rounded text-xs font-bold">TRANSFER</span>;
-            case 'MOBILE_PAY': return <span className="bg-purple-900 text-purple-300 px-2 py-1 rounded text-xs font-bold">PAGO MÓVIL</span>;
-            default: return <span className="bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs font-bold">{method}</span>;
+        switch (method?.toUpperCase()) {
+            case 'CASH': return <span className="bg-green-900 text-green-300 px-2 py-0.5 rounded text-xs font-bold">💵 EFECTIVO</span>;
+            case 'CASH_USD': return <span className="bg-green-800 text-green-200 px-2 py-0.5 rounded text-xs font-bold">💵 USD</span>;
+            case 'CARD':
+            case 'BS_POS': return <span className="bg-blue-900 text-blue-300 px-2 py-0.5 rounded text-xs font-bold">🏧 PUNTO</span>;
+            case 'ZELLE': return <span className="bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">💴 ZELLE</span>;
+            case 'MOBILE_PAY': return <span className="bg-purple-900 text-purple-300 px-2 py-0.5 rounded text-xs font-bold">📱 P.MÓVIL</span>;
+            case 'TRANSFER': return <span className="bg-cyan-900 text-cyan-300 px-2 py-0.5 rounded text-xs font-bold">🏦 TRANSFER</span>;
+            default: return <span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-xs font-bold">{method || '-'}</span>;
         }
     };
 
     const formatMoney = (amount: number) => `$${amount.toFixed(2)}`;
 
+    // ---- FILTRADO ----
+    const filteredSales = sales.filter(s => {
+        if (!showCancelled && s.status === 'CANCELLED') return false;
+        if (filterDate) {
+            const saleDate = new Date(s.createdAt).toISOString().split('T')[0];
+            if (saleDate !== filterDate) return false;
+        }
+        return true;
+    });
+
     if (isLoading) return <div className="p-8 text-center text-white">Cargando historial...</div>;
 
     return (
         <div className="p-6 max-w-7xl mx-auto text-white">
-            <div className="flex justify-between items-center mb-8">
+            {/* HEADER */}
+            <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
                         Historial de Ventas
@@ -57,132 +139,279 @@ export default function SalesHistoryPage() {
                 </div>
                 <button
                     onClick={handleGenerateZReport}
-                    className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-red-500/20 flex items-center gap-2"
+                    className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"
                 >
-                    🖨️ REPORTE "Z" (CIERRE)
+                    🖨️ REPORTE &quot;Z&quot; (CIERRE)
                 </button>
             </div>
 
-            {/* Tabla de Ventas */}
-            <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl">
+            {/* FILTROS */}
+            <div className="flex flex-wrap gap-4 mb-4 items-center">
+                <input
+                    type="date"
+                    value={filterDate}
+                    onChange={e => setFilterDate(e.target.value)}
+                    className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white"
+                />
+                {filterDate && (
+                    <button onClick={() => setFilterDate('')} className="text-xs text-gray-400 hover:text-white underline">
+                        Limpiar fecha
+                    </button>
+                )}
+                <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+                    <input
+                        type="checkbox"
+                        checked={showCancelled}
+                        onChange={e => setShowCancelled(e.target.checked)}
+                        className="rounded"
+                    />
+                    Mostrar anuladas
+                </label>
+                <span className="ml-auto text-xs text-gray-500">{filteredSales.length} órdenes</span>
+            </div>
+
+            {/* TABLA */}
+            <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-x-auto shadow-xl">
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-gray-900/50 text-gray-400 uppercase text-xs font-bold">
                         <tr>
                             <th className="p-4">Orden #</th>
                             <th className="p-4">Hora</th>
                             <th className="p-4">Cliente</th>
+                            <th className="p-4">Cajera</th>
                             <th className="p-4">Método</th>
                             <th className="p-4 text-right">Total</th>
-                            <th className="p-4">Descuento / Auth</th>
+                            <th className="p-4">Descuento</th>
+                            <th className="p-4 text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 font-mono text-sm">
-                        {sales.map(sale => (
-                            <tr key={sale.id} className="hover:bg-gray-700/30 transition-colors">
-                                <td className="p-4 font-bold text-blue-300">{sale.orderNumber}</td>
-                                <td className="p-4 text-gray-400">
-                                    {sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                </td>
-                                <td className="p-4 font-sans text-gray-300 truncate max-w-[150px]">
-                                    {sale.customerName || 'Cliente General'}
-                                </td>
-                                <td className="p-4">
-                                    {getPaymentBadge(sale.paymentMethod)}
-                                </td>
-                                <td className="p-4 text-right font-bold text-white text-base">
-                                    {formatMoney(sale.total)}
-                                </td>
-                                <td className="p-4 font-sans">
-                                    {sale.discount > 0 ? (
-                                        <div className="flex flex-col gap-1">
-                                            {sale.discountType === 'DIVISAS_33' && (
-                                                <span className="text-blue-400 text-xs">📉 Divisas (-{formatMoney(sale.discount)})</span>
-                                            )}
-                                            {sale.discountType === 'CORTESIA_100' && (
-                                                <span className="text-purple-400 text-xs font-bold">🎁 CORTESÍA</span>
-                                            )}
-                                            {sale.authorizedById && (
-                                                <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
-                                                    Auth: {sale.authorizedBy?.firstName}
-                                                </span>
-                                            )}
-                                        </div>
-                                    ) : <span className="text-gray-600">-</span>}
+                        {filteredSales.length === 0 && (
+                            <tr>
+                                <td colSpan={8} className="p-10 text-center text-gray-500">
+                                    No hay ventas en este período.
                                 </td>
                             </tr>
-                        ))}
+                        )}
+                        {filteredSales.map(sale => {
+                            const isVoided = sale.status === 'CANCELLED';
+                            return (
+                                <tr
+                                    key={sale.id}
+                                    className={`transition-colors ${isVoided ? 'opacity-50 bg-red-900/10' : 'hover:bg-gray-700/30'}`}
+                                >
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className={`font-bold ${isVoided ? 'text-red-400 line-through' : 'text-blue-300'}`}>
+                                                {sale.orderNumber}
+                                            </span>
+                                            {isVoided && (
+                                                <span className="bg-red-900 text-red-300 text-xs px-1.5 py-0.5 rounded font-bold">ANULADA</span>
+                                            )}
+                                        </div>
+                                        {isVoided && sale.voidReason && (
+                                            <div className="text-xs text-red-400/70 mt-0.5 font-sans max-w-[200px] truncate" title={sale.voidReason}>
+                                                {sale.voidReason}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="p-4 text-gray-400">
+                                        {sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                        {isVoided && sale.voidedAt && (
+                                            <div className="text-xs text-red-400/60">
+                                                Anulada: {new Date(sale.voidedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="p-4 font-sans text-gray-300 truncate max-w-[130px]">
+                                        {sale.customerName || 'Gral.'}
+                                    </td>
+                                    <td className="p-4 font-sans text-gray-400 text-xs">
+                                        {sale.createdBy?.firstName || '-'}
+                                    </td>
+                                    <td className="p-4">
+                                        {getPaymentBadge(sale.paymentMethod)}
+                                    </td>
+                                    <td className="p-4 text-right font-bold text-white text-base">
+                                        {formatMoney(sale.total)}
+                                    </td>
+                                    <td className="p-4 font-sans">
+                                        {sale.discount > 0 ? (
+                                            <div className="flex flex-col gap-0.5">
+                                                {sale.discountType === 'DIVISAS_33' && (
+                                                    <span className="text-blue-400 text-xs">📉 -{formatMoney(sale.discount)}</span>
+                                                )}
+                                                {(sale.discountType === 'CORTESIA_100' || sale.discountType === 'CORTESIA') && (
+                                                    <span className="text-purple-400 text-xs font-bold">🎁 -{formatMoney(sale.discount)}</span>
+                                                )}
+                                                {sale.authorizedById && (
+                                                    <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
+                                                        ✓ {sale.authorizedBy?.firstName}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : <span className="text-gray-600">-</span>}
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => handleReprint(sale)}
+                                                title="Reimprimir nota de entrega"
+                                                className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                            >
+                                                🖨️
+                                            </button>
+                                            {!isVoided && (
+                                                <button
+                                                    onClick={() => openVoidModal(sale)}
+                                                    title="Anular venta"
+                                                    className="bg-red-900/40 hover:bg-red-800 text-red-300 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
 
-            {/* Modal Reporte Z */}
+            {/* ================================================================ */}
+            {/* MODAL REPORTE Z                                                    */}
+            {/* ================================================================ */}
             {showZReport && zReport && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                     <div className="bg-white text-black rounded-lg w-full max-w-sm p-8 font-mono shadow-2xl relative">
-                        <button onClick={() => setShowZReport(false)} className="absolute top-2 right-2 text-gray-500 hover:text-red-500 text-2xl font-bold">×</button>
-
+                        <button onClick={() => setShowZReport(false)} className="absolute top-2 right-2 text-gray-500 hover:text-red-500 text-2xl font-bold no-print">×</button>
                         <div className="text-center mb-6 border-b-2 border-dashed border-black pb-4">
                             <h2 className="text-2xl font-black">REPORTE Z</h2>
                             <p className="text-sm">SHANKLISH CARACAS</p>
                             <p className="text-sm">{new Date().toLocaleString()}</p>
                             <p className="text-sm mt-1 font-bold">CIERRE DE CAJA DIARIO</p>
                         </div>
-
                         <div className="space-y-1 mb-4 border-b-2 border-dashed border-black pb-4">
-                            <div className="flex justify-between">
-                                <span>VENTAS BRUTAS</span>
-                                <span>{formatMoney(zReport.grossTotal)}</span>
-                            </div>
-                            <div className="flex justify-between text-red-600">
-                                <span>(-) DESCUENTOS</span>
-                                <span>-{formatMoney(zReport.totalDiscounts)}</span>
-                            </div>
+                            <div className="flex justify-between"><span>VENTAS BRUTAS</span><span>{formatMoney(zReport.grossTotal)}</span></div>
+                            <div className="flex justify-between text-red-600"><span>(-) DESCUENTOS</span><span>-{formatMoney(zReport.totalDiscounts)}</span></div>
                             {zReport.discountBreakdown.divisas > 0 && (
-                                <div className="flex justify-between text-xs text-gray-500 pl-4">
-                                    <span>Divisas (33%)</span>
-                                    <span>-{formatMoney(zReport.discountBreakdown.divisas)}</span>
-                                </div>
+                                <div className="flex justify-between text-xs text-gray-500 pl-4"><span>Divisas (33%)</span><span>-{formatMoney(zReport.discountBreakdown.divisas)}</span></div>
                             )}
                             {zReport.discountBreakdown.cortesias > 0 && (
-                                <div className="flex justify-between text-xs text-gray-500 pl-4">
-                                    <span>Cortesías (100%)</span>
-                                    <span>-{formatMoney(zReport.discountBreakdown.cortesias)}</span>
-                                </div>
+                                <div className="flex justify-between text-xs text-gray-500 pl-4"><span>Cortesías</span><span>-{formatMoney(zReport.discountBreakdown.cortesias)}</span></div>
                             )}
-                            <div className="flex justify-between font-bold text-xl mt-2 pt-2 border-t border-gray-300">
-                                <span>VENTA NETA</span>
-                                <span>{formatMoney(zReport.netTotal)}</span>
-                            </div>
+                            <div className="flex justify-between font-bold text-xl mt-2 pt-2 border-t border-gray-300"><span>VENTA NETA</span><span>{formatMoney(zReport.netTotal)}</span></div>
                         </div>
-
                         <div className="mb-6">
                             <h3 className="font-bold underline mb-2">ARQUEO DE CAJA</h3>
-                            <div className="flex justify-between">
-                                <span>EFECTIVO (CAJA)</span>
-                                <span className="font-bold">{formatMoney(zReport.paymentBreakdown.cash)}</span>
-                            </div>
-                            <div className="flex justify-between text-gray-600">
-                                <span>PUNTO DE VENTA</span>
-                                <span>{formatMoney(zReport.paymentBreakdown.card)}</span>
-                            </div>
-                            <div className="flex justify-between text-gray-600">
-                                <span>PAGO MÓVIL</span>
-                                <span>{formatMoney(zReport.paymentBreakdown.mobile)}</span>
-                            </div>
-                            <div className="flex justify-between text-gray-600">
-                                <span>TRANSFERENCIA</span>
-                                <span>{formatMoney(zReport.paymentBreakdown.transfer)}</span>
-                            </div>
+                            <div className="flex justify-between"><span>PUNTO (Bs)</span><span className="font-bold">{formatMoney(zReport.paymentBreakdown.card)}</span></div>
+                            <div className="flex justify-between"><span>ZELLE</span><span>{formatMoney(zReport.paymentBreakdown.zelle)}</span></div>
+                            <div className="flex justify-between"><span>EFECTIVO USD</span><span>{formatMoney(zReport.paymentBreakdown.cash)}</span></div>
+                            <div className="flex justify-between"><span>PAGO MÓVIL</span><span>{formatMoney(zReport.paymentBreakdown.mobile)}</span></div>
+                            <div className="flex justify-between text-gray-600"><span>TRANSFERENCIA</span><span>{formatMoney(zReport.paymentBreakdown.transfer)}</span></div>
                         </div>
-
                         <div className="text-center text-xs text-gray-500 pt-4 border-t border-gray-300">
-                            <p>Fin del Reporte</p>
-                            <p>Pedidos Totales: {zReport.totalOrders}</p>
+                            <p>Fin del Reporte — Pedidos Totales: {zReport.totalOrders}</p>
                         </div>
-
                         <button onClick={() => window.print()} className="w-full bg-black text-white py-3 rounded mt-6 font-bold hover:bg-gray-800 no-print">
                             IMPRIMIR COMPROBANTE
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ================================================================ */}
+            {/* MODAL ANULACIÓN                                                    */}
+            {/* ================================================================ */}
+            {voidTarget && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-gray-900 border border-red-800/60 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+                        <div className="flex items-center justify-between mb-5">
+                            <div>
+                                <h2 className="text-xl font-bold text-red-400">Anular Venta</h2>
+                                <p className="text-sm text-gray-400 font-mono mt-0.5">{voidTarget.orderNumber} — {formatMoney(voidTarget.total)}</p>
+                            </div>
+                            <button onClick={() => setVoidTarget(null)} className="text-gray-500 hover:text-white text-2xl font-bold">×</button>
+                        </div>
+
+                        {/* Resumen */}
+                        <div className="bg-gray-800 rounded-xl p-4 mb-5 text-sm space-y-1">
+                            <div className="flex justify-between text-gray-300">
+                                <span>Cliente:</span><span>{voidTarget.customerName || 'Cliente General'}</span>
+                            </div>
+                            <div className="flex justify-between text-gray-300">
+                                <span>Cajera:</span><span>{voidTarget.createdBy?.firstName || '-'}</span>
+                            </div>
+                            <div className="flex justify-between text-gray-300">
+                                <span>Items:</span><span>{(voidTarget.items || []).length} productos</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-white pt-1 border-t border-gray-700">
+                                <span>Total:</span><span>{formatMoney(voidTarget.total)}</span>
+                            </div>
+                        </div>
+
+                        {voidStep === 'reason' && (
+                            <>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Motivo de la anulación <span className="text-red-400">*</span>
+                                </label>
+                                <textarea
+                                    value={voidReason}
+                                    onChange={e => setVoidReason(e.target.value)}
+                                    placeholder="Ej: Error de facturación, cliente solicitó cambio de mesa..."
+                                    rows={3}
+                                    className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-white text-sm focus:border-red-500 focus:outline-none resize-none mb-5"
+                                />
+                                <div className="flex gap-3">
+                                    <button onClick={() => setVoidTarget(null)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 py-3 rounded-xl font-semibold transition-colors">
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={() => setVoidStep('pin')}
+                                        disabled={!voidReason.trim()}
+                                        className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-semibold transition-colors"
+                                    >
+                                        Continuar →
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {voidStep === 'pin' && (
+                            <>
+                                <div className="mb-4 p-3 bg-amber-900/30 border border-amber-700/40 rounded-xl text-xs text-amber-300 leading-relaxed">
+                                    🔐 Requiere PIN de Gerente, Auditor o Dueño. El inventario se reintegrará automáticamente.
+                                </div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">PIN de Autorización</label>
+                                <input
+                                    type="password"
+                                    value={voidPin}
+                                    onChange={e => { setVoidPin(e.target.value); setVoidPinError(''); }}
+                                    onKeyDown={e => e.key === 'Enter' && voidPin && handleVoidPinConfirm()}
+                                    placeholder="••••"
+                                    maxLength={8}
+                                    autoFocus
+                                    className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-white text-center text-2xl tracking-widest focus:border-red-500 focus:outline-none mb-1"
+                                />
+                                {voidPinError && <p className="text-red-400 text-xs mb-3 text-center">{voidPinError}</p>}
+                                <div className="flex gap-3 mt-4">
+                                    <button
+                                        onClick={() => { setVoidStep('reason'); setVoidPin(''); setVoidPinError(''); }}
+                                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 py-3 rounded-xl font-semibold transition-colors"
+                                    >
+                                        ← Volver
+                                    </button>
+                                    <button
+                                        onClick={handleVoidPinConfirm}
+                                        disabled={!voidPin || voidLoading}
+                                        className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold transition-colors"
+                                    >
+                                        {voidLoading ? '⏳ Procesando...' : 'Autorizar Anulación'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

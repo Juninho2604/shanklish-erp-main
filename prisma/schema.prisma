@@ -43,6 +43,7 @@ model User {
   // POS - Ventas
   salesOrders    SalesOrder[] @relation("SalesOrderCreator")
   authorizedOrders SalesOrder[] @relation("SalesOrderAuthorizer")
+  voidedOrders   SalesOrder[] @relation("SalesOrderVoider")
   
   // Cierres de Inventario
   closedDailyInventories DailyInventory[]
@@ -701,6 +702,12 @@ model SalesOrder {
   discountReason  String?
   authorizedById  String?
   authorizedBy    User?    @relation("SalesOrderAuthorizer", fields: [authorizedById], references: [id])
+
+  // Anulación
+  voidedAt        DateTime?
+  voidedById      String?
+  voidedBy        User?    @relation("SalesOrderVoider", fields: [voidedById], references: [id])
+  voidReason      String?
 
   // MÃ©todo de pago
   
