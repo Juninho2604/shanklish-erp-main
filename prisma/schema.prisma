@@ -610,7 +610,10 @@ model MenuItem {
   
   // Modificadores permitidos
   modifierGroups  MenuItemModifierGroup[]
-  
+
+  // Modificadores vinculados (para descargo de inventario por componente elegido)
+  linkedModifiers MenuModifier[] @relation("ModifierLinkedItem")
+
   // Relaciones
   orderItems      SalesOrderItem[]
   
@@ -648,14 +651,20 @@ model MenuModifier {
   
   name            String   // Ej: "TabulÃ©", "Vegetales Salteados"
   priceAdjustment Float    @default(0) // +$0.50, -$1.00, etc.
-  
+
   isAvailable     Boolean  @default(true)
   sortOrder       Int      @default(0)
-  
+
+  // Vínculo a MenuItem para descargo de inventario por modificador
+  // Cuando el cliente elige este modificador, se descarga la receta del plato vinculado
+  linkedMenuItemId String?
+  linkedMenuItem   MenuItem? @relation("ModifierLinkedItem", fields: [linkedMenuItemId], references: [id])
+
   // Relaciones
   orderItemModifiers SalesOrderItemModifier[]
-  
+
   @@index([groupId])
+  @@index([linkedMenuItemId])
 }
 
 // Tabla pivote: QuÃ© grupos de modificadores aplican a quÃ© productos

@@ -135,13 +135,14 @@ export async function voidSalesOrderAction(params: {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
 
-        // 1. Obtener orden con items
+        // 1. Obtener orden con items + modificadores
         const order = await prisma.salesOrder.findUnique({
             where: { id: params.orderId },
             include: {
                 items: {
                     include: {
-                        menuItem: { select: { recipeId: true, name: true } }
+                        menuItem: { select: { recipeId: true, name: true } },
+                        modifiers: { select: { modifierId: true, name: true } }
                     }
                 }
             }
@@ -150,47 +151,57 @@ export async function voidSalesOrderAction(params: {
         if (!order) return { success: false, message: 'Orden no encontrada' };
         if (order.status === 'CANCELLED') return { success: false, message: 'Esta orden ya está anulada' };
 
-        // 2. Revertir inventario (devolver ingredientes al stock)
+        // Helper: restaurar ingredientes de una receta al stock
+        const restoreRecipe = async (recipeId: string, qty: number, label: string) => {
+            const recipe = await prisma.recipe.findUnique({
+                where: { id: recipeId },
+                include: { ingredients: true }
+            });
+            if (!recipe || !recipe.isActive) return;
+
+            for (const ingredient of recipe.ingredients) {
+                const totalQty = ingredient.quantity * qty;
+                await prisma.inventoryMovement.create({
+                    data: {
+                        inventoryItemId: ingredient.ingredientItemId,
+                        movementType: 'ADJUSTMENT_IN',
+                        quantity: totalQty,
+                        unit: ingredient.unit as any,
+                        notes: `Anulación ${order.orderNumber}: ${label}`,
+                        reason: `Anulado por ${params.authorizedByName}: ${params.voidReason}`,
+                        createdById: session.id,
+                    }
+                });
+                await prisma.inventoryLocation.upsert({
+                    where: { inventoryItemId_areaId: { inventoryItemId: ingredient.ingredientItemId, areaId: order.areaId } },
+                    update: { currentStock: { increment: totalQty } },
+                    create: { inventoryItemId: ingredient.ingredientItemId, areaId: order.areaId, currentStock: totalQty }
+                });
+            }
+        };
+
+        // 2. Revertir inventario (receta base + modificadores vinculados)
         try {
             for (const item of order.items) {
-                if (!item.menuItem?.recipeId) continue;
+                // 2a. Receta base
+                if (item.menuItem?.recipeId) {
+                    await restoreRecipe(item.menuItem.recipeId, item.quantity, `${item.quantity}x ${item.menuItem.name}`);
+                }
 
-                const recipe = await prisma.recipe.findUnique({
-                    where: { id: item.menuItem.recipeId },
-                    include: { ingredients: true }
-                });
-
-                if (!recipe || !recipe.isActive) continue;
-
-                for (const ingredient of recipe.ingredients) {
-                    const totalQty = ingredient.quantity * item.quantity;
-
-                    await prisma.inventoryMovement.create({
-                        data: {
-                            inventoryItemId: ingredient.ingredientItemId,
-                            movementType: 'ADJUSTMENT_IN',
-                            quantity: totalQty,
-                            unit: ingredient.unit as any,
-                            notes: `Anulación ${order.orderNumber}: ${item.quantity}x ${item.menuItem.name}`,
-                            reason: `Anulado por ${params.authorizedByName}: ${params.voidReason}`,
-                            createdById: session.id,
-                        }
+                // 2b. Modificadores vinculados (Nivel 2)
+                for (const modifier of (item.modifiers || [])) {
+                    if (!modifier.modifierId) continue;
+                    const menuModifier = await prisma.menuModifier.findUnique({
+                        where: { id: modifier.modifierId },
+                        select: { linkedMenuItem: { select: { name: true, recipeId: true } } }
                     });
-
-                    await prisma.inventoryLocation.upsert({
-                        where: {
-                            inventoryItemId_areaId: {
-                                inventoryItemId: ingredient.ingredientItemId,
-                                areaId: order.areaId
-                            }
-                        },
-                        update: { currentStock: { increment: totalQty } },
-                        create: {
-                            inventoryItemId: ingredient.ingredientItemId,
-                            areaId: order.areaId,
-                            currentStock: totalQty
-                        }
-                    });
+                    if (menuModifier?.linkedMenuItem?.recipeId) {
+                        await restoreRecipe(
+                            menuModifier.linkedMenuItem.recipeId,
+                            item.quantity,
+                            `modificador ${modifier.name} (${item.menuItem?.name})`
+                        );
+                    }
                 }
             }
         } catch (invError) {

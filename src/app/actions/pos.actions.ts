@@ -291,48 +291,73 @@ export async function createSalesOrderAction(
         });
 
         // ====================================================================
-        // GESTIÓN DE INVENTARIO (Descargo de Recetas)
+        // GESTIÓN DE INVENTARIO (Descargo de Recetas + Modificadores)
         // ====================================================================
         try {
-            // Recorrer los items vendidos
             for (const item of data.items) {
-                // 1. Buscar si el producto tiene receta
+                // 1. Receta base del producto
                 const menuItem = await prisma.menuItem.findUnique({
                     where: { id: item.menuItemId },
-                    select: {
-                        name: true,
-                        recipeId: true
-                    }
+                    select: { name: true, recipeId: true }
                 });
 
-                // 2. Si tiene recipeId, buscar la receta completa
                 if (menuItem?.recipeId) {
                     const recipe = await prisma.recipe.findUnique({
                         where: { id: menuItem.recipeId },
-                        include: {
-                            ingredients: {
-                                include: { ingredientItem: true }
-                            }
-                        }
+                        include: { ingredients: { include: { ingredientItem: true } } }
                     });
 
                     if (recipe && recipe.isActive) {
-                        // 3. Descontar ingredientes
                         for (const ingredient of recipe.ingredients) {
-                            // Cantidad total = CantidadIngrediente * CantidadItemsVendidos
                             const totalQty = ingredient.quantity * item.quantity;
-
                             await registerSale({
                                 inventoryItemId: ingredient.ingredientItemId,
                                 quantity: totalQty,
                                 unit: ingredient.unit as any,
-                                areaId: areaId, // Usamos el área de venta
+                                areaId,
                                 orderId: newOrder.id,
                                 userId: session.id,
                                 notes: `Venta POS: ${item.quantity}x ${menuItem.name}`,
-                                allowNegative: true // Permitir negativos
+                                allowNegative: true
                             });
                         }
+                    }
+                }
+
+                // 2. Descargo por modificadores vinculados (Nivel 2)
+                // Ej: Tabla con "Tabule" elegido → descontar receta de Tabule
+                for (const modifier of (item.modifiers || [])) {
+                    if (!modifier.modifierId) continue;
+
+                    const menuModifier = await prisma.menuModifier.findUnique({
+                        where: { id: modifier.modifierId },
+                        select: {
+                            linkedMenuItemId: true,
+                            linkedMenuItem: { select: { name: true, recipeId: true } }
+                        }
+                    });
+
+                    if (!menuModifier?.linkedMenuItemId || !menuModifier.linkedMenuItem?.recipeId) continue;
+
+                    const modifierRecipe = await prisma.recipe.findUnique({
+                        where: { id: menuModifier.linkedMenuItem.recipeId },
+                        include: { ingredients: true }
+                    });
+
+                    if (!modifierRecipe || !modifierRecipe.isActive) continue;
+
+                    for (const ingredient of modifierRecipe.ingredients) {
+                        const totalQty = ingredient.quantity * item.quantity;
+                        await registerSale({
+                            inventoryItemId: ingredient.ingredientItemId,
+                            quantity: totalQty,
+                            unit: ingredient.unit as any,
+                            areaId,
+                            orderId: newOrder.id,
+                            userId: session.id,
+                            notes: `Modificador: ${item.quantity}x ${menuModifier.linkedMenuItem.name} (via ${menuItem?.name || 'producto'})`,
+                            allowNegative: true
+                        });
                     }
                 }
             }

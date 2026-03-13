@@ -97,6 +97,12 @@ const navigation: NavItem[] = [
         icon: '🍽️',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
     },
+    {
+        label: 'Modificadores',
+        href: '/dashboard/menu/modificadores',
+        icon: '🔧',
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
+    },
 ];
 
 // Navegación POS
