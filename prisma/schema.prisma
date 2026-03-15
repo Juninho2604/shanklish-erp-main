@@ -49,6 +49,9 @@ model User {
   salesOrders    SalesOrder[] @relation("SalesOrderCreator")
   authorizedOrders SalesOrder[] @relation("SalesOrderAuthorizer")
   voidedOrders   SalesOrder[] @relation("SalesOrderVoider")
+  openedTabs       OpenTab[]    @relation("OpenTabOpener")
+  assignedTabs     OpenTab[]    @relation("OpenTabAssignee")
+  closedTabs       OpenTab[]    @relation("OpenTabCloser")
   
   // Cierres de Inventario
   closedDailyInventories DailyInventory[]
@@ -83,6 +86,8 @@ model Area {
   id          String   @id @default(cuid())
   name        String
   description String?
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -112,6 +117,8 @@ model Area {
 
   // Items críticos por área
   criticalItems    AreaCriticalItem[]
+
+  @@index([branchId])
 }
 
 // ============================================================================
@@ -744,6 +751,8 @@ model SalesOrder {
   
   // Tipo de venta
   orderType       String   @default("RESTAURANT") // RESTAURANT, DELIVERY
+  serviceFlow     String   @default("DIRECT_SALE") // DIRECT_SALE, OPEN_TAB, TAB_CLOSING
+  sourceChannel   String   @default("POS_RESTAURANT")
   
   // Cliente (opcional)
   customerName    String?
@@ -752,6 +761,7 @@ model SalesOrder {
   
   // Estado
   status          String   @default("PENDING") // PENDING, CONFIRMED, PREPARING, READY, DELIVERED, CANCELLED
+  kitchenStatus   String   @default("NOT_SENT") // NOT_SENT, SENT, IN_PROGRESS, READY, NOT_REQUIRED
   
   // Totales
   subtotal        Float    @default(0)
@@ -782,6 +792,8 @@ model SalesOrder {
   // AuditorÃ­a
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  sentToKitchenAt DateTime?
+  closedAt        DateTime?
   
   // Cajera que creÃ³ la orden
   createdById     String
@@ -790,6 +802,20 @@ model SalesOrder {
   // Ã�rea de la que se descuenta inventario
   areaId          String
   area            Area     @relation(fields: [areaId], references: [id])
+  branchId        String?
+  branch          Branch?  @relation(fields: [branchId], references: [id])
+  serviceZoneId   String?
+  serviceZone     ServiceZone? @relation(fields: [serviceZoneId], references: [id])
+  tableOrStationId String?
+  tableOrStation  TableOrStation? @relation(fields: [tableOrStationId], references: [id])
+  openTabId       String?
+  openTab         OpenTab? @relation(fields: [openTabId], references: [id])
+
+  // Snapshot financiero
+  exchangeRateId    String?
+  exchangeRate      ExchangeRate? @relation(fields: [exchangeRateId], references: [id])
+  exchangeRateValue Float?
+  totalBs           Float?
   
   // Notas
   notes           String?
@@ -799,6 +825,8 @@ model SalesOrder {
   
   // Movimientos de inventario generados
   inventoryMovements InventoryMovement[] @relation("SaleMovements")
+  openTabLinks       OpenTabOrder[]
+  paymentSplits      PaymentSplit[]
 
   // Soft Delete
   deletedAt       DateTime?
@@ -809,6 +837,12 @@ model SalesOrder {
   @@index([status])
   @@index([createdAt])
   @@index([createdById])
+  @@index([serviceFlow])
+  @@index([kitchenStatus])
+  @@index([branchId])
+  @@index([serviceZoneId])
+  @@index([tableOrStationId])
+  @@index([openTabId])
 }
 
 model SalesOrderItem {
@@ -1182,4 +1216,168 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@index([module])
+}
+
+// ============================================================================
+// MODELO OPERATIVO RESTAURANTE
+// ============================================================================
+
+model Branch {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  legalName     String?
+  timezone      String   @default("America/Caracas")
+  currencyCode  String   @default("USD")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Soft Delete
+  deletedAt     DateTime?
+  deletedById   String?
+
+  areas         Area[]
+  serviceZones  ServiceZone[]
+  tableOrStations TableOrStation[]
+  openTabs      OpenTab[]
+  salesOrders   SalesOrder[]
+}
+
+model ServiceZone {
+  id            String   @id @default(cuid())
+  branchId      String
+  branch        Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  code          String?
+  name          String
+  zoneType      String   @default("DINING") // DINING, BAR, TERRACE, VIP
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tablesOrStations TableOrStation[]
+  openTabs      OpenTab[]
+  salesOrders   SalesOrder[]
+
+  @@unique([branchId, name])
+  @@index([branchId, zoneType])
+}
+
+model TableOrStation {
+  id            String   @id @default(cuid())
+  branchId      String
+  branch        Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  serviceZoneId String
+  serviceZone   ServiceZone @relation(fields: [serviceZoneId], references: [id], onDelete: Cascade)
+  code          String
+  name          String
+  stationType   String   @default("TABLE") // TABLE, BAR_SEAT, VIP_ROOM
+  capacity      Int      @default(1)
+  currentStatus String   @default("AVAILABLE") // AVAILABLE, OCCUPIED, RESERVED, OUT_OF_SERVICE
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  openTabs      OpenTab[]
+  salesOrders   SalesOrder[]
+
+  @@unique([branchId, code])
+  @@index([serviceZoneId, stationType])
+  @@index([currentStatus])
+}
+
+model OpenTab {
+  id              String   @id @default(cuid())
+  branchId        String
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  serviceZoneId   String?
+  serviceZone     ServiceZone? @relation(fields: [serviceZoneId], references: [id])
+  tableOrStationId String?
+  tableOrStation  TableOrStation? @relation(fields: [tableOrStationId], references: [id])
+  tabCode         String   @unique
+  customerLabel   String?
+  customerPhone   String?
+  guestCount      Int      @default(1)
+  status          String   @default("OPEN") // OPEN, PARTIALLY_PAID, CLOSED, CANCELLED
+  serviceType     String   @default("TABLE_SERVICE") // TABLE_SERVICE, BAR_TAB, EVENT
+  runningSubtotal Float    @default(0)
+  runningDiscount Float    @default(0)
+  runningTax      Float    @default(0)
+  runningTotal    Float    @default(0)
+  balanceDue      Float    @default(0)
+  version         Int      @default(0)
+  openedAt        DateTime @default(now())
+  closedAt        DateTime?
+  updatedAt       DateTime @updatedAt
+  notes           String?
+  waiterLabel     String?
+  openedById      String
+  openedBy        User     @relation("OpenTabOpener", fields: [openedById], references: [id])
+  assignedWaiterId String?
+  assignedWaiter  User?    @relation("OpenTabAssignee", fields: [assignedWaiterId], references: [id])
+  closedById      String?
+  closedBy        User?    @relation("OpenTabCloser", fields: [closedById], references: [id])
+
+  orders          SalesOrder[]
+  orderLinks      OpenTabOrder[]
+  paymentSplits   PaymentSplit[]
+
+  // Soft Delete
+  deletedAt       DateTime?
+  deletedById     String?
+
+  @@index([branchId, status])
+  @@index([tableOrStationId])
+}
+
+model OpenTabOrder {
+  id            String   @id @default(cuid())
+  openTabId     String
+  openTab       OpenTab  @relation(fields: [openTabId], references: [id], onDelete: Cascade)
+  salesOrderId  String
+  salesOrder    SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  addedAt       DateTime @default(now())
+
+  @@unique([openTabId, salesOrderId])
+  @@index([salesOrderId])
+}
+
+model PaymentSplit {
+  id            String   @id @default(cuid())
+  openTabId      String
+  openTab        OpenTab   @relation(fields: [openTabId], references: [id], onDelete: Cascade)
+  salesOrderId   String?
+  salesOrder     SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  splitLabel     String
+  splitType      String   @default("EQUAL") // EQUAL, ITEM_BASED, CUSTOM
+  paymentMethod  String?
+  status         String   @default("PENDING") // PENDING, PAID, VOID
+  subtotal       Float    @default(0)
+  discount       Float    @default(0)
+  tax            Float    @default(0)
+  total          Float    @default(0)
+  paidAmount     Float    @default(0)
+  createdAt      DateTime @default(now())
+  paidAt         DateTime?
+  notes          String?
+
+  @@index([openTabId, status])
+  @@index([salesOrderId])
+}
+
+// ============================================================================
+// TASA DE CAMBIO USD / BOLÍVARES (BCV)
+// ============================================================================
+
+model ExchangeRate {
+  id            String   @id @default(cuid())
+  rate          Float    // Bs por 1 USD
+  effectiveDate DateTime
+  source        String   @default("BCV")
+  createdAt     DateTime @default(now())
+
+  salesOrders   SalesOrder[]
+
+  @@index([effectiveDate])
 }
