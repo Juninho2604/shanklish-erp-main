@@ -158,6 +158,7 @@ export async function getSalesForArqueoAction(date: Date): Promise<{ success: bo
                     select: {
                         tabCode: true,
                         customerLabel: true,
+                        runningTotal: true,
                         tableOrStation: { select: { name: true } },
                         paymentSplits: { select: { paymentMethod: true, paidAmount: true, splitLabel: true } }
                     }
