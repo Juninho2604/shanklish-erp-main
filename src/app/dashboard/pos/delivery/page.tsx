@@ -434,37 +434,6 @@ export default function POSDeliveryPage() {
                             placeholder={`Monto recibido ($${finalTotal.toFixed(2)})`}
                             className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         />
-                        {cart.length > 0 && (
-                            <button
-                                onClick={() => {
-                                    const orderRef = `DELV-${new Date().toISOString().slice(0, 10)}-${String(Date.now()).slice(-4)}`;
-                                    printReceipt({
-                                        orderNumber: orderRef,
-                                        orderType: 'DELIVERY',
-                                        date: new Date(),
-                                        cashierName: 'Delivery',
-                                        customerName: customerName || undefined,
-                                        customerPhone: customerPhone || undefined,
-                                        customerAddress: customerAddress || undefined,
-                                        items: cart.map(i => ({
-                                            name: i.name,
-                                            quantity: i.quantity,
-                                            unitPrice: i.unitPrice,
-                                            total: i.lineTotal,
-                                            modifiers: i.modifiers.map(m => m.name)
-                                        })),
-                                        subtotal: cartSubtotal,
-                                        discount: discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal / 3 + DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS : (discountType === 'CORTESIA_100' ? cartSubtotal + DELIVERY_FEE_NORMAL : 0),
-                                        discountReason: discountType === 'DIVISAS_33' && isPagoDivisas ? 'Pago en divisas -33.33%' : (discountType === 'CORTESIA_100' ? 'Cortesía 100%' : undefined),
-                                        deliveryFee: discountType === 'CORTESIA_100' ? 0 : deliveryFee,
-                                        total: finalTotal
-                                    });
-                                }}
-                                className="w-full py-2 border border-gray-600 rounded-lg text-xs font-bold text-gray-300 hover:bg-gray-700 transition flex items-center justify-center gap-2"
-                            >
-                                🖨️ Imprimir factura
-                            </button>
-                        )}
                         <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xl shadow-lg disabled:opacity-50">
                             {isProcessing ? 'PROCESANDO...' : `CONFIRMAR $${finalTotal.toFixed(2)}`}
                         </button>

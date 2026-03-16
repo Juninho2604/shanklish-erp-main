@@ -577,6 +577,28 @@ export default function POSSportBarPage() {
           })),
           createdAt: new Date(),
         });
+        const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
+        const discount = discountType === "DIVISAS_33" ? subtotal / 3 : 0;
+        const total = subtotal - discount;
+        printReceipt({
+          orderNumber: result.data.orderNumber,
+          orderType: "RESTAURANT",
+          date: new Date(),
+          cashierName: cashierName || "Cajera",
+          customerName: pickupCustomerName || "Cliente en Caja",
+          items: cart.map((i) => ({
+            name: i.name,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            total: i.lineTotal,
+            modifiers: i.modifiers.map((m) => m.name),
+          })),
+          subtotal,
+          discount,
+          discountReason: discountType === "DIVISAS_33" ? "Pago en divisas -33.33%" : undefined,
+          total,
+          serviceFee: total * 0.1,
+        });
 
         setCart([]);
         setPaymentMethod("CASH");
@@ -1267,42 +1289,7 @@ export default function POSSportBarPage() {
                     </div>
                   )}
 
-                  {/* Imprimir recibo - disponible cuando hay consumos, incluye descuento si aplica */}
-                  {activeTab.orders.length > 0 && (
-                    <button
-                      onClick={() => {
-                        const subtotal = (activeTab as any).runningSubtotal ?? activeTab.orders.reduce((s, o) => s + o.items.reduce((si: number, i: any) => si + (i.lineTotal || 0), 0), 0);
-                        const discount = discountType === "DIVISAS_33" ? activeTab.balanceDue / 3 : ((activeTab as any).runningDiscount ?? 0);
-                        const totalAntesServicio = discountType === "DIVISAS_33" ? activeTab.balanceDue * (2 / 3) : ((activeTab as any).runningTotal ?? subtotal - discount);
-                        const serviceFee = totalAntesServicio * 0.1;
-                        const allItems = activeTab.orders.flatMap((o) =>
-                          (o.items || []).map((i: any) => ({
-                            name: i.itemName,
-                            quantity: i.quantity,
-                            unitPrice: (i.lineTotal || 0) / (i.quantity || 1),
-                            total: i.lineTotal || 0,
-                            modifiers: (i.modifiers || []).map((m: any) => m.name),
-                          }))
-                        );
-                        printReceipt({
-                          orderNumber: activeTab.orders[0]?.orderNumber || activeTab.tabCode,
-                          orderType: "RESTAURANT",
-                          date: new Date(),
-                          cashierName: cashierName || "Cajera",
-                          customerName: activeTab.customerLabel,
-                          items: allItems,
-                          subtotal,
-                          discount,
-                          discountReason: discountType === "DIVISAS_33" ? "Pago en divisas -33.33%" : undefined,
-                          total: totalAntesServicio,
-                          serviceFee,
-                        });
-                      }}
-                      className="mt-2 w-full py-2 border border-slate-500 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700 transition flex items-center justify-center gap-2"
-                    >
-                      🖨️ Imprimir factura
-                    </button>
-                  )}
+                  <p className="mt-2 text-[10px] text-slate-500 text-center">La factura se imprime al registrar el pago. Reimprimir desde Historial de Ventas.</p>
                   {/* Close tab - permitir cerrar cuando no hay consumo (saldo 0) o ya se cobró */}
                   <button
                     onClick={handleCloseTab}

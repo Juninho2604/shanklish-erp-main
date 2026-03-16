@@ -113,8 +113,8 @@ export function printReceipt(data: ReceiptData) {
     <div class="separator"></div>
     
     <div class="info-row">
-        <span class="info-label">Nº:</span>
-        <span>${data.orderNumber.split('-').pop() || data.orderNumber}</span>
+        <span class="info-label">Control / Correlativo:</span>
+        <span class="bold">${data.orderNumber}</span>
     </div>
     <div class="info-row">
         <span class="info-label">Fecha:</span>
