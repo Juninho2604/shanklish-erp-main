@@ -508,7 +508,7 @@ export default function POSSportBarPage() {
         items: allItems,
         subtotal,
         discount,
-        discountReason: discountType === "DIVISAS_33" ? "Pago en divisas -33.33%" : undefined,
+        discountReason: discountType === "DIVISAS_33" ? "Descuento aplicado" : undefined,
         total: totalAntesServicio,
         serviceFee,
       });
@@ -595,7 +595,7 @@ export default function POSSportBarPage() {
           })),
           subtotal,
           discount,
-          discountReason: discountType === "DIVISAS_33" ? "Pago en divisas -33.33%" : undefined,
+          discountReason: discountType === "DIVISAS_33" ? "Descuento aplicado" : undefined,
           total,
           serviceFee: total * 0.1,
         });
