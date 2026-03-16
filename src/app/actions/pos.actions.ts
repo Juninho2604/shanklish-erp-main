@@ -297,62 +297,28 @@ async function generateTabCode(): Promise<string> {
 
 async function getMenuItemMetadata(menuItemIds: string[]) {
     return prisma.menuItem.findMany({
-        where: { id: { in: menuItemIds } },
-        include: {
-            recipe: {
-                include: {
-                    ingredients: {
-                        include: {
-                            ingredientItem: true
-                        }
-                    }
-                }
-            }
-        }
+        where: { id: { in: menuItemIds } }
     });
 }
 
-function requiresKitchenRouting(menuItem: {
-    kitchenRouting: string;
-    recipeId: string | null;
-    serviceCategory: string | null;
-}) {
-    if (menuItem.kitchenRouting === 'NONE') return false;
-    if (menuItem.kitchenRouting === 'KITCHEN' || menuItem.kitchenRouting === 'BAR') return true;
-    if (menuItem.serviceCategory === 'PACKAGED_DRINK') return false;
-    return Boolean(menuItem.recipeId);
+function requiresKitchenRouting(menuItem: any) {
+    if (menuItem?.kitchenRouting === 'NONE') return false;
+    if (menuItem?.kitchenRouting === 'KITCHEN' || menuItem?.kitchenRouting === 'BAR') return true;
+    if (menuItem?.serviceCategory === 'PACKAGED_DRINK') return false;
+    return Boolean(menuItem?.recipeId);
 }
 
-function requiresStockValidation(menuItem: {
-    recipeId: string | null;
-    serviceCategory: string | null;
-    stockTrackingMode?: string | null;
-}) {
-    if (menuItem.stockTrackingMode === 'DISPLAY_ONLY') return false;
-    if (menuItem.serviceCategory === 'BUCKET' || menuItem.serviceCategory === 'COCKTAIL') return true;
-    if (menuItem.stockTrackingMode === 'COMPOUND' || menuItem.stockTrackingMode === 'RECIPE') return true;
-    return Boolean(menuItem.recipeId);
+function requiresStockValidation(menuItem: any) {
+    if (menuItem?.stockTrackingMode === 'DISPLAY_ONLY') return false;
+    if (menuItem?.serviceCategory === 'BUCKET' || menuItem?.serviceCategory === 'COCKTAIL') return true;
+    if (menuItem?.stockTrackingMode === 'COMPOUND' || menuItem?.stockTrackingMode === 'RECIPE') return true;
+    return Boolean(menuItem?.recipeId);
 }
 
 async function validateComponentStockAvailability(params: {
     items: CartItem[];
     areaId: string;
-    menuMap: Map<string, {
-        id: string;
-        name: string;
-        recipeId: string | null;
-        serviceCategory: string | null;
-        stockTrackingMode?: string | null;
-        recipe?: {
-            ingredients: {
-                ingredientItemId: string;
-                quantity: number;
-                ingredientItem?: {
-                    name: string;
-                };
-            }[];
-        } | null;
-    }>;
+    menuMap: Map<string, any>;
 }) {
     const shortages: string[] = [];
 
