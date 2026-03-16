@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
 import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
+import { getPOSConfig } from '@/lib/pos-settings';
 import WhatsAppOrderParser from '@/components/whatsapp-order-parser';
 import { PriceDisplay } from '@/components/pos/PriceDisplay';
 import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
@@ -58,13 +59,17 @@ export default function POSDeliveryPage() {
     const [customerAddress, setCustomerAddress] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // lastOrder
+    // lastOrder - para poder reimprimir factura desde cobranza
     const [lastOrder, setLastOrder] = useState<{
         orderNumber: string;
         total: number;
         subtotal: number;
         discount: number;
-        itemsSnapshot: any[];
+        deliveryFee: number;
+        itemsSnapshot: { name: string; quantity: number; unitPrice: number; total: number; modifiers: string[] }[];
+        customerName: string;
+        customerPhone: string;
+        customerAddress: string;
     } | null>(null);
 
     // MODAL STATE
@@ -226,15 +231,18 @@ export default function POSDeliveryPage() {
             });
 
             if (result.success && result.data) {
-                printKitchenCommand({
-                    orderNumber: result.data.orderNumber, orderType: 'DELIVERY',
-                    customerName: `${customerName} (${customerPhone})`,
-                    items: cart.map(i => ({ name: i.name, quantity: i.quantity, modifiers: i.modifiers.map(m => m.name), notes: i.notes })),
-                    createdAt: new Date(), address: customerAddress
-                });
-                printReceipt({
+                const cfg = getPOSConfig();
+                if (cfg.printComandaOnDelivery) {
+                    printKitchenCommand({
+                        orderNumber: result.data.orderNumber, orderType: 'DELIVERY',
+                        customerName: `${customerName} (${customerPhone})`,
+                        items: cart.map(i => ({ name: i.name, quantity: i.quantity, modifiers: i.modifiers.map(m => m.name), notes: i.notes })),
+                        createdAt: new Date(), address: customerAddress
+                    });
+                }
+                const receiptData = {
                     orderNumber: result.data.orderNumber,
-                    orderType: 'DELIVERY',
+                    orderType: 'DELIVERY' as const,
                     date: new Date(),
                     cashierName: 'Delivery',
                     customerName: customerName || undefined,
@@ -252,8 +260,21 @@ export default function POSDeliveryPage() {
                     discountReason: (discountType === 'DIVISAS_33' && isPagoDivisas) || discountType === 'CORTESIA_100' ? 'Descuento aplicado' : undefined,
                     deliveryFee: discountType === 'CORTESIA_100' ? 0 : deliveryFee,
                     total: finalTotal
+                };
+                if (cfg.printReceiptOnDelivery) {
+                    printReceipt(receiptData);
+                }
+                setLastOrder({
+                    orderNumber: result.data.orderNumber,
+                    total: finalTotal,
+                    subtotal: cartSubtotal,
+                    discount: receiptData.discount,
+                    deliveryFee: receiptData.deliveryFee,
+                    itemsSnapshot: receiptData.items,
+                    customerName: customerName || '',
+                    customerPhone: customerPhone || '',
+                    customerAddress: customerAddress || ''
                 });
-
                 setCart([]); setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); setPaymentMethod('TRANSFER'); setAmountReceived('');
                 setDiscountType('NONE'); setAuthorizedManager(null);
             } else alert(result.message);
@@ -437,6 +458,30 @@ export default function POSDeliveryPage() {
                         <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xl shadow-lg disabled:opacity-50">
                             {isProcessing ? 'PROCESANDO...' : `CONFIRMAR $${finalTotal.toFixed(2)}`}
                         </button>
+                        {lastOrder && (
+                            <button
+                                onClick={() => {
+                                    printReceipt({
+                                        orderNumber: lastOrder.orderNumber,
+                                        orderType: 'DELIVERY',
+                                        date: new Date(),
+                                        cashierName: 'Delivery',
+                                        customerName: lastOrder.customerName || undefined,
+                                        customerPhone: lastOrder.customerPhone || undefined,
+                                        customerAddress: lastOrder.customerAddress || undefined,
+                                        items: lastOrder.itemsSnapshot,
+                                        subtotal: lastOrder.subtotal,
+                                        discount: lastOrder.discount,
+                                        discountReason: lastOrder.discount > 0 ? 'Descuento aplicado' : undefined,
+                                        deliveryFee: lastOrder.deliveryFee,
+                                        total: lastOrder.total
+                                    });
+                                }}
+                                className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 border border-gray-600"
+                            >
+                                🖨️ Imprimir factura {lastOrder.orderNumber}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

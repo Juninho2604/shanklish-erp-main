@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/pos.actions";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
 import { printKitchenCommand, printReceipt } from "@/lib/print-command";
+import { getPOSConfig } from "@/lib/pos-settings";
 import { PriceDisplay } from "@/components/pos/PriceDisplay";
 import { CurrencyCalculator } from "@/components/pos/CurrencyCalculator";
 import { CashierShiftModal } from "@/components/pos/CashierShiftModal";
@@ -453,7 +454,7 @@ export default function POSSportBarPage() {
         alert(result.message);
         return;
       }
-      if (result.data?.kitchenStatus === "SENT") {
+      if (result.data?.kitchenStatus === "SENT" && getPOSConfig().printComandaOnRestaurant) {
         printKitchenCommand({
           orderNumber: result.data.orderNumber,
           orderType: "RESTAURANT",
@@ -516,6 +517,7 @@ export default function POSSportBarPage() {
           modifiers: (i.modifiers || []).map((m: any) => m.name),
         }))
       );
+      if (getPOSConfig().printReceiptOnRestaurant) {
       printReceipt({
         orderNumber: activeTab.tabCode,
         orderType: "RESTAURANT",
@@ -529,6 +531,7 @@ export default function POSSportBarPage() {
         total: totalAntesServicio,
         serviceFee,
       });
+      }
       setAmountReceived("");
       setPaymentPin("");
       setDiscountType("NONE");
@@ -583,6 +586,7 @@ export default function POSSportBarPage() {
       });
 
       if (result.success && result.data) {
+        if (getPOSConfig().printComandaOnRestaurant) {
         printKitchenCommand({
           orderNumber: result.data.orderNumber,
           orderType: "RESTAURANT",
@@ -595,9 +599,11 @@ export default function POSSportBarPage() {
           })),
           createdAt: new Date(),
         });
+        }
         const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
         const discount = discountType === "DIVISAS_33" ? subtotal / 3 : 0;
         const total = subtotal - discount;
+        if (getPOSConfig().printReceiptOnRestaurant) {
         printReceipt({
           orderNumber: result.data.orderNumber,
           orderType: "RESTAURANT",
@@ -617,6 +623,7 @@ export default function POSSportBarPage() {
           total,
           serviceFee: total * 0.1,
         });
+        }
 
         setCart([]);
         setPaymentMethod("CASH");
