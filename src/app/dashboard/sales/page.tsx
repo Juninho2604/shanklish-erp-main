@@ -40,6 +40,17 @@ export default function SalesHistoryPage() {
         else alert('Error generando reporte');
     };
 
+    const handleExportArqueo = async () => {
+        const date = filterDate ? new Date(filterDate + 'T12:00:00') : new Date();
+        const result = await getSalesForArqueoAction(date);
+        if (result.success && result.data) {
+            const dateStr = date.toLocaleDateString('es-VE');
+            exportArqueoToExcel(result.data, dateStr);
+        } else {
+            alert(result.message || 'Error exportando arqueo');
+        }
+    };
+
     // ---- REIMPRESIÓN ----
     const handleReprint = (sale: any) => {
         const serviceFee = sale.orderType === 'RESTAURANT' && sale.serviceFeeIncluded ? (sale.total || 0) * 0.1 : 0;
