@@ -249,6 +249,7 @@ export default function POSDeliveryPage() {
                     })),
                     subtotal: cartSubtotal,
                     discount: discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal / 3 + DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS : (discountType === 'CORTESIA_100' ? cartSubtotal + DELIVERY_FEE_NORMAL : 0),
+                    discountReason: discountType === 'DIVISAS_33' && isPagoDivisas ? 'Pago en divisas -33.33%' : (discountType === 'CORTESIA_100' ? 'Cortesía 100%' : undefined),
                     deliveryFee: discountType === 'CORTESIA_100' ? 0 : deliveryFee,
                     total: finalTotal
                 });
@@ -454,6 +455,7 @@ export default function POSDeliveryPage() {
                                         })),
                                         subtotal: cartSubtotal,
                                         discount: discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal / 3 + DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS : (discountType === 'CORTESIA_100' ? cartSubtotal + DELIVERY_FEE_NORMAL : 0),
+                                        discountReason: discountType === 'DIVISAS_33' && isPagoDivisas ? 'Pago en divisas -33.33%' : (discountType === 'CORTESIA_100' ? 'Cortesía 100%' : undefined),
                                         deliveryFee: discountType === 'CORTESIA_100' ? 0 : deliveryFee,
                                         total: finalTotal
                                     });

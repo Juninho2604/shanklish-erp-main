@@ -485,10 +485,10 @@ export default function POSSportBarPage() {
         alert(result.message);
         return;
       }
-      // Imprimir factura con 10% servicio para RESTAURANT
+      // Imprimir factura con descuento aplicado (divisas, etc.) y 10% servicio
       const subtotal = (activeTab as any).runningSubtotal ?? activeTab.orders.reduce((s, o) => s + o.items.reduce((si: number, i: any) => si + (i.lineTotal || 0), 0), 0);
-      const discount = (activeTab as any).runningDiscount ?? 0;
-      const totalAntesServicio = (activeTab as any).runningTotal ?? subtotal - discount;
+      const discount = discountType === "DIVISAS_33" ? activeTab.balanceDue / 3 : ((activeTab as any).runningDiscount ?? 0);
+      const totalAntesServicio = discountType === "DIVISAS_33" ? activeTab.balanceDue * (2 / 3) : ((activeTab as any).runningTotal ?? subtotal - discount);
       const serviceFee = totalAntesServicio * 0.1;
       const allItems = activeTab.orders.flatMap((o) =>
         (o.items || []).map((i: any) => ({
@@ -508,6 +508,7 @@ export default function POSSportBarPage() {
         items: allItems,
         subtotal,
         discount,
+        discountReason: discountType === "DIVISAS_33" ? "Pago en divisas -33.33%" : undefined,
         total: totalAntesServicio,
         serviceFee,
       });
@@ -1266,13 +1267,13 @@ export default function POSSportBarPage() {
                     </div>
                   )}
 
-                  {/* Imprimir recibo - disponible cuando hay consumos */}
+                  {/* Imprimir recibo - disponible cuando hay consumos, incluye descuento si aplica */}
                   {activeTab.orders.length > 0 && (
                     <button
                       onClick={() => {
                         const subtotal = (activeTab as any).runningSubtotal ?? activeTab.orders.reduce((s, o) => s + o.items.reduce((si: number, i: any) => si + (i.lineTotal || 0), 0), 0);
-                        const discount = (activeTab as any).runningDiscount ?? 0;
-                        const totalAntesServicio = (activeTab as any).runningTotal ?? subtotal - discount;
+                        const discount = discountType === "DIVISAS_33" ? activeTab.balanceDue / 3 : ((activeTab as any).runningDiscount ?? 0);
+                        const totalAntesServicio = discountType === "DIVISAS_33" ? activeTab.balanceDue * (2 / 3) : ((activeTab as any).runningTotal ?? subtotal - discount);
                         const serviceFee = totalAntesServicio * 0.1;
                         const allItems = activeTab.orders.flatMap((o) =>
                           (o.items || []).map((i: any) => ({
@@ -1292,6 +1293,7 @@ export default function POSSportBarPage() {
                           items: allItems,
                           subtotal,
                           discount,
+                          discountReason: discountType === "DIVISAS_33" ? "Pago en divisas -33.33%" : undefined,
                           total: totalAntesServicio,
                           serviceFee,
                         });

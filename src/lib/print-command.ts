@@ -34,6 +34,7 @@ interface ReceiptData {
     items: ReceiptItem[];
     subtotal?: number;
     discount?: number;
+    discountReason?: string; // Ej: "Pago en divisas -33.33%"
     deliveryFee?: number;
     total: number;
     serviceFee?: number;
@@ -175,7 +176,7 @@ export function printReceipt(data: ReceiptData) {
         ` : ''}
         ${discountAmount > 0 ? `
         <div class="total-row">
-            <span>Descuento:</span>
+            <span>${data.discountReason || 'Descuento'}:</span>
             <span>-$${discountAmount.toFixed(2)}</span>
         </div>
         ` : ''}
