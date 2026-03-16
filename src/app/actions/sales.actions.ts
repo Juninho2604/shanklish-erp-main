@@ -124,6 +124,138 @@ export async function getSalesHistoryAction(limit = 100) {
     }
 }
 
+export interface ArqueoSaleRow {
+    orderType: 'RESTAURANT' | 'PICKUP' | 'DELIVERY';
+    description: string;
+    correlativo: string;
+    total: number;
+    paymentBreakdown: {
+        cashUsd: number;
+        zelle: number;
+        cardPdVShanklish: number;
+        cardPdVSuperferro: number;
+        mobileShanklish: number;
+        mobileNour: number;
+    };
+    serviceFee: number;
+}
+
+export async function getSalesForArqueoAction(date: Date): Promise<{ success: boolean; data?: ArqueoSaleRow[]; message?: string }> {
+    try {
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const orders = await prisma.salesOrder.findMany({
+            where: {
+                createdAt: { gte: startOfDay, lte: endOfDay },
+                status: { not: 'CANCELLED' }
+            },
+            orderBy: { createdAt: 'asc' },
+            include: {
+                openTab: {
+                    select: {
+                        tabCode: true,
+                        customerLabel: true,
+                        tableOrStation: { select: { name: true } },
+                        paymentSplits: { select: { paymentMethod: true, paidAmount: true, splitLabel: true } }
+                    }
+                }
+            }
+        });
+
+        const byTab = new Map<string, typeof orders>();
+        for (const o of orders) {
+            if (o.orderType === 'RESTAURANT' && o.openTabId) {
+                const existing = byTab.get(o.openTabId) || [];
+                existing.push(o);
+                byTab.set(o.openTabId, existing);
+            }
+        }
+
+        const result: ArqueoSaleRow[] = [];
+        const seenTabs = new Set<string>();
+
+        for (const o of orders) {
+            if (o.orderType === 'RESTAURANT' && o.openTabId && !seenTabs.has(o.openTabId)) {
+                seenTabs.add(o.openTabId);
+                const group = byTab.get(o.openTabId) || [o];
+                const tab = group[0].openTab;
+                const total = tab?.runningTotal ?? group.reduce((s, x) => s + x.total, 0);
+                const tableName = tab?.tableOrStation?.name || 'MESA';
+                const customerName = tab?.customerLabel || '';
+                const description = `${tableName} ${customerName}`.trim() || tableName;
+
+                const breakdown = { cashUsd: 0, zelle: 0, cardPdVShanklish: 0, cardPdVSuperferro: 0, mobileShanklish: 0, mobileNour: 0 };
+                const splits = tab?.paymentSplits || [];
+                let serviceFee = 0;
+                const hasService = splits.length > 0 && splits.some((s: { splitLabel?: string }) => (s.splitLabel || '').includes('| +10% serv'));
+                const totalReceived = hasService ? total * 1.1 : total;
+
+                if (splits.length > 0) {
+                    for (const s of splits) {
+                        const pm = (s.paymentMethod || '').toUpperCase();
+                        const amt = s.paidAmount || 0;
+                        if (pm === 'CASH' || pm === 'CASH_USD') breakdown.cashUsd += amt;
+                        else if (pm === 'ZELLE') breakdown.zelle += amt;
+                        else if (pm === 'CARD' || pm === 'BS_POS') breakdown.cardPdVShanklish += amt;
+                        else if (pm === 'MOBILE_PAY' || pm === 'PAGO_MOVIL') breakdown.mobileShanklish += amt;
+                        else if (pm === 'TRANSFER') breakdown.cardPdVSuperferro += amt;
+                        else breakdown.mobileShanklish += amt;
+                    }
+                    serviceFee = hasService ? total * 0.1 : 0;
+                } else {
+                    const pm = (group[0].paymentMethod || '').toUpperCase();
+                    if (pm === 'CASH' || pm === 'CASH_USD') breakdown.cashUsd = total;
+                    else if (pm === 'ZELLE') breakdown.zelle = total;
+                    else if (pm === 'CARD' || pm === 'BS_POS') breakdown.cardPdVShanklish = total;
+                    else if (pm === 'MOBILE_PAY' || pm === 'PAGO_MOVIL') breakdown.mobileShanklish = total;
+                    else if (pm === 'TRANSFER') breakdown.cardPdVSuperferro = total;
+                    else breakdown.mobileShanklish = total;
+                }
+
+                result.push({
+                    orderType: 'RESTAURANT',
+                    description,
+                    correlativo: tab?.tabCode || group[0].orderNumber || '',
+                    total: totalReceived,
+                    paymentBreakdown: breakdown,
+                    serviceFee
+                });
+            } else if (o.orderType !== 'RESTAURANT' || !o.openTabId) {
+                const pm = (o.paymentMethod || '').toUpperCase();
+                const breakdown = { cashUsd: 0, zelle: 0, cardPdVShanklish: 0, cardPdVSuperferro: 0, mobileShanklish: 0, mobileNour: 0 };
+                if (pm === 'CASH' || pm === 'CASH_USD') breakdown.cashUsd = o.total;
+                else if (pm === 'ZELLE') breakdown.zelle = o.total;
+                else if (pm === 'CARD' || pm === 'BS_POS') breakdown.cardPdVShanklish = o.total;
+                else if (pm === 'MOBILE_PAY' || pm === 'PAGO_MOVIL') breakdown.mobileShanklish = o.total;
+                else if (pm === 'TRANSFER') breakdown.cardPdVSuperferro = o.total;
+                else breakdown.mobileShanklish = o.total;
+
+                const isPickup = !o.openTabId && (o.orderType === 'RESTAURANT' || o.orderType === 'PICKUP');
+                const isDelivery = o.orderType === 'DELIVERY';
+                const prefix = isPickup ? 'Pickup' : isDelivery ? 'Delivery' : '';
+                const description = prefix ? `${prefix}: ${o.customerName || 'Cliente'}` : (o.customerName || 'Cliente');
+
+                result.push({
+                    orderType: isDelivery ? 'DELIVERY' : 'PICKUP',
+                    description,
+                    correlativo: o.orderNumber || '',
+                    total: o.total,
+                    paymentBreakdown: breakdown,
+                    serviceFee: 0
+                });
+            }
+        }
+
+        return { success: true, data: result };
+    } catch (error) {
+        console.error('Error fetching sales for arqueo:', error);
+        return { success: false, message: 'Error cargando ventas para arqueo' };
+    }
+}
+
 export async function getDailyZReportAction(): Promise<{ success: boolean; data?: ZReportData; message?: string }> {
     try {
         const today = new Date();

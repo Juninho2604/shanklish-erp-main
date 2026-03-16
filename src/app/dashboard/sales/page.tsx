@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSalesHistoryAction, getDailyZReportAction, voidSalesOrderAction, type ZReportData } from '@/app/actions/sales.actions';
+import { getSalesHistoryAction, getDailyZReportAction, getSalesForArqueoAction, voidSalesOrderAction, type ZReportData } from '@/app/actions/sales.actions';
 import { validateManagerPinAction } from '@/app/actions/pos.actions';
 import { printReceipt } from '@/lib/print-command';
 import { exportZReportToExcel } from '@/lib/export-z-report';
+import { exportArqueoToExcel } from '@/lib/export-arqueo-excel';
 
 export default function SalesHistoryPage() {
     const [sales, setSales] = useState<any[]>([]);
@@ -151,12 +152,20 @@ export default function SalesHistoryPage() {
                     </h1>
                     <p className="text-gray-400">Registro de transacciones y cierres</p>
                 </div>
-                <button
-                    onClick={handleGenerateZReport}
-                    className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"
-                >
-                    🖨️ REPORTE &quot;Z&quot; (CIERRE)
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={handleExportArqueo}
+                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"
+                    >
+                        📥 Exportar Arqueo Excel
+                    </button>
+                    <button
+                        onClick={handleGenerateZReport}
+                        className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"
+                    >
+                        🖨️ REPORTE &quot;Z&quot; (CIERRE)
+                    </button>
+                </div>
             </div>
 
             {/* FILTROS */}
