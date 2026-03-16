@@ -1,25 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
-export function CashierShiftModal({ onShiftOpen }: { onShiftOpen: (name: string) => void }) {
+interface CashierShiftModalProps {
+    onShiftOpen: (name: string) => void;
+}
+
+export function CashierShiftModal({ onShiftOpen }: CashierShiftModalProps) {
     const [name, setName] = useState('');
     const [isVisible, setIsVisible] = useState(false);
+    // Use a ref so the effect never depends on onShiftOpen as a closure
+    const onShiftOpenRef = useRef(onShiftOpen);
+    onShiftOpenRef.current = onShiftOpen;
 
     useEffect(() => {
+        // Only fires once on mount
         const savedName = sessionStorage.getItem('cashierShiftName');
         if (savedName) {
-            onShiftOpen(savedName);
+            onShiftOpenRef.current(savedName);
         } else {
             setIsVisible(true);
         }
-    }, [onShiftOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleOpen = () => {
         if (!name.trim()) return;
         sessionStorage.setItem('cashierShiftName', name.trim());
         setIsVisible(false);
-        onShiftOpen(name.trim());
+        onShiftOpenRef.current(name.trim());
     };
 
     if (!isVisible) return null;

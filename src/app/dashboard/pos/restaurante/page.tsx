@@ -631,7 +631,6 @@ export default function POSSportBarPage() {
       <CashierShiftModal
         onShiftOpen={(name) => {
           setCashierName(name);
-          loadData();
         }}
       />
 

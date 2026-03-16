@@ -82,6 +82,9 @@ export default function POSDeliveryPage() {
     // WHATSAPP PARSER
     const [showWhatsAppParser, setShowWhatsAppParser] = useState(false);
 
+    // SEARCH
+    const [productSearch, setProductSearch] = useState('');
+
     useEffect(() => {
         async function loadMenu() {
             try {
@@ -101,6 +104,13 @@ export default function POSDeliveryPage() {
             if (cat) setMenuItems(cat.items);
         }
     }, [selectedCategory, categories]);
+
+    const filteredMenuItems = productSearch.trim()
+        ? categories.flatMap((c: any) => c.items as MenuItem[]).filter((i) =>
+              i.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+              i.sku?.toLowerCase().includes(productSearch.toLowerCase())
+          )
+        : menuItems;
 
     const getCategoryIcon = (name: string) => {
         if (name.includes('Tabla') || name.includes('Combo')) return '🍱';
@@ -256,24 +266,59 @@ export default function POSDeliveryPage() {
                         </div>
                     ) : (
                         <>
-                            <div className="flex gap-2 p-3 bg-gray-800 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
-                                {categories.map(cat => (
-                                    <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`px-5 py-3 rounded-lg font-bold transition-all flex items-center gap-2 ${selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                                        <span>{getCategoryIcon(cat.name)}</span> {cat.name}
-                                    </button>
-                                ))}
+                            {/* Search bar */}
+                            <div className="px-3 pt-3 pb-1 bg-gray-800 border-b border-gray-700">
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                                    <input
+                                        type="text"
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        placeholder="Buscar producto..."
+                                        className="w-full bg-gray-700 border border-gray-600 rounded-xl py-2 pl-9 pr-9 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    />
+                                    {productSearch && (
+                                        <button
+                                            onClick={() => setProductSearch('')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
                             </div>
+                            {/* Categories */}
+                            {!productSearch && (
+                                <div className="flex gap-2 p-3 bg-gray-800 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
+                                    {categories.map((cat: any) => (
+                                        <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`px-5 py-3 rounded-lg font-bold transition-all flex items-center gap-2 ${selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                                            <span>{getCategoryIcon(cat.name)}</span> {cat.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             <div className="flex-1 p-4 overflow-y-auto pb-24">
+                                {productSearch && (
+                                    <p className="text-xs text-gray-400 mb-3">
+                                        {filteredMenuItems.length} resultado(s) para &quot;{productSearch}&quot;
+                                    </p>
+                                )}
                                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                                    {menuItems.map(item => (
+                                    {filteredMenuItems.map(item => (
                                         <button key={item.id} onClick={() => handleAddToCart(item)} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-4 text-left shadow-md group h-36 flex flex-col justify-between">
                                             <div className="font-bold text-lg leading-tight group-hover:text-blue-300">{item.name}</div>
                                             <div className="text-2xl font-black text-blue-400">${item.price.toFixed(2)}</div>
                                         </button>
                                     ))}
+                                    {filteredMenuItems.length === 0 && (
+                                        <div className="col-span-full text-center text-gray-500 py-12 text-sm">
+                                            Sin resultados para &quot;{productSearch}&quot;
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        </>)}
+                        </>
+                        )}
                 </div>
 
                 <div className="w-96 bg-gray-900 border-l border-gray-800 flex flex-col shadow-2xl z-20">
