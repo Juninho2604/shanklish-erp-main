@@ -30,7 +30,7 @@ export interface CartItem {
     lineTotal: number;
 }
 
-export type POSOrderType = 'RESTAURANT' | 'DELIVERY';
+export type POSOrderType = 'RESTAURANT' | 'DELIVERY' | 'PICKUP';
 export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE';
 
 export interface CreateOrderData {
@@ -130,9 +130,7 @@ async function ensureBaseSalesArea() {
 }
 
 const RESTAURANT_ZONES = [
-    { code: 'SALON_PPAL', name: 'Salón Principal', zoneType: 'DINING',   sortOrder: 1, prefix: 'SP', tableCount: 20 },
-    { code: 'TERRAZA',    name: 'Terraza',         zoneType: 'TERRACE',  sortOrder: 2, prefix: 'TR', tableCount: 10 },
-    { code: 'BARRA',      name: 'Barra',           zoneType: 'BAR',      sortOrder: 3, prefix: 'BR', tableCount: 8 },
+    { code: 'SALON_PPAL', name: 'Salón Principal', zoneType: 'DINING',   sortOrder: 1, prefix: 'SP', tableCount: 30 },
 ] as const;
 
 async function ensureRestaurantSetup() {
@@ -298,39 +296,24 @@ async function generateTabCode(): Promise<string> {
 async function getMenuItemMetadata(menuItemIds: string[]) {
     return prisma.menuItem.findMany({
         where: { id: { in: menuItemIds } },
-        include: {
-            recipe: {
-                include: {
-                    ingredients: {
-                        include: {
-                            ingredientItem: true
-                        }
-                    }
-                }
-            }
+        select: {
+            id: true,
+            name: true,
+            recipeId: true,
         }
     });
 }
 
 function requiresKitchenRouting(menuItem: {
-    kitchenRouting: string;
     recipeId: string | null;
-    serviceCategory: string | null;
 }) {
-    if (menuItem.kitchenRouting === 'NONE') return false;
-    if (menuItem.kitchenRouting === 'KITCHEN' || menuItem.kitchenRouting === 'BAR') return true;
-    if (menuItem.serviceCategory === 'PACKAGED_DRINK') return false;
+    // All items that have a recipe (i.e. food) are routed to kitchen
     return Boolean(menuItem.recipeId);
 }
 
 function requiresStockValidation(menuItem: {
     recipeId: string | null;
-    serviceCategory: string | null;
-    stockTrackingMode?: string | null;
 }) {
-    if (menuItem.stockTrackingMode === 'DISPLAY_ONLY') return false;
-    if (menuItem.serviceCategory === 'BUCKET' || menuItem.serviceCategory === 'COCKTAIL') return true;
-    if (menuItem.stockTrackingMode === 'COMPOUND' || menuItem.stockTrackingMode === 'RECIPE') return true;
     return Boolean(menuItem.recipeId);
 }
 

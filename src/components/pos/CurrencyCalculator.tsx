@@ -7,10 +7,12 @@ import { usdToBs } from '@/lib/currency';
 interface CurrencyCalculatorProps {
     className?: string;
     totalUsd?: number;
+    hasServiceFee?: boolean; // Nuevo prop para incluir el 10% de servicio
+    deliveryFee?: number; // Opcional para delivery
     onRateUpdated?: (rate: number) => void;
 }
 
-export function CurrencyCalculator({ className, totalUsd, onRateUpdated }: CurrencyCalculatorProps) {
+export function CurrencyCalculator({ className, totalUsd, hasServiceFee, deliveryFee, onRateUpdated }: CurrencyCalculatorProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [rate, setRate] = useState<number | null>(null);
     const [editableRate, setEditableRate] = useState('');
@@ -114,8 +116,24 @@ export function CurrencyCalculator({ className, totalUsd, onRateUpdated }: Curre
 
                         {typeof totalUsd === 'number' && totalUsd > 0 && (
                             <div className="rounded-xl bg-blue-900/30 border border-blue-500/30 px-4 py-3">
-                                <p className="text-xs text-blue-200/80 mb-1">Total de la venta ({totalUsd.toFixed(2)} USD)</p>
-                                <p className="text-2xl font-black text-blue-300">{totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs</p>
+                                <p className="text-xs text-blue-200/80 mb-1">
+                                    Total de la venta ({totalUsd.toFixed(2)} USD)
+                                </p>
+                                {hasServiceFee && (
+                                    <p className="text-xs text-amber-200/80 mb-1 border-t border-blue-500/30 pt-1 mt-1">
+                                        + 10% Servicio ({ (totalUsd * 0.1).toFixed(2) } USD)
+                                    </p>
+                                )}
+                                {deliveryFee && (
+                                    <p className="text-xs text-amber-200/80 mb-1 border-t border-blue-500/30 pt-1 mt-1">
+                                        + Delivery ({deliveryFee.toFixed(2)} USD)
+                                    </p>
+                                )}
+                                <p className="text-2xl font-black text-blue-300 mt-2">
+                                    { (
+                                        usdToBs(totalUsd + (hasServiceFee ? totalUsd * 0.1 : 0) + (deliveryFee || 0), effectiveRate)
+                                    ).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } Bs
+                                </p>
                             </div>
                         )}
                     </div>
