@@ -51,3 +51,9 @@ next-env.d.ts
 
 # Cache
 .cache/
+
+# Binarios y archivos temporales
+cloud-sql-proxy*.exe
+*.patch
+ts_errors.log
+.env.copy
