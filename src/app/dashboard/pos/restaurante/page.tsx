@@ -191,7 +191,12 @@ export default function POSSportBarPage() {
   const [paymentPinError, setPaymentPinError] = useState("");
 
   // ── Descuento ─────────────────────────────────────────────────────────────
-  const [discountType, setDiscountType] = useState<"NONE" | "DIVISAS_33">("NONE");
+  const [discountType, setDiscountType] = useState<"NONE" | "DIVISAS_33" | "CORTESIA_100" | "CORTESIA_PERCENT">("NONE");
+  const [authorizedManager, setAuthorizedManager] = useState<{ id: string; name: string } | null>(null);
+  const [showCortesiaModal, setShowCortesiaModal] = useState(false);
+  const [cortesiaPin, setCortesiaPin] = useState("");
+  const [cortesiaPercent, setCortesiaPercent] = useState("100");
+  const [cortesiaPinError, setCortesiaPinError] = useState("");
 
   // ── 10% Servicio (solo sala principal, opcional) ───────────────────────────
   const [serviceFeeIncluded, setServiceFeeIncluded] = useState(true);
@@ -308,9 +313,15 @@ export default function POSSportBarPage() {
   const paidAmount = parseFloat(amountReceived) || 0;
   const isPagoDivisas = paymentMethod === "CASH" || paymentMethod === "ZELLE";
 
+  const cortesiaPercentNum = Math.min(100, Math.max(0, parseFloat(cortesiaPercent) || 0));
+
   const paymentBaseAmount = activeTab
     ? discountType === "DIVISAS_33"
       ? (activeTab.balanceDue * 2) / 3
+      : discountType === "CORTESIA_100"
+      ? 0
+      : discountType === "CORTESIA_PERCENT"
+      ? activeTab.balanceDue * (1 - cortesiaPercentNum / 100)
       : activeTab.balanceDue
     : 0;
   const paymentAmountToCharge = serviceFeeIncluded ? paymentBaseAmount * 1.1 : paymentBaseAmount;
@@ -476,6 +487,46 @@ export default function POSSportBarPage() {
   };
 
   // ============================================================================
+  // CORTESIA AUTH
+  // ============================================================================
+
+  const openCortesiaModal = () => {
+    setCortesiaPin("");
+    setCortesiaPinError("");
+    setCortesiaPercent("100");
+    setShowCortesiaModal(true);
+  };
+
+  const handleCortesiaPinKey = (k: string) => {
+    if (k === "clear") setCortesiaPin("");
+    else if (k === "back") setCortesiaPin((p) => p.slice(0, -1));
+    else setCortesiaPin((p) => p + k);
+  };
+
+  const handleCortesiaPinConfirm = async () => {
+    setCortesiaPinError("");
+    const r = await validateManagerPinAction(cortesiaPin);
+    if (r.success && r.data) {
+      setAuthorizedManager({ id: r.data.managerId, name: r.data.managerName });
+      const pct = parseFloat(cortesiaPercent);
+      if (pct >= 100) {
+        setDiscountType("CORTESIA_100");
+      } else {
+        setDiscountType("CORTESIA_PERCENT");
+      }
+      setShowCortesiaModal(false);
+    } else {
+      setCortesiaPinError("PIN inválido");
+    }
+  };
+
+  const clearDiscount = () => {
+    setDiscountType("NONE");
+    setAuthorizedManager(null);
+    setCortesiaPercent("100");
+  };
+
+  // ============================================================================
   // PAYMENT (requiere PIN de cajera)
   // ============================================================================
 
@@ -489,8 +540,18 @@ export default function POSSportBarPage() {
         setPaymentPinError("PIN incorrecto o sin permisos de cajera");
         return;
       }
-      const discountAmount = discountType === "DIVISAS_33" ? activeTab.balanceDue / 3 : 0;
-      const discountLabel = discountType === "DIVISAS_33" ? " · -33.33% Divisas" : "";
+      let discountAmount = 0;
+      let discountLabel = "";
+      if (discountType === "DIVISAS_33") {
+        discountAmount = activeTab.balanceDue / 3;
+        discountLabel = " · -33.33% Divisas";
+      } else if (discountType === "CORTESIA_100") {
+        discountAmount = activeTab.balanceDue;
+        discountLabel = " · Cortesía 100%";
+      } else if (discountType === "CORTESIA_PERCENT") {
+        discountAmount = activeTab.balanceDue * (cortesiaPercentNum / 100);
+        discountLabel = ` · Cortesía ${cortesiaPercentNum}%`;
+      }
       const result = await registerOpenTabPaymentAction({
         openTabId: activeTab.id,
         amount: paidAmount,
@@ -505,8 +566,8 @@ export default function POSSportBarPage() {
       }
       // Imprimir factura: correlativo fijo por mesa (tabCode), 10% servicio solo si el cliente lo pagó
       const subtotal = (activeTab as any).runningSubtotal ?? activeTab.orders.reduce((s, o) => s + o.items.reduce((si: number, i: any) => si + (i.lineTotal || 0), 0), 0);
-      const discount = discountType === "DIVISAS_33" ? activeTab.balanceDue / 3 : ((activeTab as any).runningDiscount ?? 0);
-      const totalAntesServicio = discountType === "DIVISAS_33" ? activeTab.balanceDue * (2 / 3) : ((activeTab as any).runningTotal ?? subtotal - discount);
+      const discount = discountAmount > 0 ? discountAmount : ((activeTab as any).runningDiscount ?? 0);
+      const totalAntesServicio = Math.max(0, activeTab.balanceDue - discountAmount);
       const serviceFee = serviceFeeIncluded ? totalAntesServicio * 0.1 : 0;
       const allItems = activeTab.orders.flatMap((o) =>
         (o.items || []).map((i: any) => ({
@@ -534,7 +595,7 @@ export default function POSSportBarPage() {
       }
       setAmountReceived("");
       setPaymentPin("");
-      setDiscountType("NONE");
+      clearDiscount();
       setServiceFeeIncluded(true);
       setShowPaymentPinModal(false);
       await loadData();
@@ -573,16 +634,22 @@ export default function POSSportBarPage() {
     if (cart.length === 0) return;
     setIsProcessing(true);
     try {
-      const finalTotal = cartTotal - (discountType === "DIVISAS_33" ? cartTotal / 3 : 0);
+      const pickupDiscount = discountType === "DIVISAS_33" ? cartTotal / 3
+        : discountType === "CORTESIA_100" ? cartTotal
+        : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
+        : 0;
+      const finalTotal = Math.max(0, cartTotal - pickupDiscount);
 
       const result = await createSalesOrderAction({
-        orderType: "RESTAURANT", // Tratado en RESTAURANT
+        orderType: "RESTAURANT",
         customerName: pickupCustomerName || "Cliente en Caja",
         items: cart,
         paymentMethod,
         amountPaid: paidAmount || finalTotal,
         notes: "Venta Directa Pickup",
         discountType,
+        discountPercent: discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum : undefined,
+        authorizedById: authorizedManager?.id,
       });
 
       if (result.success && result.data) {
@@ -601,8 +668,8 @@ export default function POSSportBarPage() {
         });
         }
         const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
-        const discount = discountType === "DIVISAS_33" ? subtotal / 3 : 0;
-        const total = subtotal - discount;
+        const discount = pickupDiscount;
+        const discountReason = discount > 0 ? "Descuento aplicado" : undefined;
         if (getPOSConfig().printReceiptOnRestaurant) {
         printReceipt({
           orderNumber: result.data.orderNumber,
@@ -619,16 +686,16 @@ export default function POSSportBarPage() {
           })),
           subtotal,
           discount,
-          discountReason: discountType === "DIVISAS_33" ? "Descuento aplicado" : undefined,
-          total,
-          serviceFee: total * 0.1,
+          discountReason,
+          total: finalTotal,
+          serviceFee: 0, // Pickup no cobra servicio
         });
         }
 
         setCart([]);
         setPaymentMethod("CASH");
         setAmountReceived("");
-        setDiscountType("NONE");
+        clearDiscount();
         setPickupCustomerName("");
       } else {
         alert(result.message);
@@ -999,54 +1066,76 @@ export default function POSSportBarPage() {
               </div>
 
               <div className="p-4 bg-slate-900 border-t border-slate-800 space-y-3 shrink-0">
-                <div className="flex gap-2">
+                {/* Descuento */}
+                <div className="grid grid-cols-2 gap-1.5">
                   <button
-                    onClick={() => setDiscountType("NONE")}
-                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-slate-500 text-white" : "bg-slate-800 hover:bg-slate-700"}`}
+                    onClick={clearDiscount}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-slate-500 text-white ring-1 ring-white" : "bg-slate-800 hover:bg-slate-700"}`}
                   >
                     Normal
                   </button>
                   <button
-                    onClick={() => setDiscountType("DIVISAS_33")}
-                    className={`flex-[1.5] py-2 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30" : "bg-slate-800 hover:bg-slate-700"}`}
+                    onClick={() => isPagoDivisas ? setDiscountType("DIVISAS_33") : undefined}
+                    disabled={!isPagoDivisas}
+                    title={!isPagoDivisas ? "Solo con Efectivo o Zelle" : ""}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-indigo-600 text-white" : isPagoDivisas ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-800 text-slate-600 cursor-not-allowed opacity-50"}`}
                   >
                     Divisas -33%
                   </button>
+                  <button
+                    onClick={openCortesiaModal}
+                    className={`col-span-2 py-1.5 text-xs font-bold rounded-lg transition ${(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                  >
+                    {(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT")
+                      ? `🎁 Cortesía ${discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum + "%" : "100%"}`
+                      : "🎁 Cortesía (PIN)"}
+                  </button>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {["TRANSFER", "MOBILE_PAY", "CASH", "CARD"].map((m) => (
+                {/* Métodos de pago */}
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
                     <button
                       key={m}
-                      onClick={() => setPaymentMethod(m as any)}
+                      onClick={() => setPaymentMethod(m)}
                       className={`py-2 text-[10px] font-bold rounded-lg transition ${paymentMethod === m ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
                     >
-                      {m === "TRANSFER" ? "Transf" : m === "MOBILE_PAY" ? "P.Móvil" : m === "CASH" ? "Efect" : "Punto"}
+                      {m === "TRANSFER" ? "Transf" : m === "MOBILE_PAY" ? "P.Móvil" : m === "CASH" ? "Efectivo $" : m === "ZELLE" ? "Zelle" : "Punto"}
                     </button>
                   ))}
                 </div>
 
-                <input
-                  type="number"
-                  value={amountReceived}
-                  onChange={(e) => setAmountReceived(e.target.value)}
-                  placeholder={`Monto recibido ($${(cartTotal - (discountType === "DIVISAS_33" ? cartTotal / 3 : 0)).toFixed(2)})`}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-                />
-
-                <CurrencyCalculator
-                  totalUsd={cartTotal - (discountType === "DIVISAS_33" ? cartTotal / 3 : 0)}
-                  hasServiceFee={false} // Pickup no tiene servicio
-                  onRateUpdated={setExchangeRate}
-                  className="w-full justify-center"
-                />
-
-                <button
-                  onClick={handleCheckoutPickup}
-                  disabled={cart.length === 0 || isProcessing}
-                  className="w-full py-4 mt-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-lg shadow-xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-40"
-                >
-                  COBRAR ${(cartTotal - (discountType === "DIVISAS_33" ? cartTotal / 3 : 0)).toFixed(2)}
-                </button>
+                {/* Total calculado pickup */}
+                {(() => {
+                  const pickupDiscount = discountType === "DIVISAS_33" ? cartTotal / 3
+                    : discountType === "CORTESIA_100" ? cartTotal
+                    : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
+                    : 0;
+                  const pickupTotal = Math.max(0, cartTotal - pickupDiscount);
+                  return (
+                    <>
+                      <input
+                        type="number"
+                        value={amountReceived}
+                        onChange={(e) => setAmountReceived(e.target.value)}
+                        placeholder={`Monto recibido ($${pickupTotal.toFixed(2)})`}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+                      />
+                      <CurrencyCalculator
+                        totalUsd={pickupTotal}
+                        hasServiceFee={false}
+                        onRateUpdated={setExchangeRate}
+                        className="w-full justify-center"
+                      />
+                      <button
+                        onClick={handleCheckoutPickup}
+                        disabled={cart.length === 0 || isProcessing}
+                        className="w-full py-4 mt-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-lg shadow-xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-40"
+                      >
+                        COBRAR ${pickupTotal.toFixed(2)}
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ) : !activeTab ? (
@@ -1192,10 +1281,10 @@ export default function POSSportBarPage() {
                   {/* 1. Descuento */}
                   <div className="mb-3">
                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">1. Descuento</p>
-                    <div className="flex gap-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
-                        onClick={() => setDiscountType("NONE")}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-slate-500 text-white ring-1 ring-white" : "bg-slate-900 text-slate-300 hover:bg-slate-700"}`}
+                        onClick={clearDiscount}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-slate-500 text-white ring-1 ring-white" : "bg-slate-900 text-slate-300 hover:bg-slate-700"}`}
                       >
                         Normal
                       </button>
@@ -1203,15 +1292,28 @@ export default function POSSportBarPage() {
                         onClick={() => isPagoDivisas && setDiscountType("DIVISAS_33")}
                         disabled={!isPagoDivisas}
                         title={!isPagoDivisas ? "Solo con Efectivo o Zelle" : "Descuento por pago en divisas"}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-blue-600 text-white ring-1 ring-white" : isPagoDivisas ? "bg-slate-900 text-slate-300 hover:bg-slate-700" : "bg-slate-900 text-slate-600 cursor-not-allowed opacity-50"}`}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-blue-600 text-white ring-1 ring-white" : isPagoDivisas ? "bg-slate-900 text-slate-300 hover:bg-slate-700" : "bg-slate-900 text-slate-600 cursor-not-allowed opacity-50"}`}
                       >
-                        -33.33%
+                        Divisas -33%
+                      </button>
+                      <button
+                        onClick={openCortesiaModal}
+                        className={`col-span-2 py-1.5 text-xs font-bold rounded-lg transition ${(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") ? "bg-purple-600 text-white ring-1 ring-purple-400" : "bg-slate-900 text-slate-300 hover:bg-slate-700"}`}
+                      >
+                        {(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT")
+                          ? `🎁 Cortesía ${discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum + "%" : "100%"} — ${authorizedManager?.name || ""}`
+                          : "🎁 Cortesía (PIN)"}
                       </button>
                     </div>
                     {discountType === "DIVISAS_33" && (
                       <p className="text-[10px] text-blue-400 mt-1">
                         Descuento: -${(activeTab.balanceDue / 3).toFixed(2)} → Total: $
                         {((activeTab.balanceDue * 2) / 3).toFixed(2)}
+                      </p>
+                    )}
+                    {(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") && (
+                      <p className="text-[10px] text-purple-400 mt-1">
+                        Descuento: -${(activeTab.balanceDue * (cortesiaPercentNum / 100)).toFixed(2)} → Total: ${(activeTab.balanceDue * (1 - cortesiaPercentNum / 100)).toFixed(2)}
                       </p>
                     )}
                   </div>
@@ -1498,6 +1600,61 @@ export default function POSSportBarPage() {
                 className="flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-sm transition disabled:opacity-50"
               >
                 {isProcessing ? "Procesando..." : "✓ Confirmar pago"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: CORTESÍA (PIN + PORCENTAJE)                               */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {showCortesiaModal && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-purple-800/60 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="border-b border-slate-800 p-5 flex items-center justify-between">
+              <h3 className="text-lg font-black text-purple-300">🎁 Cortesía</h3>
+              <button onClick={() => setShowCortesiaModal(false)} className="text-slate-400 hover:text-white text-2xl">×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1">% de Cortesía</label>
+                <div className="flex gap-2 mb-2">
+                  {["25", "50", "75", "100"].map(v => (
+                    <button key={v} onClick={() => setCortesiaPercent(v)}
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${cortesiaPercent === v ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
+                      {v}%
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number" min="1" max="100"
+                  value={cortesiaPercent}
+                  onChange={e => setCortesiaPercent(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-white text-center text-lg font-bold focus:border-purple-500 focus:outline-none"
+                  placeholder="% personalizado"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1">PIN de Gerente / Dueño</label>
+                <div className="bg-slate-800 p-3 rounded-xl text-2xl tracking-widest text-center font-mono mb-3 min-h-[3rem]">
+                  {cortesiaPin.replace(/./g, "•")}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1,2,3,4,5,6,7,8,9,0].map(n => (
+                    <button key={n} onClick={() => handleCortesiaPinKey(n.toString())}
+                      className="bg-slate-700 hover:bg-slate-600 rounded-lg py-3 font-bold text-xl">{n}</button>
+                  ))}
+                  <button onClick={() => handleCortesiaPinKey("clear")} className="bg-red-900 hover:bg-red-800 rounded-lg py-3 font-bold text-red-200 text-sm">C</button>
+                  <button onClick={() => handleCortesiaPinKey("back")} className="bg-slate-600 hover:bg-slate-500 rounded-lg py-3 font-bold">⌫</button>
+                </div>
+                {cortesiaPinError && <p className="text-red-400 text-xs mt-2 text-center">{cortesiaPinError}</p>}
+              </div>
+            </div>
+            <div className="border-t border-slate-800 p-4 flex gap-3">
+              <button onClick={() => setShowCortesiaModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl font-bold text-sm">Cancelar</button>
+              <button onClick={handleCortesiaPinConfirm} disabled={!cortesiaPin} className="flex-[2] py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-xl font-black text-sm transition">
+                Aplicar Cortesía
               </button>
             </div>
           </div>

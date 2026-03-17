@@ -143,6 +143,12 @@ const posNavigation: NavItem[] = [
         icon: '🍽️',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
     },
+    {
+        label: 'Configuración POS',
+        href: '/dashboard/config/pos',
+        icon: '🖨️',
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
+    },
 ];
 
 const secondaryNavigation: NavItem[] = [

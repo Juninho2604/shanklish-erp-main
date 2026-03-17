@@ -85,11 +85,12 @@ export default function POSDeliveryPage() {
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
     // DISCOUNT STATE
-    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100'>('NONE');
+    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100' | 'CORTESIA_PERCENT'>('NONE');
     const [authorizedManager, setAuthorizedManager] = useState<{ id: string, name: string } | null>(null);
     const [showPinModal, setShowPinModal] = useState(false);
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
+    const [cortesiaPercent, setCortesiaPercent] = useState('100');
 
     // WHATSAPP PARSER
     const [showWhatsAppParser, setShowWhatsAppParser] = useState(false);
@@ -214,9 +215,15 @@ export default function POSDeliveryPage() {
 
     const cartSubtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
     const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
+    const cortesiaPercentNum = Math.min(100, Math.max(0, parseFloat(cortesiaPercent) || 0));
     const deliveryFee = discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL;
-    const itemsAfterDiscount = discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal * (2 / 3) : (discountType === 'CORTESIA_100' ? 0 : cartSubtotal);
-    const finalTotal = discountType === 'CORTESIA_100' ? 0 : itemsAfterDiscount + deliveryFee;
+    const itemsAfterDiscount = discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal * (2 / 3)
+        : discountType === 'CORTESIA_100' ? 0
+        : discountType === 'CORTESIA_PERCENT' ? cartSubtotal * (1 - cortesiaPercentNum / 100)
+        : cartSubtotal;
+    const finalTotal = (discountType === 'CORTESIA_100') ? 0
+        : discountType === 'CORTESIA_PERCENT' ? itemsAfterDiscount + (cortesiaPercentNum >= 100 ? 0 : deliveryFee)
+        : itemsAfterDiscount + deliveryFee;
     const paidAmount = parseFloat(amountReceived) || 0;
 
     const handleCheckout = async () => {
@@ -226,8 +233,12 @@ export default function POSDeliveryPage() {
             const result = await createSalesOrderAction({
                 orderType: 'DELIVERY',
                 customerName: customerName || 'Delivery',
-                customerPhone, customerAddress: customerAddress || 'N/A', // Asegurar que no sea null
-                items: cart, paymentMethod, amountPaid: paidAmount || finalTotal, discountType, authorizedById: authorizedManager?.id, notes: `Dirección: ${customerAddress}`
+                customerPhone, customerAddress: customerAddress || 'N/A',
+                items: cart, paymentMethod, amountPaid: paidAmount || finalTotal,
+                discountType,
+                discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum : undefined,
+                authorizedById: authorizedManager?.id,
+                notes: `Dirección: ${customerAddress}`
             });
 
             if (result.success && result.data) {
@@ -281,8 +292,19 @@ export default function POSDeliveryPage() {
         } catch (e) { console.error(e); alert('Error'); } finally { setIsProcessing(false); }
     };
 
-    const handleDiscountSelect = (t: string) => { if (t === 'CORTESIA_100') { setPinInput(''); setPinError(''); setShowPinModal(true); } else { setDiscountType(t as any); setAuthorizedManager(null); } };
-    const handlePinSubmit = async () => { const r = await validateManagerPinAction(pinInput); if (r.success && r.data) { setAuthorizedManager({ id: r.data.managerId, name: r.data.managerName }); setDiscountType('CORTESIA_100'); setShowPinModal(false); } else setPinError('PIN Inválido'); };
+    const handleDiscountSelect = (t: string) => {
+        if (t === 'CORTESIA_100') { setPinInput(''); setPinError(''); setCortesiaPercent('100'); setShowPinModal(true); }
+        else { setDiscountType(t as any); setAuthorizedManager(null); }
+    };
+    const handlePinSubmit = async () => {
+        const r = await validateManagerPinAction(pinInput);
+        if (r.success && r.data) {
+            setAuthorizedManager({ id: r.data.managerId, name: r.data.managerName });
+            const pct = parseFloat(cortesiaPercent);
+            setDiscountType(pct >= 100 ? 'CORTESIA_100' : 'CORTESIA_PERCENT');
+            setShowPinModal(false);
+        } else setPinError('PIN Inválido');
+    };
     const handlePinKey = (k: string) => { if (k === 'clear') setPinInput(''); else if (k === 'back') setPinInput(p => p.slice(0, -1)); else setPinInput(p => p + k); };
 
     if (isLoading) return <div className="text-white p-10">Cargando...</div>;
@@ -431,15 +453,25 @@ export default function POSDeliveryPage() {
                                     <span>-${(cartSubtotal + DELIVERY_FEE_NORMAL).toFixed(2)}</span>
                                 </div>
                             )}
+                            {discountType === 'CORTESIA_PERCENT' && (
+                                <div className="flex justify-between text-purple-400">
+                                    <span>Cortesía {cortesiaPercentNum}%</span>
+                                    <span>-${(cartSubtotal * cortesiaPercentNum / 100).toFixed(2)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between font-bold text-white border-t border-gray-700 pt-1">
                                 <span>Total</span>
                                 <PriceDisplay usd={finalTotal} rate={exchangeRate} size="sm" showBs={false} />
                             </div>
                         </div>
-                        <div className="flex gap-1">
-                            <button onClick={() => handleDiscountSelect('NONE')} className={`flex-1 py-1.5 text-[10px] font-bold rounded ${discountType === 'NONE' ? 'bg-blue-900 text-blue-200 ring-1 ring-blue-500' : 'bg-gray-700 text-gray-300'}`}>Normal</button>
-                            <button onClick={() => isPagoDivisas && handleDiscountSelect('DIVISAS_33')} disabled={!isPagoDivisas} title={!isPagoDivisas ? 'Solo con Efectivo o Zelle' : 'Descuento divisas - Delivery $3'} className={`flex-1 py-1.5 text-[10px] font-bold rounded ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white' : isPagoDivisas ? 'bg-gray-700 text-gray-300' : 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-60'}`}>Divisa -33%</button>
-                            <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-1.5 text-[10px] font-bold rounded ${discountType === 'CORTESIA_100' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Cortesía</button>
+                        <div className="grid grid-cols-2 gap-1">
+                            <button onClick={() => handleDiscountSelect('NONE')} className={`py-1.5 text-[10px] font-bold rounded ${discountType === 'NONE' ? 'bg-blue-900 text-blue-200 ring-1 ring-blue-500' : 'bg-gray-700 text-gray-300'}`}>Normal</button>
+                            <button onClick={() => isPagoDivisas && handleDiscountSelect('DIVISAS_33')} disabled={!isPagoDivisas} title={!isPagoDivisas ? 'Solo con Efectivo o Zelle' : 'Descuento divisas - Delivery $3'} className={`py-1.5 text-[10px] font-bold rounded ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white' : isPagoDivisas ? 'bg-gray-700 text-gray-300' : 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-60'}`}>Divisa -33%</button>
+                            <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`col-span-2 py-1.5 text-[10px] font-bold rounded ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                                {(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT')
+                                    ? `🎁 Cortesía ${discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum + '%' : '100%'} — ${authorizedManager?.name || ''}`
+                                    : '🎁 Cortesía (PIN)'}
+                            </button>
                         </div>
                         <div className="grid grid-cols-2 gap-1.5">
                             {(['TRANSFER', 'MOBILE_PAY', 'CASH', 'ZELLE', 'CARD'] as const).map(m => (
@@ -552,15 +584,37 @@ export default function POSDeliveryPage() {
 
             {showPinModal && (
                 <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60]">
-                    <div className="bg-gray-800 p-6 rounded-2xl w-80 text-center">
-                        <h3 className="font-bold text-xl mb-4">Autorización</h3>
-                        <div className="bg-black p-4 rounded text-2xl tracking-widest mb-4 font-mono">{pinInput.replace(/./g, '*')}</div>
+                    <div className="bg-gray-800 p-6 rounded-2xl w-80">
+                        <h3 className="font-bold text-xl mb-4 text-center text-purple-300">🎁 Cortesía</h3>
+                        {/* Porcentaje */}
+                        <div className="mb-4">
+                            <label className="block text-xs text-gray-400 font-bold mb-1">% de Cortesía</label>
+                            <div className="flex gap-1.5 mb-2">
+                                {['25','50','75','100'].map(v => (
+                                    <button key={v} onClick={() => setCortesiaPercent(v)}
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded transition ${cortesiaPercent === v ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                                        {v}%
+                                    </button>
+                                ))}
+                            </div>
+                            <input type="number" min="1" max="100" value={cortesiaPercent}
+                                onChange={e => setCortesiaPercent(e.target.value)}
+                                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-center font-bold focus:border-purple-500 focus:outline-none"
+                                placeholder="% personalizado" />
+                        </div>
+                        {/* PIN */}
+                        <label className="block text-xs text-gray-400 font-bold mb-1">PIN de Gerente / Dueño</label>
+                        <div className="bg-black p-4 rounded text-2xl tracking-widest mb-3 font-mono text-center min-h-[3.5rem]">{pinInput.replace(/./g, '•')}</div>
                         <div className="grid grid-cols-3 gap-2 mb-4">
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(n => <button key={n} onClick={() => handlePinKey(n.toString())} className="bg-gray-700 p-3 rounded font-bold text-xl">{n}</button>)}
-                            <button onClick={() => handlePinKey('clear')} className="bg-red-800 rounded font-bold text-red-200">C</button>
+                            <button onClick={() => handlePinKey('clear')} className="bg-red-800 rounded font-bold text-red-200 text-sm">C</button>
                             <button onClick={() => handlePinKey('back')} className="bg-gray-600 rounded font-bold">⌫</button>
                         </div>
-                        <div className="flex gap-2"><button onClick={() => setShowPinModal(false)} className="flex-1 bg-gray-600 py-2 rounded">Cancelar</button><button onClick={handlePinSubmit} className="flex-1 bg-blue-600 py-2 rounded font-bold">OK</button></div>
+                        {pinError && <p className="text-red-400 text-xs text-center mb-3">{pinError}</p>}
+                        <div className="flex gap-2">
+                            <button onClick={() => { setShowPinModal(false); setPinInput(''); }} className="flex-1 bg-gray-600 py-2 rounded">Cancelar</button>
+                            <button onClick={handlePinSubmit} disabled={!pinInput} className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 py-2 rounded font-bold transition">Aplicar</button>
+                        </div>
                     </div>
                 </div>
             )}

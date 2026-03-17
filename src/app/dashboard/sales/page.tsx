@@ -12,6 +12,9 @@ export default function SalesHistoryPage() {
     const [zReport, setZReport] = useState<ZReportData | null>(null);
     const [showZReport, setShowZReport] = useState(false);
 
+    // --- EXPANSIÓN DE FILAS ---
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
     // --- ANULACIÓN ---
     const [voidTarget, setVoidTarget] = useState<any | null>(null);
     const [voidStep, setVoidStep] = useState<'reason' | 'pin'>('reason');
@@ -22,7 +25,10 @@ export default function SalesHistoryPage() {
 
     // --- FILTROS ---
     const [showCancelled, setShowCancelled] = useState(false);
-    const [filterDate, setFilterDate] = useState('');
+    const [filterDate, setFilterDate] = useState(() => {
+        // Default: today en Caracas
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
+    });
 
     useEffect(() => { loadData(); }, []);
 
@@ -31,6 +37,15 @@ export default function SalesHistoryPage() {
         const result = await getSalesHistoryAction();
         if (result.success && result.data) setSales(result.data as any[]);
         setIsLoading(false);
+    };
+
+    const toggleRow = (id: string) => {
+        setExpandedRows(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
     };
 
     const handleGenerateZReport = async () => {
@@ -72,7 +87,8 @@ export default function SalesHistoryPage() {
     };
 
     // ---- REIMPRESIÓN ----
-    const handleReprint = (sale: any) => {
+    const handleReprint = (sale: any, e: React.MouseEvent) => {
+        e.stopPropagation();
         const serviceFee = sale.orderType === 'RESTAURANT' && sale.serviceFeeIncluded ? (sale.total || 0) * 0.1 : 0;
         const itemsSubtotal = (sale.items || []).reduce((s: number, i: any) => s + (i.lineTotal || 0), 0);
         const deliveryFee = sale.orderType === 'DELIVERY' && sale.subtotal != null ? Math.max(0, sale.subtotal - itemsSubtotal) : undefined;
@@ -102,7 +118,8 @@ export default function SalesHistoryPage() {
     };
 
     // ---- ANULACIÓN ----
-    const openVoidModal = (sale: any) => {
+    const openVoidModal = (sale: any, e: React.MouseEvent) => {
+        e.stopPropagation();
         setVoidTarget(sale);
         setVoidStep('reason');
         setVoidReason('');
@@ -148,236 +165,351 @@ export default function SalesHistoryPage() {
     // ---- BADGES ----
     const getPaymentBadge = (method: string) => {
         switch (method?.toUpperCase()) {
-            case 'CASH': return <span className="bg-green-900 text-green-300 px-2 py-0.5 rounded text-xs font-bold">💵 EFECTIVO</span>;
-            case 'CASH_USD': return <span className="bg-green-800 text-green-200 px-2 py-0.5 rounded text-xs font-bold">💵 USD</span>;
+            case 'CASH': return <span className="bg-green-900 text-green-300 px-2 py-0.5 rounded text-xs font-bold">EFECTIVO</span>;
+            case 'CASH_USD': return <span className="bg-green-800 text-green-200 px-2 py-0.5 rounded text-xs font-bold">USD</span>;
             case 'CARD':
-            case 'BS_POS': return <span className="bg-blue-900 text-blue-300 px-2 py-0.5 rounded text-xs font-bold">🏧 PUNTO</span>;
-            case 'ZELLE': return <span className="bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">💴 ZELLE</span>;
-            case 'MOBILE_PAY': return <span className="bg-purple-900 text-purple-300 px-2 py-0.5 rounded text-xs font-bold">📱 P.MÓVIL</span>;
-            case 'TRANSFER': return <span className="bg-cyan-900 text-cyan-300 px-2 py-0.5 rounded text-xs font-bold">🏦 TRANSFER</span>;
+            case 'BS_POS': return <span className="bg-blue-900 text-blue-300 px-2 py-0.5 rounded text-xs font-bold">PUNTO</span>;
+            case 'ZELLE': return <span className="bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">ZELLE</span>;
+            case 'MOBILE_PAY': return <span className="bg-purple-900 text-purple-300 px-2 py-0.5 rounded text-xs font-bold">PAGO MÓVIL</span>;
+            case 'TRANSFER': return <span className="bg-cyan-900 text-cyan-300 px-2 py-0.5 rounded text-xs font-bold">TRANSFER</span>;
             default: return <span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-xs font-bold">{method || '-'}</span>;
         }
     };
 
-    const formatMoney = (amount: number) => `$${amount.toFixed(2)}`;
+    const formatMoney = (amount: number) => `$${(amount || 0).toFixed(2)}`;
 
     // ---- FILTRADO ----
-    const filteredSales = sales.filter(s => {
-        if (!showCancelled && s.status === 'CANCELLED') return false;
+    const allFilteredSales = sales.filter(s => showCancelled || s.status !== 'CANCELLED');
+    const filteredSales = allFilteredSales.filter(s => {
         if (filterDate) {
-            const saleDate = new Date(s.createdAt).toISOString().split('T')[0];
+            const saleDate = new Date(s.createdAt).toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
             if (saleDate !== filterDate) return false;
         }
         return true;
     });
+
+    const shownCount = filteredSales.length;
+    const totalCount = allFilteredSales.length;
+
+    // Formatted date for display
+    const displayDate = filterDate
+        ? new Date(filterDate + 'T12:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: 'numeric', year: 'numeric' })
+        : '';
 
     if (isLoading) return <div className="p-8 text-center text-white">Cargando historial...</div>;
 
     return (
         <div className="p-6 max-w-7xl mx-auto text-white">
             {/* HEADER */}
-            <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+            <div className="flex flex-wrap justify-between items-start mb-5 gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
                         Historial de Ventas
                     </h1>
-                    <p className="text-gray-400">Registro de transacciones y cierres</p>
+                    <p className="text-gray-400 text-sm mt-0.5">
+                        Registro de transacciones y cierres
+                        {' · '}
+                        <span className="text-gray-300 font-medium">{shownCount} de {totalCount} órdenes</span>
+                    </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Date filter - dark pill style */}
+                    <div className="flex items-center gap-1.5 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2">
+                        <span className="text-gray-400 text-sm">📅</span>
+                        <input
+                            type="date"
+                            value={filterDate}
+                            onChange={e => setFilterDate(e.target.value)}
+                            className="bg-transparent text-white text-sm focus:outline-none cursor-pointer w-32"
+                        />
+                    </div>
+                    {filterDate && (
+                        <button
+                            onClick={() => setFilterDate('')}
+                            className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                            × Todas
+                        </button>
+                    )}
+                    <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                        <input
+                            type="checkbox"
+                            checked={showCancelled}
+                            onChange={e => setShowCancelled(e.target.checked)}
+                            className="rounded"
+                        />
+                        Anuladas
+                    </label>
                     <button
                         onClick={handleExportArqueo}
-                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"
+                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-5 py-2 rounded-lg font-bold shadow-lg flex items-center gap-2 text-sm"
                     >
-                        📥 Exportar Arqueo Excel
+                        📥 EXPORTAR EXCEL
                     </button>
                     <button
                         onClick={handleGenerateZReport}
-                        className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"
+                        className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-5 py-2 rounded-lg font-bold shadow-lg flex items-center gap-2 text-sm"
                     >
                         🖨️ REPORTE &quot;Z&quot; (CIERRE)
                     </button>
                 </div>
             </div>
 
-            {/* FILTROS */}
-            <div className="flex flex-wrap gap-4 mb-4 items-center">
-                <input
-                    type="date"
-                    value={filterDate}
-                    onChange={e => setFilterDate(e.target.value)}
-                    className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white"
-                />
-                {filterDate && (
-                    <button onClick={() => setFilterDate('')} className="text-xs text-gray-400 hover:text-white underline">
-                        Limpiar fecha
-                    </button>
-                )}
-                <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
-                    <input
-                        type="checkbox"
-                        checked={showCancelled}
-                        onChange={e => setShowCancelled(e.target.checked)}
-                        className="rounded"
-                    />
-                    Mostrar anuladas
-                </label>
-                <span className="ml-auto text-xs text-gray-500">{filteredSales.length} órdenes</span>
-            </div>
-
             {/* TABLA */}
             <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-x-auto shadow-xl">
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-900/50 text-gray-400 uppercase text-xs font-bold">
+                    <thead className="bg-gray-900/70 text-gray-400 uppercase text-xs font-bold tracking-wider">
                         <tr>
-                            <th className="p-4">Orden #</th>
-                            <th className="p-4">Hora</th>
-                            <th className="p-4">Cliente</th>
-                            <th className="p-4">Cajera</th>
-                            <th className="p-4">Método(s)</th>
-                            <th className="p-4 text-right">Factura</th>
-                            <th className="p-4 text-right">Cobrado</th>
-                            <th className="p-4">Descuento</th>
-                            <th className="p-4 text-center">10% Serv.</th>
-                            <th className="p-4 text-center">Acciones</th>
+                            <th className="px-4 py-3">Orden #</th>
+                            <th className="px-4 py-3">Fecha</th>
+                            <th className="px-4 py-3">Hora</th>
+                            <th className="px-4 py-3">Cliente</th>
+                            <th className="px-4 py-3">Método</th>
+                            <th className="px-4 py-3 text-right">Total Factura</th>
+                            <th className="px-4 py-3 text-right">Cobrado</th>
+                            <th className="px-4 py-3 text-center">10% Serv.</th>
+                            <th className="px-4 py-3">Descuento / Auth</th>
+                            <th className="px-4 py-3 text-center">Ítems</th>
+                            <th className="px-4 py-3 text-center">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-700 font-mono text-sm">
+                    <tbody className="divide-y divide-gray-700 text-sm">
                         {filteredSales.length === 0 && (
                             <tr>
-                                <td colSpan={9} className="p-10 text-center text-gray-500">
+                                <td colSpan={11} className="p-10 text-center text-gray-500">
                                     No hay ventas en este período.
                                 </td>
                             </tr>
                         )}
                         {filteredSales.map(sale => {
                             const isVoided = sale.status === 'CANCELLED';
+                            const isExpanded = expandedRows.has(sale.id);
+                            const itemCount = (sale.items || []).length;
+                            const itemsSubtotal = (sale.items || []).reduce((s: number, i: any) => s + (i.lineTotal || 0), 0);
+                            const servicioAmount = sale.servicioAmount ?? (sale.orderType === 'RESTAURANT' && sale.serviceFeeIncluded ? (sale.total || 0) * 0.1 : 0);
+                            const totalFactura = sale.totalFactura ?? sale.total;
+                            const totalCobrado = sale.totalCobrado ?? sale.total;
+                            const propina = sale.propina ?? 0;
+                            const saleDate = sale.createdAt
+                                ? new Date(sale.createdAt).toLocaleDateString('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: 'numeric', year: 'numeric' })
+                                : '-';
+                            const saleTime = sale.createdAt
+                                ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit' })
+                                : '-';
+
                             return (
-                                <tr
-                                    key={sale.id}
-                                    className={`transition-colors ${isVoided ? 'opacity-50 bg-red-900/10' : 'hover:bg-gray-700/30'}`}
-                                >
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className={`font-bold ${isVoided ? 'text-red-400 line-through' : 'text-blue-300'}`}>
-                                                {sale.orderNumber}
-                                            </span>
-                                            {sale._consolidated && sale.orderNumbers?.length > 1 && (
-                                                <span className="text-[10px] text-gray-500" title={sale.orderNumbers.join(', ')}>
-                                                    ({sale.orderNumbers.length} tandas)
+                                <>
+                                    <tr
+                                        key={sale.id}
+                                        onClick={() => itemCount > 0 && toggleRow(sale.id)}
+                                        className={`transition-colors ${isVoided ? 'opacity-50 bg-red-900/10' : 'hover:bg-gray-700/40'} ${itemCount > 0 ? 'cursor-pointer' : ''}`}
+                                    >
+                                        {/* ORDEN # */}
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className={`font-bold font-mono text-xs ${isVoided ? 'text-red-400 line-through' : 'text-blue-300'}`}>
+                                                    {sale.orderNumber}
                                                 </span>
-                                            )}
-                                            {isVoided && (
-                                                <span className="bg-red-900 text-red-300 text-xs px-1.5 py-0.5 rounded font-bold">ANULADA</span>
-                                            )}
-                                        </div>
-                                        {isVoided && sale.voidReason && (
-                                            <div className="text-xs text-red-400/70 mt-0.5 font-sans max-w-[200px] truncate" title={sale.voidReason}>
-                                                {sale.voidReason}
+                                                {isVoided && (
+                                                    <span className="bg-red-900 text-red-300 text-[10px] px-1.5 py-0.5 rounded font-bold">ANULADA</span>
+                                                )}
                                             </div>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-gray-400">
-                                        {sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                        {isVoided && sale.voidedAt && (
-                                            <div className="text-xs text-red-400/60">
-                                                Anulada: {new Date(sale.voidedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className="p-4 font-sans text-gray-300 truncate max-w-[130px]">
-                                        {sale.customerName || 'Gral.'}
-                                    </td>
-                                    <td className="p-4 font-sans text-gray-400 text-xs">
-                                        {sale.createdBy?.firstName || '-'}
-                                    </td>
-                                    <td className="p-4">
-                                        {(sale.paymentBreakdown || []).length > 1 ? (
-                                            <div className="flex flex-wrap gap-1" title={(sale.paymentBreakdown || []).map((p: { method: string; amount: number }) => `${p.method}: $${p.amount.toFixed(2)}`).join(' | ')}>
-                                                {(sale.paymentBreakdown || []).map((p: { method: string; amount: number }, i: number) => (
-                                                    <span key={i} className="flex items-center gap-0.5">
-                                                        {getPaymentBadge(p.method)}
-                                                        <span className="text-[10px] text-gray-500">${(p.amount || 0).toFixed(2)}</span>
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            getPaymentBadge(sale.paymentMethod)
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right text-gray-400 text-sm">
-                                        {formatMoney(sale.totalFactura ?? sale.total)}
-                                    </td>
-                                    <td className="p-4 text-right font-bold text-white text-base">
-                                        <div
-                                            className="cursor-help"
-                                            title={
-                                                sale.orderType === 'RESTAURANT' && (sale.totalProductos != null || sale.servicioAmount != null)
-                                                    ? [
-                                                        sale.totalProductos != null && `Productos: ${formatMoney(sale.totalProductos)}`,
-                                                        (sale.servicioAmount ?? 0) > 0 && `Servicio 10%: ${formatMoney(sale.servicioAmount)}`,
-                                                        (sale.propina ?? 0) > 0.01 && `Propina: ${formatMoney(sale.propina)}`,
-                                                        `Total cobrado: ${formatMoney(sale.totalCobrado ?? sale.total)}`
-                                                    ].filter(Boolean).join('\n')
-                                                    : undefined
-                                            }
-                                        >
-                                            {formatMoney(sale.totalCobrado ?? sale.total)}
-                                            {(sale.propina ?? 0) > 0.01 && (
-                                                <div className="text-[10px] text-amber-400 font-normal" title="Propina (excedente no devuelto)">
-                                                    +{formatMoney(sale.propina)} propina
+                                            {sale._consolidated && sale.orderNumbers?.length > 1 && (
+                                                <div className="text-[10px] text-gray-500 font-mono mt-0.5" title={sale.orderNumbers.join(', ')}>
+                                                    {sale.orderNumbers.length} tandas
                                                 </div>
                                             )}
-                                        </div>
-                                    </td>
-                                    <td className="p-4 font-sans">
-                                        {sale.discount > 0 ? (
-                                            <div className="flex flex-col gap-0.5">
-                                                {sale.discountType === 'DIVISAS_33' && (
-                                                    <span className="text-blue-400 text-xs">📉 -{formatMoney(sale.discount)}</span>
-                                                )}
-                                                {(sale.discountType === 'CORTESIA_100' || sale.discountType === 'CORTESIA') && (
-                                                    <span className="text-purple-400 text-xs font-bold">🎁 -{formatMoney(sale.discount)}</span>
-                                                )}
-                                                {sale.authorizedById && (
-                                                    <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
-                                                        ✓ {sale.authorizedBy?.firstName}
-                                                    </span>
+                                            {isVoided && sale.voidReason && (
+                                                <div className="text-[10px] text-red-400/70 mt-0.5 max-w-[160px] truncate" title={sale.voidReason}>
+                                                    {sale.voidReason}
+                                                </div>
+                                            )}
+                                        </td>
+                                        {/* FECHA */}
+                                        <td className="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">
+                                            {saleDate}
+                                            {isVoided && sale.voidedAt && (
+                                                <div className="text-red-400/60 mt-0.5">
+                                                    ✕ {new Date(sale.voidedAt).toLocaleDateString('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: 'numeric' })}
+                                                </div>
+                                            )}
+                                        </td>
+                                        {/* HORA */}
+                                        <td className="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">
+                                            {saleTime}
+                                        </td>
+                                        {/* CLIENTE */}
+                                        <td className="px-4 py-3 text-gray-200 font-medium truncate max-w-[120px]">
+                                            {sale.customerName || 'Gral.'}
+                                        </td>
+                                        {/* MÉTODO */}
+                                        <td className="px-4 py-3">
+                                            {(sale.paymentBreakdown || []).length > 1 ? (
+                                                <div className="flex flex-wrap gap-1" title={(sale.paymentBreakdown || []).map((p: { method: string; amount: number }) => `${p.method}: $${p.amount.toFixed(2)}`).join(' | ')}>
+                                                    {(sale.paymentBreakdown || []).map((p: { method: string; amount: number }, i: number) => (
+                                                        <span key={i} className="flex items-center gap-0.5">
+                                                            {getPaymentBadge(p.method)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                getPaymentBadge(sale.paymentMethod)
+                                            )}
+                                        </td>
+                                        {/* TOTAL FACTURA */}
+                                        <td className="px-4 py-3 text-right text-gray-400 text-sm font-mono">
+                                            {formatMoney(totalFactura)}
+                                        </td>
+                                        {/* COBRADO */}
+                                        <td className="px-4 py-3 text-right font-bold text-white font-mono">
+                                            {formatMoney(totalCobrado)}
+                                            {propina > 0.01 && (
+                                                <div className="text-[10px] text-amber-400 font-normal text-right">
+                                                    +{formatMoney(propina)} propina
+                                                </div>
+                                            )}
+                                        </td>
+                                        {/* 10% SERV */}
+                                        <td className="px-4 py-3 text-center">
+                                            {sale.orderType === 'RESTAURANT' ? (
+                                                sale.serviceFeeIncluded ? (
+                                                    <span className="text-emerald-400 text-xs font-bold">✓ Sí</span>
+                                                ) : (
+                                                    <span className="text-gray-600 text-xs">No</span>
+                                                )
+                                            ) : (
+                                                <span className="text-gray-700">-</span>
+                                            )}
+                                        </td>
+                                        {/* DESCUENTO / AUTH */}
+                                        <td className="px-4 py-3">
+                                            {sale.discount > 0 ? (
+                                                <div className="flex flex-col gap-0.5">
+                                                    {sale.discountType === 'DIVISAS_33' && (
+                                                        <span className="text-blue-400 text-xs">📉 -{formatMoney(sale.discount)}</span>
+                                                    )}
+                                                    {(sale.discountType === 'CORTESIA_100' || sale.discountType === 'CORTESIA') && (
+                                                        <span className="text-purple-400 text-xs font-bold">🎁 -{formatMoney(sale.discount)}</span>
+                                                    )}
+                                                    {sale.discountType === 'CORTESIA_PERCENT' && (
+                                                        <span className="text-purple-400 text-xs font-bold">🎁 -{formatMoney(sale.discount)}</span>
+                                                    )}
+                                                    {sale.authorizedById && (
+                                                        <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
+                                                            ✓ {sale.authorizedBy?.firstName}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : <span className="text-gray-700">-</span>}
+                                        </td>
+                                        {/* ÍTEMS */}
+                                        <td className="px-4 py-3 text-center">
+                                            {itemCount > 0 ? (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); toggleRow(sale.id); }}
+                                                    className="inline-flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded text-xs font-bold transition-colors"
+                                                >
+                                                    {itemCount}
+                                                    <span className={`transition-transform text-[10px] ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+                                                </button>
+                                            ) : (
+                                                <span className="text-gray-600">-</span>
+                                            )}
+                                        </td>
+                                        {/* ACCIONES */}
+                                        <td className="px-4 py-3 text-center">
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <button
+                                                    onClick={(e) => handleReprint(sale, e)}
+                                                    title="Reimprimir factura"
+                                                    className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                                >
+                                                    🖨️ Imprimir
+                                                </button>
+                                                {!isVoided && (
+                                                    <button
+                                                        onClick={(e) => openVoidModal(sale, e)}
+                                                        title="Anular venta"
+                                                        className="bg-red-900/40 hover:bg-red-800 text-red-300 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                                    >
+                                                        Anular
+                                                    </button>
                                                 )}
                                             </div>
-                                        ) : <span className="text-gray-600">-</span>}
-                                    </td>
-                                    <td className="p-4 text-center">
-                                        {sale.orderType === 'RESTAURANT' ? (
-                                            sale.serviceFeeIncluded ? (
-                                                <span className="text-emerald-400 text-xs font-bold">✓ Sí</span>
-                                            ) : (
-                                                <span className="text-amber-500/80 text-xs">No</span>
-                                            )
-                                        ) : (
-                                            <span className="text-gray-600">-</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-center">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <button
-                                                onClick={() => handleReprint(sale)}
-                                                title="Reimprimir nota de entrega"
-                                                className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                                            >
-                                                🖨️
-                                            </button>
-                                            {!isVoided && (
-                                                <button
-                                                    onClick={() => openVoidModal(sale)}
-                                                    title="Anular venta"
-                                                    className="bg-red-900/40 hover:bg-red-800 text-red-300 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                                                >
-                                                    ✕
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
+                                        </td>
+                                    </tr>
+                                    {/* FILA EXPANDIDA - ÍTEMS */}
+                                    {isExpanded && itemCount > 0 && (
+                                        <tr key={`${sale.id}-expanded`} className="bg-gray-900/60">
+                                            <td colSpan={11} className="px-6 py-4">
+                                                {/* Tabla de productos */}
+                                                <div className="rounded-lg overflow-hidden border border-gray-700 mb-3">
+                                                    <table className="w-full text-xs">
+                                                        <thead className="bg-gray-800 text-gray-400 uppercase text-[10px] font-bold">
+                                                            <tr>
+                                                                <th className="px-3 py-2 text-left">Producto</th>
+                                                                <th className="px-3 py-2 text-center">Cant.</th>
+                                                                <th className="px-3 py-2 text-right">P. Unit.</th>
+                                                                <th className="px-3 py-2 text-right">Subtotal</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-800">
+                                                            {(sale.items || []).map((item: any, idx: number) => {
+                                                                const unitPrice = item.unitPrice ?? (item.lineTotal / (item.quantity || 1));
+                                                                const modifiers = Array.isArray(item.modifiers)
+                                                                    ? item.modifiers.map((m: any) => typeof m === 'string' ? m : m?.name).filter(Boolean)
+                                                                    : [];
+                                                                return (
+                                                                    <tr key={idx} className="hover:bg-gray-800/40">
+                                                                        <td className="px-3 py-2 text-gray-200">
+                                                                            {item.itemName || item.name}
+                                                                            {modifiers.length > 0 && (
+                                                                                <div className="text-gray-500 text-[10px]">+ {modifiers.join(', ')}</div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-3 py-2 text-center text-gray-300">×{item.quantity}</td>
+                                                                        <td className="px-3 py-2 text-right text-gray-400 font-mono">${unitPrice.toFixed(2)}</td>
+                                                                        <td className="px-3 py-2 text-right text-white font-bold font-mono">${(item.lineTotal || 0).toFixed(2)}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                {/* Resumen de totales */}
+                                                <div className="flex flex-wrap gap-3 text-xs font-mono text-gray-400">
+                                                    <span>Productos: <span className="text-white">{formatMoney(itemsSubtotal)}</span></span>
+                                                    {sale.orderType === 'RESTAURANT' && sale.serviceFeeIncluded && servicioAmount > 0 && (
+                                                        <span>10% Servicio: <span className="text-emerald-400">+{formatMoney(servicioAmount)}</span></span>
+                                                    )}
+                                                    {(sale.discount || 0) > 0 && (
+                                                        <span>Descuento: <span className="text-red-400">-{formatMoney(sale.discount)}</span></span>
+                                                    )}
+                                                    <span>Total factura: <span className="text-white">{formatMoney(totalFactura)}</span></span>
+                                                    <span>Cobrado: <span className="text-white font-bold">{formatMoney(totalCobrado)}</span></span>
+                                                    {propina > 0.01 && (
+                                                        <span>Propina/excedente: <span className="text-amber-400">+{formatMoney(propina)}</span></span>
+                                                    )}
+                                                </div>
+
+                                                {/* Desglose de pagos */}
+                                                {(sale.paymentBreakdown || []).length > 0 && (
+                                                    <div className="mt-2 text-xs text-gray-500">
+                                                        <span className="font-bold uppercase text-gray-600">Desglose de pagos: </span>
+                                                        {(sale.paymentBreakdown || []).map((p: { method: string; amount: number; label?: string }, i: number) => (
+                                                            <span key={i} className="mr-3">
+                                                                {getPaymentBadge(p.method)}
+                                                                {p.label && <span className="ml-1 text-gray-500">{p.label}</span>}
+                                                                <span className="ml-1 text-white font-bold font-mono">{formatMoney(p.amount)}</span>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </>
                             );
                         })}
                     </tbody>
@@ -451,7 +583,6 @@ export default function SalesHistoryPage() {
                             <button onClick={() => setVoidTarget(null)} className="text-gray-500 hover:text-white text-2xl font-bold">×</button>
                         </div>
 
-                        {/* Resumen */}
                         <div className="bg-gray-800 rounded-xl p-4 mb-5 text-sm space-y-1">
                             <div className="flex justify-between text-gray-300">
                                 <span>Cliente:</span><span>{voidTarget.customerName || 'Cliente General'}</span>
