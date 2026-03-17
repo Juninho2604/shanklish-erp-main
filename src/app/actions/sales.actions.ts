@@ -93,7 +93,7 @@ export async function getSalesHistoryAction(limit = 100) {
                 const totalCobrado = splits.reduce((s: number, sp: { paidAmount?: number }) => s + (sp.paidAmount || 0), 0) || totalFactura;
                 const servicioAmount = serviceFeeIncluded ? total * 0.1 : 0;
                 const propina = Math.max(0, totalCobrado - totalFactura);
-                const paymentBreakdown = splits.map((sp: { paymentMethod?: string; paidAmount?: number }) => ({
+                const paymentBreakdown = splits.map((sp: { paymentMethod?: string | null; paidAmount?: number }) => ({
                     method: sp.paymentMethod || 'CASH',
                     amount: sp.paidAmount || 0
                 }));
