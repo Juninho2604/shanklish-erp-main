@@ -787,7 +787,7 @@ export default function POSSportBarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <CashierShiftModal
         forceOpen={showChangeCashierModal}
         onShiftOpen={(name) => {
@@ -797,32 +797,34 @@ export default function POSSportBarPage() {
       />
 
       {/* ── HEADER ──────────────────────────────────────────────────────── */}
-      <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">🍸</span>
+      <div className="glass-panel px-6 py-4 flex items-center justify-between shrink-0 shadow-lg border-b-primary/10">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 bg-primary/20 rounded-2xl flex items-center justify-center text-3xl shadow-inner">🍸</div>
           <div>
-            <h1 className="text-xl font-black">POS Restaurante</h1>
-            <p className="text-xs text-slate-400 flex items-center gap-2">
-              Cuentas abiertas · Trazabilidad
+            <h1 className="text-2xl font-black tracking-tight text-foreground">POS <span className="text-primary italic">RESTAURANTE</span></h1>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+              Gestión Táctil CAPSULA · Operaciones en Vivo
               {cashierName ? (
-                <>
-                  <span>· Cajera: {cashierName}</span>
+                <span className="flex items-center gap-2 bg-secondary/50 px-2 py-0.5 rounded-full border border-border">
+                  👤 {cashierName}
                   <button
                     onClick={() => setShowChangeCashierModal(true)}
-                    className="text-amber-400 hover:text-amber-300 text-[10px] font-bold underline"
+                    className="text-primary hover:text-accent font-black underline"
                   >
-                    Cambiar cajera
+                    Cambiar
                   </button>
-                </>
+                </span>
               ) : null}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {activeTab && (
-            <CurrencyCalculator totalUsd={Number(activeTab.balanceDue.toFixed(2))} onRateUpdated={setExchangeRate} />
+            <div className="hidden md:block">
+               <CurrencyCalculator totalUsd={Number(activeTab.balanceDue.toFixed(2))} onRateUpdated={setExchangeRate} />
+            </div>
           )}
-          <div className="text-xs text-slate-400 font-mono">
+          <div className="px-4 py-2 bg-secondary/30 rounded-xl border border-border font-black text-sm tabular-nums text-foreground/70">
             {new Date().toLocaleDateString("es-VE", { timeZone: "America/Caracas" })}
           </div>
         </div>
@@ -831,33 +833,37 @@ export default function POSSportBarPage() {
       {/* ── MAIN GRID ────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* ══ LEFT: TABLE GRID ═══════════════════════════════════════════ */}
-        <aside className="w-72 xl:w-80 shrink-0 border-r border-slate-800 bg-slate-900/60 flex flex-col overflow-hidden">
+        <aside className="w-72 xl:w-80 shrink-0 border-r border-border bg-card/30 flex flex-col overflow-hidden">
           {/* Zone selector */}
-          <div className="p-3 border-b border-slate-800 flex gap-2">
-            <button
-              onClick={() => {
-                setIsPickupMode(true);
-                setSelectedTableId("");
-                setSelectedZoneId("");
-              }}
-              className={`flex-[0.5] py-2 rounded-lg text-xs font-bold transition ${isPickupMode ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30" : "bg-slate-800 text-indigo-400 hover:bg-slate-700"}`}
-              title="Venta Directa sin abrir mesa"
-            >
-              🛍️ Pickup
-            </button>
-            {layout?.serviceZones.map((z) => (
+          <div className="p-4 border-b border-border space-y-3">
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest pl-1">Secciones</p>
+            <div className="flex flex-col gap-2">
               <button
-                key={z.id}
                 onClick={() => {
-                  setIsPickupMode(false);
-                  setSelectedZoneId(z.id);
+                  setIsPickupMode(true);
                   setSelectedTableId("");
+                  setSelectedZoneId("");
                 }}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${selectedZoneId === z.id && !isPickupMode ? "bg-amber-500 text-black" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                className={`capsula-btn min-h-0 py-3 text-sm ${isPickupMode ? "capsula-btn-primary" : "capsula-btn-secondary"}`}
               >
-                {z.zoneType === "BAR" ? "🍺" : "🌿"} {z.name}
+                🛍️ Venta Directa / Pickup
               </button>
-            ))}
+              <div className="flex gap-2">
+                {layout?.serviceZones.map((z) => (
+                  <button
+                    key={z.id}
+                    onClick={() => {
+                      setIsPickupMode(false);
+                      setSelectedZoneId(z.id);
+                      setSelectedTableId("");
+                    }}
+                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all active:scale-95 ${selectedZoneId === z.id && !isPickupMode ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-card border border-border text-foreground/60 hover:border-primary/50"}`}
+                  >
+                    {z.zoneType === "BAR" ? "🍺" : "🌿"} {z.name}
+                  </button>
+                ))}
+              </div>
+            </div>
             {!layout && !layoutError && (
               <div className="flex-1 text-center text-xs text-slate-500 py-2">Cargando...</div>
             )}
@@ -876,8 +882,8 @@ export default function POSSportBarPage() {
           )}
 
           {/* Table grid */}
-          <div className="flex-1 overflow-y-auto p-3">
-            <div className="grid grid-cols-4 gap-1.5">
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-3 gap-3">
               {selectedZone?.tablesOrStations.map((table) => {
                 const tab = table.openTabs[0];
                 const isSelected = table.id === selectedTableId;
@@ -885,26 +891,22 @@ export default function POSSportBarPage() {
                   <button
                     key={table.id}
                     onClick={() => setSelectedTableId(table.id)}
-                    className={`rounded-xl p-2 text-left transition border-2 ${
+                    className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all duration-200 active:scale-90 border-2 ${
                       isSelected
-                        ? "border-amber-400 bg-amber-500/15"
+                        ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 z-10"
                         : tab
-                          ? "border-emerald-600/60 bg-emerald-900/20 hover:border-emerald-500"
-                          : "border-slate-700 bg-slate-800/60 hover:border-slate-500"
+                          ? "border-emerald-500/50 bg-emerald-500/5"
+                          : "border-border bg-card/50 hover:border-primary/30"
                     }`}
                   >
-                    <div className="text-[10px] font-black text-center leading-none">{table.code}</div>
+                    <div className={`text-base font-black ${isSelected ? 'text-primary' : tab ? 'text-emerald-500' : 'text-foreground/40'}`}>{table.code}</div>
                     {tab ? (
-                      <>
-                        <div className="mt-1 text-[8px] text-emerald-300 truncate leading-none">
-                          {tab.customerLabel}
-                        </div>
-                        <div className="text-[9px] font-bold text-amber-400 text-center">
-                          ${tab.balanceDue.toFixed(0)}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="mt-1 text-[8px] text-slate-500 text-center">LIBRE</div>
+                      <div className="absolute top-1 right-1 h-3 w-3 bg-emerald-500 rounded-full border-2 border-background animate-pulse"></div>
+                    ) : null}
+                    {tab && (
+                      <div className="mt-1 text-[9px] font-black text-foreground/70 truncate w-full px-1 text-center">
+                         ${tab.balanceDue.toFixed(0)}
+                      </div>
                     )}
                   </button>
                 );
@@ -1007,18 +1009,23 @@ export default function POSSportBarPage() {
           </div>
 
           {/* Menu items */}
-          <div className="flex-1 overflow-y-auto p-3">
-            <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+          <div className="flex-1 overflow-y-auto p-4 scroll-smooth">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredMenuItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => handleAddToCart(item)}
                   disabled={!activeTab && !isPickupMode}
-                  className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-900 p-3 text-left shadow transition hover:border-amber-500/50 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed h-24"
+                  className="capsula-card group flex flex-col justify-between p-4 text-left disabled:opacity-30 disabled:grayscale h-32 border-primary/5 hover:border-primary/40"
                 >
-                  <div className="text-sm font-bold line-clamp-2 leading-tight">{item.name}</div>
-                  <div className="text-lg font-black text-amber-400">
-                    <PriceDisplay usd={item.price} rate={exchangeRate} size="sm" showBs={false} />
+                  <div className="text-sm font-black text-foreground group-hover:text-primary transition-colors leading-tight line-clamp-2 uppercase tracking-tight">{item.name}</div>
+                  <div className="flex items-end justify-between mt-2">
+                    <div className="text-xl font-black text-primary">
+                      <PriceDisplay usd={item.price} rate={exchangeRate} size="sm" showBs={false} />
+                    </div>
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary opacity-0 group-hover:opacity-100 transition-all group-hover:translate-y-[-4px]">
+                      ➕
+                    </div>
                   </div>
                 </button>
               ))}
@@ -1110,14 +1117,14 @@ export default function POSSportBarPage() {
                   </button>
                 </div>
                 {/* Métodos de pago */}
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
                     <button
                       key={m}
                       onClick={() => setPaymentMethod(m)}
-                      className={`py-2 text-[10px] font-bold rounded-lg transition ${paymentMethod === m ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
+                      className={`py-3 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all active:scale-95 ${paymentMethod === m ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-card border border-border text-foreground/50"}`}
                     >
-                      {m === "TRANSFER" ? "Transf" : m === "MOBILE_PAY" ? "P.Móvil" : m === "CASH" ? "Efectivo $" : m === "ZELLE" ? "Zelle" : "Punto"}
+                      {PAYMENT_LABELS[m]}
                     </button>
                   ))}
                 </div>
@@ -1130,28 +1137,35 @@ export default function POSSportBarPage() {
                     : 0;
                   const pickupTotal = Math.max(0, cartTotal - pickupDiscount);
                   return (
-                    <>
-                      <input
-                        type="number"
-                        value={amountReceived}
-                        onChange={(e) => setAmountReceived(e.target.value)}
-                        placeholder={`Monto recibido ($${pickupTotal.toFixed(2)})`}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-                      />
-                      <CurrencyCalculator
-                        totalUsd={pickupTotal}
-                        hasServiceFee={false}
-                        onRateUpdated={setExchangeRate}
-                        className="w-full justify-center"
-                      />
+                    <div className="space-y-4 pt-2">
+                       <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
+                        <input
+                          type="number"
+                          value={amountReceived}
+                          onChange={(e) => setAmountReceived(e.target.value)}
+                          placeholder={`Recibido...`}
+                          className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30"
+                        />
+                        <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
+                      </div>
+                      
+                      <div className="glass-panel p-4 rounded-2xl border-primary/5">
+                        <CurrencyCalculator
+                          totalUsd={pickupTotal}
+                          hasServiceFee={false}
+                          onRateUpdated={setExchangeRate}
+                          className="w-full justify-center"
+                        />
+                      </div>
+
                       <button
                         onClick={handleCheckoutPickup}
                         disabled={cart.length === 0 || isProcessing}
-                        className="w-full py-4 mt-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-lg shadow-xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-40"
+                        className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-xl shadow-primary/20"
                       >
-                        COBRAR ${pickupTotal.toFixed(2)}
+                        {isProcessing ? "PROCESANDO..." : `COBRAR $${pickupTotal.toFixed(2)}`}
                       </button>
-                    </>
+                    </div>
                   );
                 })()}
                 {lastPickupOrder && (
@@ -1434,9 +1448,9 @@ export default function POSSportBarPage() {
                       setShowPaymentPinModal(true);
                     }}
                     disabled={paidAmount <= 0 || isProcessing}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-black transition disabled:opacity-40"
+                    className="capsula-btn capsula-btn-primary w-full py-5 text-sm shadow-xl shadow-primary/10"
                   >
-                    🔐 Registrar pago ${paidAmount > 0 ? paidAmount.toFixed(2) : "0.00"}
+                    🔐 REGISTRAR PAGO ${paidAmount > 0 ? paidAmount.toFixed(2) : "0.00"}
                   </button>
 
                   {/* Paid splits */}

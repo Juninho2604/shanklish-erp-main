@@ -13,6 +13,14 @@ import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
 const DELIVERY_FEE_NORMAL = 4.5;
 const DELIVERY_FEE_DIVISAS = 3;
 
+const PAYMENT_LABELS = {
+    CASH: 'Efectivo $',
+    ZELLE: 'Zelle',
+    CARD: 'Punto',
+    MOBILE_PAY: 'P.Móvil',
+    TRANSFER: 'Transf'
+};
+
 interface ModifierOption {
     id: string;
     name: string;
@@ -287,34 +295,39 @@ export default function POSDeliveryPage() {
     if (isLoading) return <div className="text-white p-10">Cargando...</div>;
 
     return (
-        <div className="min-h-screen bg-gray-950 text-white relative flex flex-col font-sans">
-            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 px-6 py-4 fixed top-0 w-full z-30 shadow-xl flex justify-between items-center h-20">
-                <div className="flex items-center gap-3">
-                    <span className="text-4xl">🛵</span>
-                    <div><h1 className="text-2xl font-black">Shanklish Delivery</h1><p className="text-blue-200 text-xs font-bold uppercase">Sistema de Despacho</p></div>
+        <div className="min-h-screen bg-background text-foreground relative flex flex-col font-sans animate-in fade-in duration-700">
+            <div className="glass-panel px-6 py-4 fixed top-0 w-full z-30 shadow-2xl flex justify-between items-center h-24 border-b-primary/10">
+                <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 bg-blue-600 rounded-2xl flex items-center justify-center text-4xl shadow-lg shadow-blue-500/20">🛵</div>
+                    <div>
+                        <h1 className="text-3xl font-black tracking-tighter uppercase italic text-blue-600 dark:text-blue-400">Shanklish <span className="text-foreground">Delivery</span></h1>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+                            Sistema de Despacho Táctil CAPSULA
+                        </p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <CurrencyCalculator totalUsd={finalTotal} deliveryFee={discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL} hasServiceFee={false} onRateUpdated={setExchangeRate} className="bg-white/10 hover:bg-white/20 text-white" />
+                <div className="flex items-center gap-4">
+                    <div className="glass-panel p-2 rounded-2xl border-primary/5">
+                        <CurrencyCalculator totalUsd={finalTotal} deliveryFee={discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL} hasServiceFee={false} onRateUpdated={setExchangeRate} />
+                    </div>
                     <button
                         onClick={() => setShowWhatsAppParser(!showWhatsAppParser)}
-                        className={cn(
-                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all',
-                            showWhatsAppParser
-                                ? 'bg-green-500 text-white shadow-lg'
-                                : 'bg-white/10 text-white/80 hover:bg-white/20'
-                        )}
+                        className={`capsula-btn min-h-0 py-3 px-6 text-sm ${showWhatsAppParser ? 'capsula-btn-primary bg-emerald-600 border-emerald-700' : 'capsula-btn-secondary'}`}
                     >
                         💬 WhatsApp
                     </button>
-                    <p className="font-mono text-xl">{new Date().toLocaleDateString('es-VE')}</p>
+                    <div className="px-4 py-2 bg-secondary/30 rounded-xl border border-border font-black text-sm tabular-nums text-foreground/70">
+                        {new Date().toLocaleDateString('es-VE')}
+                    </div>
                 </div>
             </div>
 
-            <div className="flex h-screen pt-20 overflow-hidden">
-                <div className="flex-1 flex flex-col overflow-hidden bg-gray-900">
+            <div className="flex h-screen pt-24 overflow-hidden">
+                <div className="flex-1 flex flex-col overflow-hidden bg-background">
                     {/* WhatsApp Parser Panel */}
                     {showWhatsAppParser ? (
-                        <div className="flex-1 overflow-y-auto p-4 pb-24">
+                        <div className="flex-1 overflow-y-auto p-6 pb-24 glass-panel m-4 rounded-3xl border-primary/5">
                             <WhatsAppOrderParser
                                 onOrderReady={(items, name, phone, address) => {
                                     setCart(items);
@@ -328,20 +341,20 @@ export default function POSDeliveryPage() {
                     ) : (
                         <>
                             {/* Search bar */}
-                            <div className="px-3 pt-3 pb-1 bg-gray-800 border-b border-gray-700">
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                            <div className="px-6 py-4 bg-background border-b border-border">
+                                <div className="relative group">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary">🔍</span>
                                     <input
                                         type="text"
                                         value={productSearch}
                                         onChange={(e) => setProductSearch(e.target.value)}
-                                        placeholder="Buscar producto..."
-                                        className="w-full bg-gray-700 border border-gray-600 rounded-xl py-2 pl-9 pr-9 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                        placeholder="Buscar producto por nombre o SKU..."
+                                        className="w-full bg-secondary/50 border border-border rounded-2xl py-4 pl-12 pr-12 text-base font-medium focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
                                     />
                                     {productSearch && (
                                         <button
                                             onClick={() => setProductSearch('')}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground"
                                         >
                                             ✕
                                         </button>
@@ -350,30 +363,46 @@ export default function POSDeliveryPage() {
                             </div>
                             {/* Categories */}
                             {!productSearch && (
-                                <div className="flex gap-2 p-3 bg-gray-800 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
+                                <div className="flex gap-3 px-6 py-4 bg-background border-b border-border overflow-x-auto no-scrollbar scroll-smooth">
                                     {categories.map((cat: any) => (
-                                        <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`px-5 py-3 rounded-lg font-bold transition-all flex items-center gap-2 ${selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                                            <span>{getCategoryIcon(cat.name)}</span> {cat.name}
+                                        <button 
+                                            key={cat.id} 
+                                            onClick={() => setSelectedCategory(cat.id)} 
+                                            className={`group shrink-0 px-6 py-3 rounded-2xl font-black text-sm transition-all active:scale-95 flex items-center gap-2 border-2 ${selectedCategory === cat.id ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20' : 'bg-card border-border text-foreground/50 hover:border-primary/30'}`}
+                                        >
+                                            <span className="text-xl group-hover:rotate-12 transition-transform">{getCategoryIcon(cat.name)}</span> {cat.name}
                                         </button>
                                     ))}
                                 </div>
                             )}
-                            <div className="flex-1 p-4 overflow-y-auto pb-24">
+                            <div className="flex-1 p-6 overflow-y-auto pb-24 scroll-smooth">
                                 {productSearch && (
-                                    <p className="text-xs text-gray-400 mb-3">
-                                        {filteredMenuItems.length} resultado(s) para &quot;{productSearch}&quot;
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">
+                                        💡 {filteredMenuItems.length} productos coinciden con tu búsqueda
                                     </p>
                                 )}
-                                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                     {filteredMenuItems.map(item => (
-                                        <button key={item.id} onClick={() => handleAddToCart(item)} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-4 text-left shadow-md group h-36 flex flex-col justify-between">
-                                            <div className="font-bold text-lg leading-tight group-hover:text-blue-300">{item.name}</div>
-                                            <div className="text-2xl font-black text-blue-400">${item.price.toFixed(2)}</div>
+                                        <button 
+                                            key={item.id} 
+                                            onClick={() => handleAddToCart(item)} 
+                                            className="capsula-card group p-5 text-left h-40 flex flex-col justify-between border-primary/5 hover:border-primary/40 active:scale-[0.98]"
+                                        >
+                                            <div className="font-black text-base uppercase leading-tight tracking-tight group-hover:text-primary transition-colors">{item.name}</div>
+                                            <div className="flex items-end justify-between">
+                                                <div className="text-2xl font-black text-primary italic">
+                                                    <PriceDisplay usd={item.price} rate={exchangeRate} size="lg" showBs={false} />
+                                                </div>
+                                                <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0">
+                                                    ➕
+                                                </div>
+                                            </div>
                                         </button>
                                     ))}
                                     {filteredMenuItems.length === 0 && (
-                                        <div className="col-span-full text-center text-gray-500 py-12 text-sm">
-                                            Sin resultados para &quot;{productSearch}&quot;
+                                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
+                                            <span className="text-6xl mb-4">🔍</span>
+                                            <p className="font-black uppercase tracking-widest">Sin resultados</p>
                                         </div>
                                     )}
                                 </div>
@@ -382,129 +411,151 @@ export default function POSDeliveryPage() {
                         )}
                 </div>
 
-                <div className="w-96 bg-gray-900 border-l border-gray-800 flex flex-col shadow-2xl z-20">
-                    <div className="p-4 bg-gray-800 border-b border-gray-700">
-                        <h2 className="font-black text-xl mb-3 flex items-center gap-2">📦 Datos de Entrega</h2>
-                        <div className="space-y-2">
-                            <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Nombre Cliente" className="w-full bg-gray-700 border-none rounded p-2 text-white focus:ring-2 focus:ring-blue-500" />
-                            <input type="text" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="Teléfono" className="w-full bg-gray-700 border-none rounded p-2 text-white focus:ring-2 focus:ring-blue-500" />
-                            <textarea value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="Dirección exacta..." className="w-full bg-gray-700 border-none rounded p-2 text-white focus:ring-2 focus:ring-blue-500 h-20 resize-none text-sm" />
+                <div className="w-96 bg-card border-l border-border flex flex-col shadow-2xl z-20">
+                    <div className="p-6 bg-secondary/20 border-b border-border space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-black text-lg uppercase tracking-tight flex items-center gap-2">📦 Entrega</h2>
+                            <span className="text-[10px] font-black bg-blue-500/10 text-blue-600 px-2 py-1 rounded-full border border-blue-500/20">NUEVA ORDEN</span>
+                        </div>
+                        <div className="space-y-3">
+                            <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="👤 Nombre Cliente" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all" />
+                            <input type="text" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="📞 Teléfono" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all" />
+                            <textarea value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="📍 Dirección exacta de entrega..." className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all h-24 resize-none" />
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-900/50">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-card/50 no-scrollbar">
+                        {cart.length === 0 && (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground/30 py-10">
+                                <span className="text-5xl mb-2">🛒</span>
+                                <p className="text-xs font-black uppercase tracking-widest">Carrito Vacío</p>
+                            </div>
+                        )}
                         {cart.map((item, i) => (
-                            <div key={i} className="bg-gray-800 p-3 rounded border border-gray-700 flex justify-between group">
+                            <div key={i} className="glass-panel p-4 rounded-2xl border-primary/5 flex justify-between group relative overflow-hidden active:scale-95 transition-transform">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/20"></div>
                                 <div>
-                                    <div className="font-bold text-sm flex gap-2"><span className="text-blue-400">x{item.quantity}</span> {item.name}</div>
-                                    <div className="text-xs text-gray-400 pl-6">{item.modifiers.map(m => m.name).join(', ')}</div>
-                                    {item.notes && <div className="text-xs text-blue-300 pl-6 italic">"{item.notes}"</div>}
+                                    <div className="font-black text-sm flex gap-2"><span className="text-primary tracking-tighter">x{item.quantity}</span> {item.name}</div>
+                                    <div className="text-[10px] uppercase font-bold text-muted-foreground mt-1 pl-5">{item.modifiers.map(m => m.name).join(' · ')}</div>
+                                    {item.notes && <div className="text-[10px] font-black text-blue-500 pl-5 italic mt-1 bg-blue-500/5 py-1 px-2 rounded-lg">💬 "{item.notes}"</div>}
                                 </div>
-                                <div className="text-right">
-                                    <div className="font-bold text-sm">${item.lineTotal.toFixed(2)}</div>
-                                    <button onClick={() => removeFromCart(i)} className="text-red-500 text-xs hover:underline opacity-0 group-hover:opacity-100">Borrar</button>
+                                <div className="text-right flex flex-col justify-between items-end">
+                                    <div className="font-black text-sm text-foreground">${item.lineTotal.toFixed(2)}</div>
+                                    <button onClick={() => removeFromCart(i)} className="h-6 w-6 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">🗑️</button>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    <div className="p-4 bg-gray-800 border-t border-gray-700 space-y-3">
-                        <div className="rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-xs space-y-1">
-                            <div className="flex justify-between text-gray-400">
-                                <span>Subtotal</span>
+                    <div className="p-6 bg-secondary/30 border-t border-border space-y-4">
+                        <div className="capsula-card p-4 space-y-2 border-primary/10 shadow-lg">
+                            <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                                <span>Subtotal Orden</span>
                                 <PriceDisplay usd={cartSubtotal} rate={exchangeRate} size="sm" showBs={false} />
                             </div>
-                            <div className="flex justify-between text-gray-400">
-                                <span>🛵 Delivery</span>
-                                <span className="text-blue-300">${deliveryFee.toFixed(2)}</span>
+                            <div className="flex justify-between text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                                <span>🛵 Tarifa Delivery</span>
+                                <span>+${deliveryFee.toFixed(2)}</span>
                             </div>
                             {discountType === 'DIVISAS_33' && isPagoDivisas && (
-                                <div className="flex justify-between text-blue-400">
-                                    <span>Descuento divisas -33.33%</span>
+                                <div className="flex justify-between text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 p-2 rounded-lg">
+                                    <span>Descuento % Divisas</span>
                                     <span>-${(cartSubtotal / 3 + DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS).toFixed(2)}</span>
                                 </div>
                             )}
-                            {discountType === 'CORTESIA_100' && (
-                                <div className="flex justify-between text-purple-400">
-                                    <span>Cortesía 100%</span>
-                                    <span>-${(cartSubtotal + DELIVERY_FEE_NORMAL).toFixed(2)}</span>
+                            <div className="flex justify-between font-black text-xl text-foreground border-t border-border pt-2 mt-2">
+                                <span className="uppercase tracking-tighter italic">Total</span>
+                                <div className="text-primary italic">
+                                    <PriceDisplay usd={finalTotal} rate={exchangeRate} size="lg" showBs={false} />
                                 </div>
-                            )}
-                            {discountType === 'CORTESIA_PERCENT' && (
-                                <div className="flex justify-between text-purple-400">
-                                    <span>Cortesía {cortesiaPercentNum}%</span>
-                                    <span>-${(cartSubtotal * cortesiaPercentNum / 100).toFixed(2)}</span>
-                                </div>
-                            )}
-                            <div className="flex justify-between font-bold text-white border-t border-gray-700 pt-1">
-                                <span>Total</span>
-                                <PriceDisplay usd={finalTotal} rate={exchangeRate} size="sm" showBs={false} />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-1">
-                            <button onClick={() => handleDiscountSelect('NONE')} className={`py-1.5 text-[10px] font-bold rounded ${discountType === 'NONE' ? 'bg-blue-900 text-blue-200 ring-1 ring-blue-500' : 'bg-gray-700 text-gray-300'}`}>Normal</button>
-                            <button onClick={() => isPagoDivisas && handleDiscountSelect('DIVISAS_33')} disabled={!isPagoDivisas} title={!isPagoDivisas ? 'Solo con Efectivo o Zelle' : 'Descuento divisas - Delivery $3'} className={`py-1.5 text-[10px] font-bold rounded ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white' : isPagoDivisas ? 'bg-gray-700 text-gray-300' : 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-60'}`}>Divisa -33%</button>
-                            <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`col-span-2 py-1.5 text-[10px] font-bold rounded ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                                {(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT')
-                                    ? `🎁 Cortesía ${discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum + '%' : '100%'} — ${authorizedManager?.name || ''}`
-                                    : '🎁 Cortesía (PIN)'}
+
+                        {/* Descuentos y Pagos */}
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => handleDiscountSelect('NONE')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${discountType === 'NONE' ? 'bg-secondary text-foreground border-2 border-primary/50' : 'bg-background border border-border text-muted-foreground'}`}>Normal</button>
+                                <button onClick={() => isPagoDivisas && handleDiscountSelect('DIVISAS_33')} disabled={!isPagoDivisas} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${discountType === 'DIVISAS_33' ? 'bg-primary text-white shadow-lg shadow-primary/20' : isPagoDivisas ? 'bg-background border border-border text-primary' : 'bg-background opacity-30 grayscale cursor-not-allowed'}`}>Divisa -33%</button>
+                                <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`col-span-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'bg-background border border-border text-purple-600'}`}>
+                                    {(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT')
+                                        ? `🎁 Cortesía ${discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum + '%' : '100%'} — ${authorizedManager?.name || ''}`
+                                        : '🎁 Cortesía (Autorizar PIN)'}
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                {(['TRANSFER', 'MOBILE_PAY', 'CASH', 'ZELLE', 'CARD'] as const).map(m => (
+                                    <button key={m} onClick={() => setPaymentMethod(m)} className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 ${paymentMethod === m ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-background border border-border text-muted-foreground'}`}>
+                                        {PAYMENT_LABELS[m]}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
+                                <input
+                                    type="number"
+                                    value={amountReceived}
+                                    onChange={(e) => setAmountReceived(e.target.value)}
+                                    placeholder={`Recibido...`}
+                                    className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30"
+                                />
+                                <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
+                            </div>
+
+                            <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-2xl shadow-primary/30">
+                                {isProcessing ? 'PROCESANDO...' : `CONFIRMAR ORDEN`}
                             </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                            {(['TRANSFER', 'MOBILE_PAY', 'CASH', 'ZELLE', 'CARD'] as const).map(m => (
-                                <button key={m} onClick={() => setPaymentMethod(m)} className={`py-2 text-[10px] font-bold rounded ${paymentMethod === m ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
-                                    {m === 'TRANSFER' ? 'Transf' : m === 'MOBILE_PAY' ? 'P.Móvil' : m === 'CASH' ? 'Efect' : m === 'ZELLE' ? 'Zelle' : 'Punto'}
-                                </button>
-                            ))}
-                        </div>
-                        <input
-                            type="number"
-                            value={amountReceived}
-                            onChange={(e) => setAmountReceived(e.target.value)}
-                            placeholder={`Monto recibido ($${finalTotal.toFixed(2)})`}
-                            className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                        />
-                        <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xl shadow-lg disabled:opacity-50">
-                            {isProcessing ? 'PROCESANDO...' : `CONFIRMAR $${finalTotal.toFixed(2)}`}
-                        </button>
                     </div>
                 </div>
             </div>
 
             {showModifierModal && selectedItemForModifier && (
-                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-gray-800 w-full max-w-lg rounded-2xl flex flex-col max-h-[90vh] shadow-2xl border border-gray-700">
-                        <div className="p-5 border-b border-gray-700 flex justify-between bg-gray-850">
-                            <div><h3 className="text-2xl font-bold">{selectedItemForModifier.name}</h3><p className="text-blue-400 font-bold text-xl">${selectedItemForModifier.price.toFixed(2)}</p></div>
-                            <button onClick={() => setShowModifierModal(false)} className="text-4xl leading-none hover:text-red-500">&times;</button>
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-card glass-panel w-full max-w-lg rounded-3xl flex flex-col max-h-[90vh] shadow-2xl border-primary/20">
+                        <div className="p-6 border-b border-border flex justify-between items-center">
+                            <div>
+                                <h3 className="text-2xl font-black uppercase tracking-tight">{selectedItemForModifier.name}</h3>
+                                <div className="text-primary font-black text-2xl italic mt-1">
+                                    <PriceDisplay usd={selectedItemForModifier.price} rate={exchangeRate} size="lg" showBs={false} />
+                                </div>
+                            </div>
+                            <button onClick={() => setShowModifierModal(false)} className="h-12 w-12 rounded-full hover:bg-red-500/10 hover:text-red-500 transition-colors text-3xl flex items-center justify-center">&times;</button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
                             {selectedItemForModifier.modifierGroups?.map((groupRel) => {
                                 const group = groupRel.modifierGroup;
                                 const totalSelector = currentModifiers.filter(m => m.groupId === group.id).reduce((s, m) => s + m.quantity, 0);
                                 const isValid = !group.isRequired || totalSelector >= group.minSelections;
                                 return (
-                                    <div key={group.id} className={`p-4 rounded-xl border ${isValid ? 'border-gray-600 bg-gray-750' : 'border-red-500 bg-red-900/10'}`}>
-                                        <div className="flex justify-between mb-2">
-                                            <h4 className="font-bold text-blue-100">{group.name}</h4>
-                                            <span className={`text-xs px-2 py-0.5 rounded ${isValid ? 'bg-blue-900 text-blue-300' : 'bg-red-800 text-red-200'}`}>{totalSelector}/{group.maxSelections}</span>
+                                    <div key={group.id} className={`p-5 rounded-3xl border-2 transition-colors ${isValid ? 'border-border bg-secondary/20' : 'border-red-500 bg-red-500/5'}`}>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="font-black text-sm uppercase tracking-widest text-foreground/70">{group.name}</h4>
+                                            <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${isValid ? 'bg-primary/20 text-primary' : 'bg-red-500 text-white animate-bounce'}`}>
+                                                {totalSelector}/{group.maxSelections} {group.isRequired ? '• Requerido' : ''}
+                                            </span>
                                         </div>
-                                        <div className="grid gap-2">
+                                        <div className="grid gap-3">
                                             {group.modifiers.map(mod => {
                                                 const existing = currentModifiers.find(m => m.id === mod.id && m.groupId === group.id);
                                                 const qty = existing ? existing.quantity : 0;
                                                 const isMax = group.maxSelections > 1 && totalSelector >= group.maxSelections;
                                                 const isRadio = group.maxSelections === 1;
                                                 return (
-                                                    <div key={mod.id} className={`flex justify-between items-center p-3 rounded-lg border ${qty > 0 ? 'bg-blue-900/40 border-blue-500' : 'bg-gray-800 border-gray-600'}`}>
-                                                        <span>{mod.name}</span>
+                                                    <div key={mod.id} className={`flex justify-between items-center p-4 rounded-2xl border-2 transition-all ${qty > 0 ? 'bg-primary/10 border-primary' : 'bg-background border-border hover:border-primary/30'}`}>
+                                                        <div className="font-bold text-sm">{mod.name}</div>
                                                         {isRadio ? (
-                                                            <button onClick={() => updateModifierQuantity(group, mod, 1)} className={`w-6 h-6 rounded-full border flex justify-center items-center ${qty > 0 ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>{qty > 0 && '✓'}</button>
+                                                            <button 
+                                                                onClick={() => updateModifierQuantity(group, mod, 1)} 
+                                                                className={`h-8 w-8 rounded-full border-2 flex justify-center items-center transition-all ${qty > 0 ? 'bg-primary border-primary text-white scale-110 shadow-lg shadow-primary/30' : 'border-border hover:border-primary'}`}
+                                                            >
+                                                                {qty > 0 && '✓'}
+                                                            </button>
                                                         ) : (
-                                                            <div className="flex gap-2 bg-gray-900 p-1 rounded">
-                                                                <button onClick={() => updateModifierQuantity(group, mod, -1)} disabled={qty === 0} className={`w-6 h-6 ${qty === 0 ? 'text-gray-600' : 'text-white'}`}>-</button>
-                                                                <span className="font-bold text-blue-400">{qty}</span>
-                                                                <button onClick={() => updateModifierQuantity(group, mod, 1)} disabled={isMax} className={`w-6 h-6 ${isMax ? 'text-gray-600' : 'text-blue-400'}`}>+</button>
+                                                            <div className="flex items-center gap-3 bg-card p-1 rounded-2xl border border-border shadow-inner">
+                                                                <button onClick={() => updateModifierQuantity(group, mod, -1)} disabled={qty === 0} className={`h-8 w-8 rounded-xl font-black transition-all ${qty === 0 ? 'text-muted-foreground opacity-20' : 'bg-secondary text-foreground hover:bg-red-500 hover:text-white hover:scale-105'}`}>-</button>
+                                                                <span className="font-black text-lg w-6 text-center text-primary">{qty}</span>
+                                                                <button onClick={() => updateModifierQuantity(group, mod, 1)} disabled={isMax} className={`h-8 w-8 rounded-xl font-black transition-all ${isMax ? 'text-muted-foreground opacity-20' : 'bg-primary text-white hover:scale-105 shadow-lg shadow-primary/20'}`}>+</button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -514,59 +565,79 @@ export default function POSDeliveryPage() {
                                     </div>
                                 )
                             })}
-                            <div className="bg-gray-750 p-4 rounded-xl border border-gray-600">
-                                <label className="text-xs font-bold uppercase text-gray-400 mb-2 block">Notas</label>
-                                <textarea value={itemNotes} onChange={e => setItemNotes(e.target.value)} className="w-full bg-gray-900 rounded p-3 h-20 text-white border-none focus:ring-2 focus:ring-blue-500" placeholder="Instrucciones..." />
+                            
+                            <div className="bg-secondary/20 p-6 rounded-3xl border border-border">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 block">Instrucciones Especiales (Opcional)</label>
+                                <textarea value={itemNotes} onChange={e => setItemNotes(e.target.value)} className="w-full bg-background rounded-2xl p-4 h-24 text-sm font-bold border border-border focus:border-primary focus:ring-0 transition-all resize-none" placeholder="Escribe aquí si el cliente tiene alguna petición..." />
                             </div>
-                            <div className="flex items-center justify-between bg-gray-750 p-4 rounded-xl border border-gray-600">
-                                <span className="font-bold">Cantidad</span>
-                                <div className="flex bg-gray-900 rounded-lg">
-                                    <button onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))} className="w-12 h-10 hover:bg-gray-700 font-bold">-</button>
-                                    <span className="w-10 h-10 flex items-center justify-center font-bold">{itemQuantity}</span>
-                                    <button onClick={() => setItemQuantity(itemQuantity + 1)} className="w-12 h-10 bg-blue-600 hover:bg-blue-500 font-bold text-white rounded-r-lg">+</button>
+
+                            <div className="flex items-center justify-between glass-panel p-6 rounded-3xl border-primary/5">
+                                <span className="font-black uppercase tracking-tighter text-lg">Cantidad</span>
+                                <div className="flex items-center gap-2 bg-background p-1.5 rounded-2xl border border-border shadow-inner">
+                                    <button onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))} className="h-14 w-14 rounded-xl font-black text-2xl hover:bg-secondary transition-all active:scale-90">-</button>
+                                    <span className="w-16 text-center font-black text-3xl italic text-primary">{itemQuantity}</span>
+                                    <button onClick={() => setItemQuantity(itemQuantity + 1)} className="h-14 w-14 rounded-xl bg-primary text-white font-black text-2xl shadow-xl shadow-primary/30 hover:scale-105 active:scale-95">+</button>
                                 </div>
                             </div>
                         </div>
-                        <div className="p-4 border-t border-gray-700 flex gap-3">
-                            <button onClick={() => setShowModifierModal(false)} className="flex-1 py-3 bg-gray-700 rounded-lg font-bold">Cancelar</button>
-                            <button onClick={confirmAddToCart} disabled={selectedItemForModifier?.modifierGroups.some(g => !isGroupValid(g.modifierGroup))} className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-bold shadow-lg disabled:opacity-50">AGREGAR</button>
+                        <div className="p-6 border-t border-border flex gap-4">
+                            <button onClick={() => setShowModifierModal(false)} className="capsula-btn capsula-btn-secondary flex-1 py-5 text-sm">CANCELAR</button>
+                            <button onClick={confirmAddToCart} disabled={selectedItemForModifier?.modifierGroups.some(g => !isGroupValid(g.modifierGroup))} className="capsula-btn capsula-btn-primary flex-[2] py-5 text-sm shadow-xl shadow-primary/30">AGREGAR AL CARRITO</button>
                         </div>
                     </div>
                 </div>
             )}
 
             {showPinModal && (
-                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60]">
-                    <div className="bg-gray-800 p-6 rounded-2xl w-80">
-                        <h3 className="font-bold text-xl mb-4 text-center text-purple-300">🎁 Cortesía</h3>
-                        {/* Porcentaje */}
-                        <div className="mb-4">
-                            <label className="block text-xs text-gray-400 font-bold mb-1">% de Cortesía</label>
-                            <div className="flex gap-1.5 mb-2">
-                                {['25','50','75','100'].map(v => (
-                                    <button key={v} onClick={() => setCortesiaPercent(v)}
-                                        className={`flex-1 py-1.5 text-xs font-bold rounded transition ${cortesiaPercent === v ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                                        {v}%
-                                    </button>
-                                ))}
+                <div className="fixed inset-0 bg-background/90 backdrop-blur-xl flex items-center justify-center z-[60] animate-in fade-in duration-500">
+                    <div className="bg-card glass-panel p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl border-purple-500/20">
+                        <div className="text-center mb-6">
+                            <div className="h-16 w-16 bg-purple-500/10 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4">🎁</div>
+                            <h3 className="font-black text-2xl uppercase tracking-tighter text-purple-600 dark:text-purple-400 italic">Autorizar Cortesía</h3>
+                            <p className="text-xs font-medium text-muted-foreground mt-1">Este descuento requiere validación de gerencia</p>
+                        </div>
+                        
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center mb-3">Selecciona el % de descuento</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {['25','50','75','100'].map(v => (
+                                        <button key={v} onClick={() => setCortesiaPercent(v)}
+                                            className={`py-3 rounded-2xl text-sm font-black transition-all active:scale-95 ${cortesiaPercent === v ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'bg-secondary text-muted-foreground hover:bg-purple-500/10 hover:text-purple-600'}`}>
+                                            {v}%
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="mt-3 relative">
+                                    <input type="number" min="1" max="100" value={cortesiaPercent}
+                                        onChange={e => setCortesiaPercent(e.target.value)}
+                                        className="w-full bg-secondary/50 border border-border rounded-2xl py-4 text-center font-black text-xl focus:border-purple-500 focus:outline-none transition-all placeholder:text-muted-foreground/30"
+                                        placeholder="Valor %" />
+                                    <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-purple-600">%</span>
+                                </div>
                             </div>
-                            <input type="number" min="1" max="100" value={cortesiaPercent}
-                                onChange={e => setCortesiaPercent(e.target.value)}
-                                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-center font-bold focus:border-purple-500 focus:outline-none"
-                                placeholder="% personalizado" />
-                        </div>
-                        {/* PIN */}
-                        <label className="block text-xs text-gray-400 font-bold mb-1">PIN de Gerente / Dueño</label>
-                        <div className="bg-black p-4 rounded text-2xl tracking-widest mb-3 font-mono text-center min-h-[3.5rem]">{pinInput.replace(/./g, '•')}</div>
-                        <div className="grid grid-cols-3 gap-2 mb-4">
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(n => <button key={n} onClick={() => handlePinKey(n.toString())} className="bg-gray-700 p-3 rounded font-bold text-xl">{n}</button>)}
-                            <button onClick={() => handlePinKey('clear')} className="bg-red-800 rounded font-bold text-red-200 text-sm">C</button>
-                            <button onClick={() => handlePinKey('back')} className="bg-gray-600 rounded font-bold">⌫</button>
-                        </div>
-                        {pinError && <p className="text-red-400 text-xs text-center mb-3">{pinError}</p>}
-                        <div className="flex gap-2">
-                            <button onClick={() => { setShowPinModal(false); setPinInput(''); }} className="flex-1 bg-gray-600 py-2 rounded">Cancelar</button>
-                            <button onClick={handlePinSubmit} disabled={!pinInput} className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 py-2 rounded font-bold transition">Aplicar</button>
+
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center mb-3">Introduce tu PIN de Seguridad</label>
+                                <div className="bg-secondary/40 border border-border rounded-3xl p-6 text-4xl tracking-[1.5em] mb-4 font-black flex justify-center items-center h-24 text-purple-600 shadow-inner">
+                                    {pinInput.length > 0 ? pinInput.replace(/./g, '•') : <span className="text-muted-foreground/10 tracking-normal text-xl font-medium">MODO PIN...</span>}
+                                </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+                                        <button key={n} onClick={() => handlePinKey(n.toString())} className="h-16 rounded-2xl bg-secondary hover:bg-purple-500/10 hover:text-purple-600 font-black text-2xl transition-all active:scale-90 border border-border/50 shadow-sm">{n}</button>
+                                    ))}
+                                    <button onClick={() => handlePinKey('clear')} className="h-16 rounded-2xl bg-red-500/10 text-red-500 font-black text-lg hover:bg-red-500 hover:text-white transition-all active:scale-90 border border-red-500/20 shadow-sm">CLR</button>
+                                    <button key={0} onClick={() => handlePinKey('0')} className="h-16 rounded-2xl bg-secondary hover:bg-purple-500/10 hover:text-purple-600 font-black text-2xl transition-all active:scale-90 border border-border/50 shadow-sm">0</button>
+                                    <button onClick={() => handlePinKey('back')} className="h-16 rounded-2xl bg-secondary hover:bg-purple-500/10 hover:text-purple-600 font-black text-2xl transition-all active:scale-90 border border-border/50 shadow-sm">⌫</button>
+                                </div>
+                            </div>
+
+                            {pinError && <div className="bg-red-500/10 border border-red-500/20 text-red-600 text-xs font-black text-center py-3 rounded-2xl animate-bounce">{pinError}</div>}
+
+                            <div className="grid grid-cols-2 gap-4 pt-2">
+                                <button onClick={() => { setShowPinModal(false); setPinInput(''); }} className="capsula-btn capsula-btn-secondary py-4 font-black uppercase tracking-widest">Cerrar</button>
+                                <button onClick={handlePinSubmit} disabled={!pinInput} className="capsula-btn capsula-btn-primary bg-purple-600 border-purple-700 shadow-lg shadow-purple-500/20 py-4 font-black uppercase tracking-widest">Validar</button>
+                            </div>
                         </div>
                     </div>
                 </div>
