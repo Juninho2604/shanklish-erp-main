@@ -19,8 +19,8 @@ export default async function LoginPage() {
                     <h2 className="mt-6 text-center text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">
                         Iniciar Sesión
                     </h2>
-                    <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-                        Sistema ERP Shanklish Caracas
+                    <p className="mt-2 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
+                        CAPSULA - Shanklish Caracas
                     </p>
                 </div>
 

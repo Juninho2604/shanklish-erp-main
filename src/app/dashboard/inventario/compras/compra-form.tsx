@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth.store';
 import { formatCurrency, formatNumber, cn } from '@/lib/utils';
 import { registrarEntradaMercancia } from '@/app/actions/entrada.actions';
+import { Combobox } from '@/components/ui/combobox';
 
 interface Props {
     itemsList: any[];
@@ -13,7 +14,8 @@ interface Props {
 
 export default function CompraForm({ itemsList, areasList }: Props) {
     const { user, canViewCosts } = useAuthStore();
-    const showCosts = canViewCosts();
+    const [showCosts, setShowCosts] = useState(false);
+    useEffect(() => { setShowCosts(canViewCosts()); }, [canViewCosts]);
 
     // Estado del formulario
     const [selectedItem, setSelectedItem] = useState('');
@@ -130,26 +132,24 @@ export default function CompraForm({ itemsList, areasList }: Props) {
                                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Insumo *
                                 </label>
-                                <select
-                                    value={selectedItem}
-                                    onChange={(e) => {
-                                        setSelectedItem(e.target.value);
-                                        const item = itemsList.find(i => i.id === e.target.value);
+                                <Combobox
+                                    items={itemsList.map(item => ({
+                                        value: item.id,
+                                        label: `${item.name} (${item.baseUnit})`
+                                    }))}
+                                    value={selectedItem || ''}
+                                    onChange={(val) => {
+                                        setSelectedItem(val);
+                                        const item = itemsList.find(i => i.id === val);
                                         if (item) {
                                             setUnit(item.baseUnit);
                                             setUnitCost(item.currentCost || 0);
                                         }
                                     }}
-                                    required
-                                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                >
-                                    <option value="">Seleccionar insumo...</option>
-                                    {itemsList.map(item => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.name} ({item.baseUnit})
-                                        </option>
-                                    ))}
-                                </select>
+                                    placeholder="Seleccionar insumo..."
+                                    searchPlaceholder="Buscar insumo..."
+                                    emptyMessage="No se encontró el insumo."
+                                />
                             </div>
 
                             {/* Cantidad */}

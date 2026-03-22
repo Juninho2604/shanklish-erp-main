@@ -100,7 +100,7 @@ export async function calculateRecipeCost(
                 include: {
                     ingredientItem: {
                         include: {
-                            recipe: true, // Para detectar sub-recetas
+                            outputRecipes: true, // Para detectar sub-recetas
                         },
                     },
                 },
@@ -124,10 +124,13 @@ export async function calculateRecipeCost(
         let unitCost = 0;
 
         // Si el ingrediente es una sub-receta, calcular su costo recursivamente
-        if (item.type === 'SUB_RECIPE' && item.recipe) {
+        // @ts-ignore - Dynamic property from include
+        const subRecipe = item.outputRecipes && item.outputRecipes.length > 0 ? item.outputRecipes[0] : null;
+
+        if (item.type === 'SUB_RECIPE' && subRecipe) {
             subRecipes.push(item.id);
             const subRecipeCost = await calculateRecipeCost(
-                prisma, item.recipe.id, laborCostPerHour, overheadPercentage, visitedRecipes
+                prisma, subRecipe.id, laborCostPerHour, overheadPercentage, visitedRecipes
             );
             if (subRecipeCost) {
                 unitCost = subRecipeCost.costPerUnit;

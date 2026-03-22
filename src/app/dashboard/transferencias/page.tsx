@@ -1,6 +1,7 @@
 import { getInventoryItemsForSelect, getAreasForSelect } from '@/app/actions/entrada.actions';
 import { getRequisitions } from '@/app/actions/requisition.actions';
 import TransferenciasView from './transferencias-view';
+import BulkTransferPanel from './BulkTransferPanel';
 
 // Esta página es Server Component para cargar datos iniciales seguros
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,9 @@ export default async function TransferenciasPage() {
                 </div>
             </div>
 
+            {/* Panel de Transferencia Rápida por Categoría */}
+            <BulkTransferPanel areasList={areas} />
+
             <TransferenciasView
                 itemsList={items}
                 areasList={areas}
@@ -39,3 +43,4 @@ export default async function TransferenciasPage() {
         </div>
     );
 }
+

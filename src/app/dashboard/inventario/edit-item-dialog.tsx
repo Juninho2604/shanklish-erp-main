@@ -16,6 +16,7 @@ export function ItemEditDialog({ item, isOpen, onClose }: Props) {
         name: item.name,
         sku: item.sku,
         category: item.category || '',
+        baseUnit: item.baseUnit || 'UNI',
         minimumStock: item.minimumStock,
         reorderPoint: item.reorderPoint || 0,
     });
@@ -28,7 +29,8 @@ export function ItemEditDialog({ item, isOpen, onClose }: Props) {
             const res = await updateInventoryItemAction(item.id, {
                 ...formData,
                 minimumStock: Number(formData.minimumStock),
-                reorderPoint: Number(formData.reorderPoint)
+                reorderPoint: Number(formData.reorderPoint),
+                baseUnit: formData.baseUnit
             });
 
             if (res.success) {
@@ -47,8 +49,8 @@ export function ItemEditDialog({ item, isOpen, onClose }: Props) {
     return (
         <Dialog.Root open={isOpen} onOpenChange={onClose}>
             <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-                <Dialog.Content className="fixed left-[50%] top-[50%] max-h-[85vh] w-[90vw] max-w-[500px] translate-x-[-50%] translate-y-[-50%] rounded-[6px] bg-white p-[25px] shadow-[hsl(206_22%_7%_/_35%)_0px_10px_38px_-10px,_hsl(206_22%_7%_/_20%)_0px_10px_20px_-15px] focus:outline-none dark:bg-gray-900">
+                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+                <Dialog.Content className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-[500px] translate-x-[-50%] translate-y-[-50%] rounded-[6px] bg-white p-[25px] shadow-[hsl(206_22%_7%_/_35%)_0px_10px_38px_-10px,_hsl(206_22%_7%_/_20%)_0px_10px_20px_-15px] focus:outline-none dark:bg-gray-900">
                     <Dialog.Title className="text-xl font-medium text-gray-900 dark:text-gray-100">
                         Editar {item.name}
                     </Dialog.Title>
@@ -90,6 +92,28 @@ export function ItemEditDialog({ item, isOpen, onClose }: Props) {
                                 />
                             </fieldset>
                         </div>
+
+                        <fieldset className="flex flex-col gap-1">
+                            <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300">
+                                Unidad de Medida
+                            </label>
+                            <select
+                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-[15px] leading-none text-gray-900 outline-none focus:ring-2 focus:ring-amber-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                value={formData.baseUnit}
+                                onChange={e => setFormData({ ...formData, baseUnit: e.target.value })}
+                            >
+                                <option value="KG">KG - Kilogramos</option>
+                                <option value="UNI">UNI - Unidades</option>
+                                <option value="LT">LT - Litros</option>
+                                <option value="GR">GR - Gramos</option>
+                                <option value="ML">ML - Mililitros</option>
+                                <option value="PAQUETE">PAQUETE</option>
+                                <option value="CAJA">CAJA</option>
+                                <option value="BOLSA">BOLSA</option>
+                                <option value="BOTELLA">BOTELLA</option>
+                                <option value="GALON">GALON</option>
+                            </select>
+                        </fieldset>
 
                         <div className="grid grid-cols-2 gap-4">
                             <fieldset className="flex flex-col gap-1">

@@ -6,9 +6,9 @@ import { Toaster } from 'react-hot-toast';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-    title: 'Shanklish Caracas ERP',
-    description: 'Sistema de Gestión para Restauración y Manufactura de Alimentos',
-    keywords: ['ERP', 'restaurante', 'inventario', 'recetas', 'Shanklish', 'Caracas'],
+    title: 'CAPSULA de Shanklish Caracas',
+    description: 'Sistema de Gestión e Inventario para Restauración y Manufactura de Alimentos',
+    keywords: ['CAPSULA', 'ERP', 'restaurante', 'inventario', 'recetas', 'Shanklish', 'Caracas'],
 };
 
 export default function RootLayout({

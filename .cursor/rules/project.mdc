@@ -1,0 +1,13 @@
+---
+description: Contexto del proyecto Shanklish ERP
+globs: 
+alwaysApply: true
+---
+
+# Shanklish ERP - Reglas del Proyecto
+
+- **Stack**: Next.js 14 (App Router), TypeScript, Prisma, Tailwind CSS
+- **Estructura**: Server Actions en `src/app/actions/`, componentes en `src/components/`
+- **Base de datos**: PostgreSQL con Prisma
+- **Idioma**: Responder en español al usuario
+- **Commits**: Mensajes descriptivos en español (ej: "feat: agregar módulo X")

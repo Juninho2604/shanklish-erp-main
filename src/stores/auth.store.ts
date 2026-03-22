@@ -27,6 +27,9 @@ const ROLE_LEVELS: Record<UserRole, number> = {
     HR_MANAGER: 5,
     CHEF: 6,
     AREA_LEAD: 7,
+    CASHIER_RESTAURANT: 8,
+    CASHIER_DELIVERY: 9,
+    KITCHEN_CHEF: 10,
 };
 
 export const useAuthStore = create<AuthState>()(

@@ -51,6 +51,7 @@ export interface SaleInput {
     orderId?: string;       // ID de orden de venta (futuro: Wink)
     notes?: string;
     userId: string;
+    allowNegative?: boolean;
 }
 
 export interface SaleResult {
@@ -244,8 +245,8 @@ export async function registerSale(input: SaleInput): Promise<SaleResult> {
 
         const currentStock = item.stockLevels[0]?.currentStock || 0;
 
-        // 2. Verificar stock suficiente
-        if (Number(currentStock) < input.quantity) {
+        // 2. Verificar stock suficiente (si no se permiten negativos)
+        if (!input.allowNegative && Number(currentStock) < input.quantity) {
             return {
                 success: false,
                 message: `Stock insuficiente. Disponible: ${currentStock} ${item.baseUnit}`,

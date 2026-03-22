@@ -20,7 +20,10 @@ export type UserRole =
     | 'OPS_MANAGER'
     | 'HR_MANAGER'
     | 'CHEF'
-    | 'AREA_LEAD';
+    | 'AREA_LEAD'
+    | 'CASHIER_RESTAURANT'
+    | 'CASHIER_DELIVERY'
+    | 'KITCHEN_CHEF';
 
 export type InventoryItemType = 'RAW_MATERIAL' | 'SUB_RECIPE' | 'FINISHED_GOOD';
 

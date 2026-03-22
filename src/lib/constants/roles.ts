@@ -6,12 +6,15 @@
 
 export const UserRole = {
   OWNER: 'OWNER',
-  AUDITOR: 'AUDITOR', 
+  AUDITOR: 'AUDITOR',
   ADMIN_MANAGER: 'ADMIN_MANAGER',
   OPS_MANAGER: 'OPS_MANAGER',
   HR_MANAGER: 'HR_MANAGER',
   CHEF: 'CHEF',
   AREA_LEAD: 'AREA_LEAD',
+  CASHIER_RESTAURANT: 'CASHIER_RESTAURANT',
+  CASHIER_DELIVERY: 'CASHIER_DELIVERY',
+  KITCHEN_CHEF: 'KITCHEN_CHEF',
 } as const;
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
@@ -27,6 +30,9 @@ export const ROLE_HIERARCHY: Record<UserRoleType, number> = {
   [UserRole.HR_MANAGER]: 5,
   [UserRole.CHEF]: 6,
   [UserRole.AREA_LEAD]: 7,
+  [UserRole.KITCHEN_CHEF]: 7,
+  [UserRole.CASHIER_RESTAURANT]: 8,
+  [UserRole.CASHIER_DELIVERY]: 8,
 };
 
 /**
@@ -80,6 +86,24 @@ export const ROLE_INFO: Record<UserRoleType, {
     description: 'Gestión de área específica',
     color: '#6B7280', // Gray
   },
+  [UserRole.CASHIER_RESTAURANT]: {
+    label: 'Cashier Restaurant',
+    labelEs: 'Cajera Restaurante',
+    description: 'Punto de venta del restaurante',
+    color: '#059669', // Teal
+  },
+  [UserRole.CASHIER_DELIVERY]: {
+    label: 'Cashier Delivery',
+    labelEs: 'Cajera Delivery',
+    description: 'Punto de venta para delivery',
+    color: '#7C3AED', // Violet
+  },
+  [UserRole.KITCHEN_CHEF]: {
+    label: 'Kitchen Chef',
+    labelEs: 'Jefe de Cocina',
+    description: 'Comandera de cocina',
+    color: '#DC2626', // Red
+  },
 };
 
 /**
@@ -99,6 +123,12 @@ export const SystemModule = {
   REPORTS: 'reports',
   AUDIT: 'audit',
   SETTINGS: 'settings',
+  // POS - Nuevos módulos
+  POS_RESTAURANT: 'pos_restaurant',
+  POS_DELIVERY: 'pos_delivery',
+  MENU: 'menu',
+  SALES_HISTORY: 'sales_history',
+  KITCHEN_DISPLAY: 'kitchen_display',
 } as const;
 
 export type SystemModuleType = typeof SystemModule[keyof typeof SystemModule];
@@ -137,8 +167,13 @@ export const ROLE_PERMISSIONS: Record<UserRoleType, Partial<Record<SystemModuleT
     [SystemModule.REPORTS]: ['view', 'export'],
     [SystemModule.AUDIT]: ['view', 'export'],
     [SystemModule.SETTINGS]: ['view', 'edit'],
+    // POS
+    [SystemModule.POS_RESTAURANT]: ['view', 'create', 'edit', 'delete'],
+    [SystemModule.POS_DELIVERY]: ['view', 'create', 'edit', 'delete'],
+    [SystemModule.MENU]: ['view', 'create', 'edit', 'delete'],
+    [SystemModule.SALES_HISTORY]: ['view', 'export'],
   },
-  
+
   [UserRole.AUDITOR]: {
     // Solo lectura en todos los módulos
     [SystemModule.DASHBOARD]: ['view'],
@@ -155,7 +190,7 @@ export const ROLE_PERMISSIONS: Record<UserRoleType, Partial<Record<SystemModuleT
     [SystemModule.AUDIT]: ['view', 'export'],
     [SystemModule.SETTINGS]: ['view'],
   },
-  
+
   [UserRole.ADMIN_MANAGER]: {
     [SystemModule.DASHBOARD]: ['view'],
     [SystemModule.OPERATIONS]: ['view'],
@@ -170,7 +205,7 @@ export const ROLE_PERMISSIONS: Record<UserRoleType, Partial<Record<SystemModuleT
     [SystemModule.REPORTS]: ['view', 'export'],
     [SystemModule.SETTINGS]: ['view', 'edit'],
   },
-  
+
   [UserRole.OPS_MANAGER]: {
     [SystemModule.DASHBOARD]: ['view'],
     [SystemModule.OPERATIONS]: ['view', 'create', 'edit', 'delete', 'approve', 'export'],
@@ -179,15 +214,20 @@ export const ROLE_PERMISSIONS: Record<UserRoleType, Partial<Record<SystemModuleT
     [SystemModule.PRODUCTION]: ['view', 'create', 'edit', 'delete', 'approve', 'export'],
     [SystemModule.COSTS]: ['view', 'export'],
     [SystemModule.REPORTS]: ['view', 'export'],
+    // POS
+    [SystemModule.POS_RESTAURANT]: ['view', 'create', 'edit'],
+    [SystemModule.POS_DELIVERY]: ['view', 'create', 'edit'],
+    [SystemModule.MENU]: ['view', 'create', 'edit'],
+    [SystemModule.SALES_HISTORY]: ['view', 'export'],
   },
-  
+
   [UserRole.HR_MANAGER]: {
     [SystemModule.DASHBOARD]: ['view'],
     [SystemModule.USERS]: ['view'],
     [SystemModule.HR]: ['view', 'create', 'edit', 'delete', 'approve', 'export'],
     [SystemModule.REPORTS]: ['view', 'export'],
   },
-  
+
   [UserRole.CHEF]: {
     [SystemModule.DASHBOARD]: ['view'],
     [SystemModule.INVENTORY]: ['view'],
@@ -195,12 +235,29 @@ export const ROLE_PERMISSIONS: Record<UserRoleType, Partial<Record<SystemModuleT
     [SystemModule.PRODUCTION]: ['view', 'create', 'edit'],
     [SystemModule.COSTS]: ['view'],
   },
-  
+
   [UserRole.AREA_LEAD]: {
     [SystemModule.DASHBOARD]: ['view'],
     [SystemModule.INVENTORY]: ['view', 'edit'], // Solo de su área
     [SystemModule.RECIPES]: ['view'],
     [SystemModule.PRODUCTION]: ['view', 'create'], // Reportar producción
+  },
+
+  [UserRole.CASHIER_RESTAURANT]: {
+    // Solo acceso al POS de restaurante
+    [SystemModule.POS_RESTAURANT]: ['view', 'create'],
+    [SystemModule.SALES_HISTORY]: ['view'], // Solo sus ventas del día
+  },
+
+  [UserRole.CASHIER_DELIVERY]: {
+    // Solo acceso al POS de delivery
+    [SystemModule.POS_DELIVERY]: ['view', 'create'],
+    [SystemModule.SALES_HISTORY]: ['view'], // Solo sus ventas del día
+  },
+
+  [UserRole.KITCHEN_CHEF]: {
+    // Solo acceso a la comandera de cocina
+    [SystemModule.KITCHEN_DISPLAY]: ['view'],
   },
 };
 
@@ -214,10 +271,10 @@ export function hasPermission(
 ): boolean {
   const rolePermissions = ROLE_PERMISSIONS[role];
   if (!rolePermissions) return false;
-  
+
   const modulePermissions = rolePermissions[module];
   if (!modulePermissions) return false;
-  
+
   return modulePermissions.includes(permission);
 }
 

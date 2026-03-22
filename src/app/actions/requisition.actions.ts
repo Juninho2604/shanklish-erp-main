@@ -45,14 +45,16 @@ export interface ActionResult {
 export async function getRequisitions(filter: 'ALL' | 'PENDING' | 'COMPLETED' = 'ALL') {
     try {
         const whereClause: any = {};
-        if (filter === 'PENDING') whereClause.status = 'PENDING';
-        if (filter === 'COMPLETED') whereClause.status = { in: ['APPROVED', 'COMPLETED', 'REJECTED'] };
+        if (filter === 'PENDING') whereClause.status = { in: ['PENDING', 'DISPATCHED'] };
+        if (filter === 'COMPLETED') whereClause.status = { in: ['APPROVED', 'COMPLETED', 'RECEIVED', 'REJECTED'] };
 
         const requisitions = await prisma.requisition.findMany({
             where: whereClause,
             include: {
                 requestedBy: { select: { firstName: true, lastName: true } },
                 processedBy: { select: { firstName: true, lastName: true } },
+                dispatchedBy: { select: { firstName: true, lastName: true } },
+                receivedBy: { select: { firstName: true, lastName: true } },
                 targetArea: { select: { name: true } },
                 sourceArea: { select: { name: true } },
                 items: {
@@ -129,7 +131,68 @@ export async function createRequisition(input: CreateRequisitionInput): Promise<
     }
 }
 
-// 2. APROBAR Y DESPACHAR
+// 2a. DESPACHAR REQUISICIÓN (Jefe de Producción - paso intermedio)
+export async function dispatchRequisition(input: {
+    requisitionId: string;
+    dispatchedById: string;
+    items: { inventoryItemId: string; sentQuantity: number }[];
+}): Promise<ActionResult> {
+    try {
+        const req = await prisma.requisition.findUnique({
+            where: { id: input.requisitionId },
+            include: { items: true }
+        });
+
+        if (!req) return { success: false, message: 'Requisición no encontrada' };
+        if (req.status !== 'PENDING' && req.status !== 'REQUESTED') {
+            return { success: false, message: 'Esta solicitud ya fue procesada o despachada' };
+        }
+
+        await prisma.$transaction(async (tx) => {
+            // Si no tenía origen, buscar almacén principal
+            let sourceAreaId = req.sourceAreaId;
+            if (!sourceAreaId) {
+                const mainWarehouse = await tx.area.findFirst({
+                    where: { name: { contains: 'ALMACEN PRINCIPAL', mode: 'insensitive' } }
+                });
+                if (mainWarehouse) sourceAreaId = mainWarehouse.id;
+            }
+
+            // Actualizar estado a DISPATCHED
+            await tx.requisition.update({
+                where: { id: input.requisitionId },
+                data: {
+                    status: 'DISPATCHED',
+                    dispatchedById: input.dispatchedById,
+                    dispatchedAt: new Date(),
+                    sourceAreaId
+                }
+            });
+
+            // Actualizar cada item con la cantidad enviada
+            for (const item of input.items) {
+                await tx.requisitionItem.updateMany({
+                    where: {
+                        requisitionId: input.requisitionId,
+                        inventoryItemId: item.inventoryItemId
+                    },
+                    data: {
+                        sentQuantity: item.sentQuantity,
+                        dispatchedQuantity: item.sentQuantity // retrocompat
+                    }
+                });
+            }
+        });
+
+        revalidatePath('/dashboard/transferencias');
+        return { success: true, message: 'Despacho registrado. Pendiente de aprobación gerencial.' };
+    } catch (error) {
+        console.error('Error dispatching:', error);
+        return { success: false, message: 'Error al despachar' };
+    }
+}
+
+// 2b. APROBAR Y COMPLETAR (Gerente)
 export async function approveRequisition(input: ApproveRequisitionInput): Promise<ActionResult> {
     try {
         // Buscar la requisición para validar
@@ -139,7 +202,10 @@ export async function approveRequisition(input: ApproveRequisitionInput): Promis
         });
 
         if (!req) return { success: false, message: 'Requisición no encontrada' };
-        if (req.status !== 'PENDING') return { success: false, message: 'Esta solicitud ya fue procesada' };
+        // Aceptar PENDING (flujo directo) o DISPATCHED (flujo escalonado)
+        if (req.status !== 'PENDING' && req.status !== 'DISPATCHED') {
+            return { success: false, message: 'Esta solicitud ya fue procesada' };
+        }
 
         // Si no tenía origen, intentar asignarlo ahora o fallar
         if (!req.sourceAreaId) {
@@ -240,7 +306,7 @@ export async function approveRequisition(input: ApproveRequisitionInput): Promis
                     }
                 });
             }
-        });
+        }, { timeout: 120000 });
 
         revalidatePath('/dashboard/inventario');
         return { success: true, message: 'Transferencia aprobada y ejecutada' };
@@ -279,5 +345,339 @@ export async function rejectRequisition(requisitionId: string, userId: string): 
     } catch (error) {
         console.error('Error rejecting:', error);
         return { success: false, message: 'Error al rechazar solicitud' };
+    }
+}
+
+// 4. RECIBIR TRANSFERENCIA (Jefe de Cocina / Receptor)
+export async function receiveRequisition(input: {
+    requisitionId: string;
+    receivedById: string;
+    items: { inventoryItemId: string; receivedQuantity: number }[];
+    notes?: string;
+}): Promise<ActionResult> {
+    try {
+        const req = await prisma.requisition.findUnique({
+            where: { id: input.requisitionId },
+            include: { items: true }
+        });
+
+        if (!req) return { success: false, message: 'Requisición no encontrada' };
+        if (req.status !== 'DISPATCHED' && req.status !== 'COMPLETED') {
+            return { success: false, message: 'Esta solicitud no está en estado de recepción' };
+        }
+
+        // Validar usuario
+        let receiverId = input.receivedById;
+        const userExists = await prisma.user.findUnique({ where: { id: receiverId } });
+        if (!userExists) {
+            const owner = await prisma.user.findFirst({ where: { role: 'OWNER' } });
+            if (owner) receiverId = owner.id;
+        }
+
+        await prisma.$transaction(async (tx) => {
+            // Actualizar estado
+            await tx.requisition.update({
+                where: { id: input.requisitionId },
+                data: {
+                    status: 'RECEIVED',
+                    receivedById: receiverId,
+                    receivedAt: new Date(),
+                    notes: input.notes
+                        ? (req.notes ? `${req.notes}\n[RECEPCIÓN]: ${input.notes}` : `[RECEPCIÓN]: ${input.notes}`)
+                        : req.notes
+                }
+            });
+
+            // Actualizar cantidades recibidas por item
+            for (const item of input.items) {
+                const reqItem = req.items.find(i => i.inventoryItemId === item.inventoryItemId);
+                if (!reqItem) continue;
+
+                await tx.requisitionItem.updateMany({
+                    where: {
+                        requisitionId: input.requisitionId,
+                        inventoryItemId: item.inventoryItemId
+                    },
+                    data: {
+                        receivedQuantity: item.receivedQuantity
+                    }
+                });
+            }
+        });
+
+        revalidatePath('/dashboard/transferencias');
+        return { success: true, message: 'Recepción confirmada exitosamente' };
+    } catch (error) {
+        console.error('Error receiving:', error);
+        return { success: false, message: 'Error al registrar recepción' };
+    }
+}
+
+// 5. MARCAR COMO COMPLETADO (cierre final de transferencia recibida)
+export async function completeRequisition(requisitionId: string, completedById: string): Promise<ActionResult> {
+    try {
+        const req = await prisma.requisition.findUnique({
+            where: { id: requisitionId }
+        });
+
+        if (!req) return { success: false, message: 'Requisición no encontrada' };
+        if (req.status !== 'RECEIVED') {
+            return { success: false, message: 'Solo se pueden completar transferencias en estado Recibido' };
+        }
+
+        let userId = completedById;
+        const userExists = await prisma.user.findUnique({ where: { id: userId } });
+        if (!userExists) {
+            const owner = await prisma.user.findFirst({ where: { role: 'OWNER' } });
+            if (owner) userId = owner.id;
+        }
+
+        await prisma.requisition.update({
+            where: { id: requisitionId },
+            data: {
+                status: 'COMPLETED',
+                processedById: userId,
+                processedAt: new Date()
+            }
+        });
+
+        revalidatePath('/dashboard/transferencias');
+        return { success: true, message: `Transferencia ${req.code} marcada como completada` };
+    } catch (error) {
+        console.error('Error completing requisition:', error);
+        return { success: false, message: error instanceof Error ? error.message : 'Error al completar transferencia' };
+    }
+}
+
+// ============================================================================
+// TRANSFERENCIA MASIVA POR CATEGORÍA
+// ============================================================================
+
+/**
+ * Obtiene categorías disponibles con conteo de items
+ */
+export async function getCategoriesForTransferAction(): Promise<{
+    success: boolean;
+    categories?: { name: string; count: number }[];
+}> {
+    try {
+        const items = await prisma.inventoryItem.groupBy({
+            by: ['category'],
+            where: {
+                isActive: true,
+                category: { not: null }
+            },
+            _count: { id: true },
+            orderBy: { category: 'asc' }
+        });
+
+        return {
+            success: true,
+            categories: items
+                .filter(i => i.category)
+                .map(i => ({
+                    name: i.category!,
+                    count: i._count.id
+                }))
+        };
+    } catch (error) {
+        console.error('Error getting categories:', error);
+        return { success: false };
+    }
+}
+
+/**
+ * Previsualiza qué items se transferirían por categoría
+ */
+export async function previewBulkTransferAction(
+    category: string,
+    sourceAreaId: string
+): Promise<{
+    success: boolean;
+    message: string;
+    items?: { id: string; name: string; currentStock: number; unit: string }[];
+}> {
+    try {
+        // Obtener items de la categoría con stock en el área origen
+        const locations = await prisma.inventoryLocation.findMany({
+            where: {
+                areaId: sourceAreaId,
+                currentStock: { gt: 0 },
+                inventoryItem: {
+                    category: { equals: category, mode: 'insensitive' },
+                    isActive: true
+                }
+            },
+            include: {
+                inventoryItem: { select: { id: true, name: true, baseUnit: true } }
+            }
+        });
+
+        if (locations.length === 0) {
+            return {
+                success: false,
+                message: `No hay items de categoría "${category}" con stock en el área seleccionada`
+            };
+        }
+
+        return {
+            success: true,
+            message: `${locations.length} items encontrados`,
+            items: locations.map(loc => ({
+                id: loc.inventoryItemId,
+                name: loc.inventoryItem.name,
+                currentStock: loc.currentStock,
+                unit: loc.inventoryItem.baseUnit
+            }))
+        };
+    } catch (error) {
+        console.error('Error previewing bulk transfer:', error);
+        return { success: false, message: 'Error al previsualizar transferencia' };
+    }
+}
+
+/**
+ * Ejecuta transferencia masiva de TODA una categoría de un área a otra
+ * Esto mueve TODO el stock disponible, sin necesidad de aprobación
+ */
+export async function executeBulkTransferAction(
+    category: string,
+    sourceAreaId: string,
+    targetAreaId: string,
+    userId: string,
+    excludedItemIds: string[] = []
+): Promise<ActionResult> {
+    try {
+        if (sourceAreaId === targetAreaId) {
+            return { success: false, message: 'Origen y destino no pueden ser iguales' };
+        }
+
+        // Validar usuario
+        let executorId = userId;
+        const userExists = await prisma.user.findUnique({ where: { id: userId } });
+        if (!userExists) {
+            const owner = await prisma.user.findFirst({ where: { role: 'OWNER' } });
+            if (owner) executorId = owner.id;
+        }
+
+        // Obtener items con stock en origen (excluyendo los indicados)
+        const locationsToTransfer = await prisma.inventoryLocation.findMany({
+            where: {
+                areaId: sourceAreaId,
+                currentStock: { gt: 0 },
+                inventoryItem: {
+                    category: { equals: category, mode: 'insensitive' },
+                    isActive: true,
+                    id: { notIn: excludedItemIds }
+                }
+            },
+            include: {
+                inventoryItem: { select: { id: true, name: true, baseUnit: true } }
+            }
+        });
+
+        if (locationsToTransfer.length === 0) {
+            return {
+                success: false,
+                message: `No hay items de categoría "${category}" con stock en el área origen`
+            };
+        }
+
+        // Generar código de transferencia
+        const count = await prisma.requisition.count();
+        const code = `BULK-${(count + 1).toString().padStart(4, '0')}`;
+
+        // Ejecutar transferencia en transacción
+        await prisma.$transaction(async (tx) => {
+            // Crear requisición como historial
+            const req = await tx.requisition.create({
+                data: {
+                    code,
+                    requestedById: executorId,
+                    processedById: executorId,
+                    sourceAreaId,
+                    targetAreaId,
+                    status: 'COMPLETED',
+                    processedAt: new Date(),
+                    notes: `Transferencia masiva de categoría: ${category}`,
+                    items: {
+                        create: locationsToTransfer.map(loc => ({
+                            inventoryItemId: loc.inventoryItemId,
+                            quantity: loc.currentStock,
+                            unit: loc.inventoryItem.baseUnit,
+                            dispatchedQuantity: loc.currentStock
+                        }))
+                    }
+                }
+            });
+
+            // Procesar cada item
+            for (const loc of locationsToTransfer) {
+                const qty = loc.currentStock;
+
+                // Movimiento de salida
+                await tx.inventoryMovement.create({
+                    data: {
+                        inventoryItemId: loc.inventoryItemId,
+                        movementType: 'TRANSFER_OUT',
+                        quantity: qty,
+                        unit: loc.inventoryItem.baseUnit,
+                        createdById: executorId,
+                        notes: `Transferencia masiva ${code}`,
+                        reason: `Categoría ${category} → Destino`
+                    }
+                });
+
+                // Reducir stock en origen (poner a 0)
+                await tx.inventoryLocation.update({
+                    where: {
+                        inventoryItemId_areaId: {
+                            inventoryItemId: loc.inventoryItemId,
+                            areaId: sourceAreaId
+                        }
+                    },
+                    data: {
+                        currentStock: 0,
+                        lastCountDate: new Date()
+                    }
+                });
+
+                // Sumar stock en destino
+                await tx.inventoryLocation.upsert({
+                    where: {
+                        inventoryItemId_areaId: {
+                            inventoryItemId: loc.inventoryItemId,
+                            areaId: targetAreaId
+                        }
+                    },
+                    create: {
+                        inventoryItemId: loc.inventoryItemId,
+                        areaId: targetAreaId,
+                        currentStock: qty,
+                        lastCountDate: new Date()
+                    },
+                    update: {
+                        currentStock: { increment: qty },
+                        lastCountDate: new Date()
+                    }
+                });
+            }
+        }, { timeout: 180000 }); // 3 minutes for large transfers
+
+        revalidatePath('/dashboard/inventario');
+        revalidatePath('/dashboard/transferencias');
+
+        return {
+            success: true,
+            message: `✅ Transferencia ${code} completada: ${locationsToTransfer.length} items de "${category}" movidos`,
+            data: { code, count: locationsToTransfer.length }
+        };
+
+    } catch (error) {
+        console.error('Error executing bulk transfer:', error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Error al ejecutar transferencia'
+        };
     }
 }

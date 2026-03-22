@@ -1,0 +1,647 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
+import { getExchangeRateValue } from '@/app/actions/exchange.actions';
+import { printReceipt, printKitchenCommand } from '@/lib/print-command';
+import { getPOSConfig } from '@/lib/pos-settings';
+import WhatsAppOrderParser from '@/components/whatsapp-order-parser';
+import { PriceDisplay } from '@/components/pos/PriceDisplay';
+import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
+
+const DELIVERY_FEE_NORMAL = 4.5;
+const DELIVERY_FEE_DIVISAS = 3;
+
+const PAYMENT_LABELS = {
+    CASH: 'Efectivo $',
+    ZELLE: 'Zelle',
+    CARD: 'Punto',
+    MOBILE_PAY: 'P.Móvil',
+    TRANSFER: 'Transf'
+};
+
+interface ModifierOption {
+    id: string;
+    name: string;
+    priceAdjustment: number;
+    isAvailable: boolean;
+}
+
+interface ModifierGroup {
+    id: string;
+    name: string;
+    minSelections: number;
+    maxSelections: number;
+    isRequired: boolean;
+    modifiers: ModifierOption[];
+}
+
+interface MenuItem {
+    id: string;
+    categoryId: string;
+    sku: string;
+    name: string;
+    price: number;
+    modifierGroups: { modifierGroup: ModifierGroup }[];
+}
+
+interface SelectedModifier {
+    groupId: string;
+    groupName: string;
+    id: string;
+    name: string;
+    priceAdjustment: number;
+    quantity: number;
+}
+
+export default function POSDeliveryPage() {
+    const [categories, setCategories] = useState<any[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string>('');
+    const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const [cart, setCart] = useState<CartItem[]>([]);
+    const [customerName, setCustomerName] = useState('');
+    const [customerPhone, setCustomerPhone] = useState('');
+    const [customerAddress, setCustomerAddress] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
+
+    // MODAL STATE
+    const [showModifierModal, setShowModifierModal] = useState(false);
+    const [selectedItemForModifier, setSelectedItemForModifier] = useState<MenuItem | null>(null);
+    const [currentModifiers, setCurrentModifiers] = useState<SelectedModifier[]>([]);
+    const [itemQuantity, setItemQuantity] = useState(1);
+    const [itemNotes, setItemNotes] = useState('');
+
+    // PAYMENT STATE
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('TRANSFER');
+    const [amountReceived, setAmountReceived] = useState('');
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+
+    // DISCOUNT STATE
+    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100' | 'CORTESIA_PERCENT'>('NONE');
+    const [authorizedManager, setAuthorizedManager] = useState<{ id: string, name: string } | null>(null);
+    const [showPinModal, setShowPinModal] = useState(false);
+    const [pinInput, setPinInput] = useState('');
+    const [pinError, setPinError] = useState('');
+    const [cortesiaPercent, setCortesiaPercent] = useState('100');
+
+    // WHATSAPP PARSER
+    const [showWhatsAppParser, setShowWhatsAppParser] = useState(false);
+
+    // SEARCH
+    const [productSearch, setProductSearch] = useState('');
+
+    useEffect(() => {
+        async function loadMenu() {
+            try {
+                const [menuResult, rate] = await Promise.all([
+                    getMenuForPOSAction(),
+                    getExchangeRateValue(),
+                ]);
+                if (menuResult.success && menuResult.data) {
+                    setCategories(menuResult.data);
+                    if (menuResult.data.length > 0) setSelectedCategory(menuResult.data[0].id);
+                }
+                setExchangeRate(rate);
+            } catch (error) { console.error(error); } finally { setIsLoading(false); }
+        }
+        loadMenu();
+    }, []);
+
+    useEffect(() => {
+        if (selectedCategory) {
+            const cat = categories.find(c => c.id === selectedCategory);
+            if (cat) setMenuItems(cat.items);
+        }
+    }, [selectedCategory, categories]);
+
+    useEffect(() => {
+        if (paymentMethod !== 'CASH' && paymentMethod !== 'ZELLE' && discountType === 'DIVISAS_33') {
+            setDiscountType('NONE');
+        }
+    }, [paymentMethod, discountType]);
+
+    const filteredMenuItems = productSearch.trim()
+        ? categories.flatMap((c: any) => c.items as MenuItem[]).filter((i) =>
+              i.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+              i.sku?.toLowerCase().includes(productSearch.toLowerCase())
+          )
+        : menuItems;
+
+    const getCategoryIcon = (name: string) => {
+        if (name.includes('Tabla') || name.includes('Combo')) return '🍱';
+        if (name.includes('Queso')) return '🧀';
+        if (name.includes('Platos')) return '🍛';
+        // ... (resto igual)
+        return '📦';
+    };
+
+    const handleAddToCart = (item: MenuItem) => {
+        setSelectedItemForModifier(item);
+        setCurrentModifiers([]);
+        setItemQuantity(1);
+        setItemNotes('');
+        setShowModifierModal(true);
+    };
+
+    const removeFromCart = (i: number) => {
+        const nc = [...cart]; nc.splice(i, 1); setCart(nc);
+    };
+
+    // LOGICA ACTUALIZADA DE MODIFICADORES CON CANTIDAD
+    const updateModifierQuantity = (group: ModifierGroup, modifier: ModifierOption, change: number) => {
+        const currentInGroup = currentModifiers.filter(m => m.groupId === group.id);
+        const totalSelectedInGroup = currentInGroup.reduce((s, m) => s + m.quantity, 0);
+        const existingMod = currentModifiers.find(m => m.id === modifier.id && m.groupId === group.id);
+        const currentQty = existingMod ? existingMod.quantity : 0;
+
+        if (change > 0) {
+            if (group.maxSelections > 1 && totalSelectedInGroup >= group.maxSelections) return;
+            if (group.maxSelections === 1) {
+                if (totalSelectedInGroup >= 1 && existingMod) return;
+                if (totalSelectedInGroup >= 1 && !existingMod) {
+                    const others = currentModifiers.filter(m => m.groupId !== group.id);
+                    setCurrentModifiers([...others, {
+                        groupId: group.id, groupName: group.name,
+                        id: modifier.id, name: modifier.name,
+                        priceAdjustment: modifier.priceAdjustment, quantity: 1
+                    }]);
+                    return;
+                }
+            }
+        }
+
+        const newQty = currentQty + change;
+        if (newQty < 0) return;
+
+        let newModifiers = [...currentModifiers];
+        if (existingMod) {
+            if (newQty === 0) newModifiers = newModifiers.filter(m => !(m.id === modifier.id && m.groupId === group.id));
+            else newModifiers = newModifiers.map(m => (m.id === modifier.id && m.groupId === group.id) ? { ...m, quantity: newQty } : m);
+        } else if (newQty > 0) {
+            newModifiers.push({ groupId: group.id, groupName: group.name, id: modifier.id, name: modifier.name, priceAdjustment: modifier.priceAdjustment, quantity: newQty });
+        }
+        setCurrentModifiers(newModifiers);
+    };
+
+    const isGroupValid = (group: ModifierGroup) => {
+        if (!group.isRequired) return true;
+        const count = currentModifiers.filter(m => m.groupId === group.id).reduce((s, m) => s + m.quantity, 0);
+        return count >= group.minSelections;
+    };
+
+    const confirmAddToCart = () => {
+        if (!selectedItemForModifier) return;
+        if (!selectedItemForModifier.modifierGroups.every(g => isGroupValid(g.modifierGroup))) return;
+
+        const modTotal = currentModifiers.reduce((s, m) => s + (m.priceAdjustment * m.quantity), 0);
+        const lineTotal = (selectedItemForModifier.price + modTotal) * itemQuantity;
+
+        const explodedModifiers = currentModifiers.flatMap(m => Array(m.quantity).fill({ modifierId: m.id, name: m.name, priceAdjustment: m.priceAdjustment }));
+
+        setCart([...cart, {
+            menuItemId: selectedItemForModifier.id, name: selectedItemForModifier.name, quantity: itemQuantity, unitPrice: selectedItemForModifier.price,
+            modifiers: explodedModifiers, notes: itemNotes || undefined, lineTotal
+        }]);
+        setShowModifierModal(false); setSelectedItemForModifier(null);
+    };
+
+    const cartSubtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
+    const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
+    const cortesiaPercentNum = Math.min(100, Math.max(0, parseFloat(cortesiaPercent) || 0));
+    const deliveryFee = discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL;
+    const itemsAfterDiscount = discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal * (2 / 3)
+        : discountType === 'CORTESIA_100' ? 0
+        : discountType === 'CORTESIA_PERCENT' ? cartSubtotal * (1 - cortesiaPercentNum / 100)
+        : cartSubtotal;
+    const finalTotal = (discountType === 'CORTESIA_100') ? 0
+        : discountType === 'CORTESIA_PERCENT' ? itemsAfterDiscount + (cortesiaPercentNum >= 100 ? 0 : deliveryFee)
+        : itemsAfterDiscount + deliveryFee;
+    const paidAmount = parseFloat(amountReceived) || 0;
+
+    const handleCheckout = async () => {
+        if (cart.length === 0) return;
+        setIsProcessing(true);
+        try {
+            const result = await createSalesOrderAction({
+                orderType: 'DELIVERY',
+                customerName: customerName || 'Delivery',
+                customerPhone, customerAddress: customerAddress || 'N/A',
+                items: cart, paymentMethod, amountPaid: paidAmount || finalTotal,
+                discountType,
+                discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum : undefined,
+                authorizedById: authorizedManager?.id,
+                notes: `Dirección: ${customerAddress}`
+            });
+
+            if (result.success && result.data) {
+                const cfg = getPOSConfig();
+                if (cfg.printComandaOnDelivery) {
+                    printKitchenCommand({
+                        orderNumber: result.data.orderNumber, orderType: 'DELIVERY',
+                        customerName: `${customerName} (${customerPhone})`,
+                        items: cart.map(i => ({ name: i.name, quantity: i.quantity, modifiers: i.modifiers.map(m => m.name), notes: i.notes })),
+                        createdAt: new Date(), address: customerAddress
+                    });
+                }
+                const receiptData = {
+                    orderNumber: result.data.orderNumber,
+                    orderType: 'DELIVERY' as const,
+                    date: new Date(),
+                    cashierName: 'Delivery',
+                    customerName: customerName || undefined,
+                    customerPhone: customerPhone || undefined,
+                    customerAddress: customerAddress || undefined,
+                    items: cart.map(i => ({
+                        name: i.name,
+                        quantity: i.quantity,
+                        unitPrice: i.unitPrice,
+                        total: i.lineTotal,
+                        modifiers: i.modifiers.map(m => m.name)
+                    })),
+                    subtotal: cartSubtotal,
+                    discount: discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal / 3 + DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS : (discountType === 'CORTESIA_100' ? cartSubtotal + DELIVERY_FEE_NORMAL : 0),
+                    discountReason: (discountType === 'DIVISAS_33' && isPagoDivisas) || discountType === 'CORTESIA_100' ? 'Descuento aplicado' : undefined,
+                    deliveryFee: discountType === 'CORTESIA_100' ? 0 : deliveryFee,
+                    total: finalTotal
+                };
+                if (cfg.printReceiptOnDelivery) {
+                    printReceipt(receiptData);
+                }
+                setCart([]); setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); setPaymentMethod('TRANSFER'); setAmountReceived('');
+                setDiscountType('NONE'); setAuthorizedManager(null);
+            } else alert(result.message);
+        } catch (e) { console.error(e); alert('Error'); } finally { setIsProcessing(false); }
+    };
+
+    const handleDiscountSelect = (t: string) => {
+        if (t === 'CORTESIA_100') { setPinInput(''); setPinError(''); setCortesiaPercent('100'); setShowPinModal(true); }
+        else { setDiscountType(t as any); setAuthorizedManager(null); }
+    };
+    const handlePinSubmit = async () => {
+        const r = await validateManagerPinAction(pinInput);
+        if (r.success && r.data) {
+            setAuthorizedManager({ id: r.data.managerId, name: r.data.managerName });
+            const pct = parseFloat(cortesiaPercent);
+            setDiscountType(pct >= 100 ? 'CORTESIA_100' : 'CORTESIA_PERCENT');
+            setShowPinModal(false);
+        } else setPinError('PIN Inválido');
+    };
+    const handlePinKey = (k: string) => { if (k === 'clear') setPinInput(''); else if (k === 'back') setPinInput(p => p.slice(0, -1)); else setPinInput(p => p + k); };
+
+    if (isLoading) return <div className="text-white p-10">Cargando...</div>;
+
+    return (
+        <div className="min-h-screen bg-background text-foreground relative flex flex-col font-sans animate-in fade-in duration-700">
+            <div className="glass-panel px-6 py-4 fixed top-0 w-full z-30 shadow-2xl flex justify-between items-center h-24 border-b-primary/10">
+                <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 bg-blue-600 rounded-2xl flex items-center justify-center text-4xl shadow-lg shadow-blue-500/20">🛵</div>
+                    <div>
+                        <h1 className="text-3xl font-black tracking-tighter uppercase italic text-blue-600 dark:text-blue-400">Shanklish <span className="text-foreground">Delivery</span></h1>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+                            Sistema de Despacho Táctil CAPSULA
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="glass-panel p-2 rounded-2xl border-primary/5">
+                        <CurrencyCalculator totalUsd={finalTotal} deliveryFee={discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL} hasServiceFee={false} onRateUpdated={setExchangeRate} />
+                    </div>
+                    <button
+                        onClick={() => setShowWhatsAppParser(!showWhatsAppParser)}
+                        className={`capsula-btn min-h-0 py-3 px-6 text-sm ${showWhatsAppParser ? 'capsula-btn-primary bg-emerald-600 border-emerald-700' : 'capsula-btn-secondary'}`}
+                    >
+                        💬 WhatsApp
+                    </button>
+                    <div className="px-4 py-2 bg-secondary/30 rounded-xl border border-border font-black text-sm tabular-nums text-foreground/70">
+                        {new Date().toLocaleDateString('es-VE')}
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex h-screen pt-24 overflow-hidden">
+                <div className="flex-1 flex flex-col overflow-hidden bg-background">
+                    {/* WhatsApp Parser Panel */}
+                    {showWhatsAppParser ? (
+                        <div className="flex-1 overflow-y-auto p-6 pb-24 glass-panel m-4 rounded-3xl border-primary/5">
+                            <WhatsAppOrderParser
+                                onOrderReady={(items, name, phone, address) => {
+                                    setCart(items);
+                                    setCustomerName(name);
+                                    setCustomerPhone(phone);
+                                    setCustomerAddress(address);
+                                    setShowWhatsAppParser(false);
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            {/* Search bar */}
+                            <div className="px-6 py-4 bg-background border-b border-border">
+                                <div className="relative group">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary">🔍</span>
+                                    <input
+                                        type="text"
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        placeholder="Buscar producto por nombre o SKU..."
+                                        className="w-full bg-secondary/50 border border-border rounded-2xl py-4 pl-12 pr-12 text-base font-medium focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                                    />
+                                    {productSearch && (
+                                        <button
+                                            onClick={() => setProductSearch('')}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {/* Categories */}
+                            {!productSearch && (
+                                <div className="flex gap-3 px-6 py-4 bg-background border-b border-border overflow-x-auto no-scrollbar scroll-smooth">
+                                    {categories.map((cat: any) => (
+                                        <button 
+                                            key={cat.id} 
+                                            onClick={() => setSelectedCategory(cat.id)} 
+                                            className={`group shrink-0 px-6 py-3 rounded-2xl font-black text-sm transition-all active:scale-95 flex items-center gap-2 border-2 ${selectedCategory === cat.id ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20' : 'bg-card border-border text-foreground/50 hover:border-primary/30'}`}
+                                        >
+                                            <span className="text-xl group-hover:rotate-12 transition-transform">{getCategoryIcon(cat.name)}</span> {cat.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex-1 p-6 overflow-y-auto pb-24 scroll-smooth">
+                                {productSearch && (
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">
+                                        💡 {filteredMenuItems.length} productos coinciden con tu búsqueda
+                                    </p>
+                                )}
+                                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    {filteredMenuItems.map(item => (
+                                        <button 
+                                            key={item.id} 
+                                            onClick={() => handleAddToCart(item)} 
+                                            className="capsula-card group p-5 text-left h-40 flex flex-col justify-between border-primary/5 hover:border-primary/40 active:scale-[0.98]"
+                                        >
+                                            <div className="font-black text-base uppercase leading-tight tracking-tight group-hover:text-primary transition-colors">{item.name}</div>
+                                            <div className="flex items-end justify-between">
+                                                <div className="text-2xl font-black text-primary italic">
+                                                    <PriceDisplay usd={item.price} rate={exchangeRate} size="lg" showBs={false} />
+                                                </div>
+                                                <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0">
+                                                    ➕
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {filteredMenuItems.length === 0 && (
+                                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
+                                            <span className="text-6xl mb-4">🔍</span>
+                                            <p className="font-black uppercase tracking-widest">Sin resultados</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                        )}
+                </div>
+
+                <div className="w-96 bg-card border-l border-border flex flex-col shadow-2xl z-20">
+                    <div className="p-6 bg-secondary/20 border-b border-border space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-black text-lg uppercase tracking-tight flex items-center gap-2">📦 Entrega</h2>
+                            <span className="text-[10px] font-black bg-blue-500/10 text-blue-600 px-2 py-1 rounded-full border border-blue-500/20">NUEVA ORDEN</span>
+                        </div>
+                        <div className="space-y-3">
+                            <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="👤 Nombre Cliente" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all" />
+                            <input type="text" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="📞 Teléfono" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all" />
+                            <textarea value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="📍 Dirección exacta de entrega..." className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all h-24 resize-none" />
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-card/50 no-scrollbar">
+                        {cart.length === 0 && (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground/30 py-10">
+                                <span className="text-5xl mb-2">🛒</span>
+                                <p className="text-xs font-black uppercase tracking-widest">Carrito Vacío</p>
+                            </div>
+                        )}
+                        {cart.map((item, i) => (
+                            <div key={i} className="glass-panel p-4 rounded-2xl border-primary/5 flex justify-between group relative overflow-hidden active:scale-95 transition-transform">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/20"></div>
+                                <div>
+                                    <div className="font-black text-sm flex gap-2"><span className="text-primary tracking-tighter">x{item.quantity}</span> {item.name}</div>
+                                    <div className="text-[10px] uppercase font-bold text-muted-foreground mt-1 pl-5">{item.modifiers.map(m => m.name).join(' · ')}</div>
+                                    {item.notes && <div className="text-[10px] font-black text-blue-500 pl-5 italic mt-1 bg-blue-500/5 py-1 px-2 rounded-lg">💬 "{item.notes}"</div>}
+                                </div>
+                                <div className="text-right flex flex-col justify-between items-end">
+                                    <div className="font-black text-sm text-foreground">${item.lineTotal.toFixed(2)}</div>
+                                    <button onClick={() => removeFromCart(i)} className="h-6 w-6 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">🗑️</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="p-6 bg-secondary/30 border-t border-border space-y-4">
+                        <div className="capsula-card p-4 space-y-2 border-primary/10 shadow-lg">
+                            <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                                <span>Subtotal Orden</span>
+                                <PriceDisplay usd={cartSubtotal} rate={exchangeRate} size="sm" showBs={false} />
+                            </div>
+                            <div className="flex justify-between text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                                <span>🛵 Tarifa Delivery</span>
+                                <span>+${deliveryFee.toFixed(2)}</span>
+                            </div>
+                            {discountType === 'DIVISAS_33' && isPagoDivisas && (
+                                <div className="flex justify-between text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 p-2 rounded-lg">
+                                    <span>Descuento % Divisas</span>
+                                    <span>-${(cartSubtotal / 3 + DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS).toFixed(2)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between font-black text-xl text-foreground border-t border-border pt-2 mt-2">
+                                <span className="uppercase tracking-tighter italic">Total</span>
+                                <div className="text-primary italic">
+                                    <PriceDisplay usd={finalTotal} rate={exchangeRate} size="lg" showBs={false} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Descuentos y Pagos */}
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => handleDiscountSelect('NONE')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${discountType === 'NONE' ? 'bg-secondary text-foreground border-2 border-primary/50' : 'bg-background border border-border text-muted-foreground'}`}>Normal</button>
+                                <button onClick={() => isPagoDivisas && handleDiscountSelect('DIVISAS_33')} disabled={!isPagoDivisas} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${discountType === 'DIVISAS_33' ? 'bg-primary text-white shadow-lg shadow-primary/20' : isPagoDivisas ? 'bg-background border border-border text-primary' : 'bg-background opacity-30 grayscale cursor-not-allowed'}`}>Divisa -33%</button>
+                                <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`col-span-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'bg-background border border-border text-purple-600'}`}>
+                                    {(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT')
+                                        ? `🎁 Cortesía ${discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum + '%' : '100%'} — ${authorizedManager?.name || ''}`
+                                        : '🎁 Cortesía (Autorizar PIN)'}
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                {(['TRANSFER', 'MOBILE_PAY', 'CASH', 'ZELLE', 'CARD'] as const).map(m => (
+                                    <button key={m} onClick={() => setPaymentMethod(m)} className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 ${paymentMethod === m ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-background border border-border text-muted-foreground'}`}>
+                                        {PAYMENT_LABELS[m]}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
+                                <input
+                                    type="number"
+                                    value={amountReceived}
+                                    onChange={(e) => setAmountReceived(e.target.value)}
+                                    placeholder={`Recibido...`}
+                                    className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30"
+                                />
+                                <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
+                            </div>
+
+                            <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-2xl shadow-primary/30">
+                                {isProcessing ? 'PROCESANDO...' : `CONFIRMAR ORDEN`}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {showModifierModal && selectedItemForModifier && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-card glass-panel w-full max-w-lg rounded-3xl flex flex-col max-h-[90vh] shadow-2xl border-primary/20">
+                        <div className="p-6 border-b border-border flex justify-between items-center">
+                            <div>
+                                <h3 className="text-2xl font-black uppercase tracking-tight">{selectedItemForModifier.name}</h3>
+                                <div className="text-primary font-black text-2xl italic mt-1">
+                                    <PriceDisplay usd={selectedItemForModifier.price} rate={exchangeRate} size="lg" showBs={false} />
+                                </div>
+                            </div>
+                            <button onClick={() => setShowModifierModal(false)} className="h-12 w-12 rounded-full hover:bg-red-500/10 hover:text-red-500 transition-colors text-3xl flex items-center justify-center">&times;</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+                            {selectedItemForModifier.modifierGroups?.map((groupRel) => {
+                                const group = groupRel.modifierGroup;
+                                const totalSelector = currentModifiers.filter(m => m.groupId === group.id).reduce((s, m) => s + m.quantity, 0);
+                                const isValid = !group.isRequired || totalSelector >= group.minSelections;
+                                return (
+                                    <div key={group.id} className={`p-5 rounded-3xl border-2 transition-colors ${isValid ? 'border-border bg-secondary/20' : 'border-red-500 bg-red-500/5'}`}>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="font-black text-sm uppercase tracking-widest text-foreground/70">{group.name}</h4>
+                                            <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${isValid ? 'bg-primary/20 text-primary' : 'bg-red-500 text-white animate-bounce'}`}>
+                                                {totalSelector}/{group.maxSelections} {group.isRequired ? '• Requerido' : ''}
+                                            </span>
+                                        </div>
+                                        <div className="grid gap-3">
+                                            {group.modifiers.map(mod => {
+                                                const existing = currentModifiers.find(m => m.id === mod.id && m.groupId === group.id);
+                                                const qty = existing ? existing.quantity : 0;
+                                                const isMax = group.maxSelections > 1 && totalSelector >= group.maxSelections;
+                                                const isRadio = group.maxSelections === 1;
+                                                return (
+                                                    <div key={mod.id} className={`flex justify-between items-center p-4 rounded-2xl border-2 transition-all ${qty > 0 ? 'bg-primary/10 border-primary' : 'bg-background border-border hover:border-primary/30'}`}>
+                                                        <div className="font-bold text-sm">{mod.name}</div>
+                                                        {isRadio ? (
+                                                            <button 
+                                                                onClick={() => updateModifierQuantity(group, mod, 1)} 
+                                                                className={`h-8 w-8 rounded-full border-2 flex justify-center items-center transition-all ${qty > 0 ? 'bg-primary border-primary text-white scale-110 shadow-lg shadow-primary/30' : 'border-border hover:border-primary'}`}
+                                                            >
+                                                                {qty > 0 && '✓'}
+                                                            </button>
+                                                        ) : (
+                                                            <div className="flex items-center gap-3 bg-card p-1 rounded-2xl border border-border shadow-inner">
+                                                                <button onClick={() => updateModifierQuantity(group, mod, -1)} disabled={qty === 0} className={`h-8 w-8 rounded-xl font-black transition-all ${qty === 0 ? 'text-muted-foreground opacity-20' : 'bg-secondary text-foreground hover:bg-red-500 hover:text-white hover:scale-105'}`}>-</button>
+                                                                <span className="font-black text-lg w-6 text-center text-primary">{qty}</span>
+                                                                <button onClick={() => updateModifierQuantity(group, mod, 1)} disabled={isMax} className={`h-8 w-8 rounded-xl font-black transition-all ${isMax ? 'text-muted-foreground opacity-20' : 'bg-primary text-white hover:scale-105 shadow-lg shadow-primary/20'}`}>+</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                            
+                            <div className="bg-secondary/20 p-6 rounded-3xl border border-border">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 block">Instrucciones Especiales (Opcional)</label>
+                                <textarea value={itemNotes} onChange={e => setItemNotes(e.target.value)} className="w-full bg-background rounded-2xl p-4 h-24 text-sm font-bold border border-border focus:border-primary focus:ring-0 transition-all resize-none" placeholder="Escribe aquí si el cliente tiene alguna petición..." />
+                            </div>
+
+                            <div className="flex items-center justify-between glass-panel p-6 rounded-3xl border-primary/5">
+                                <span className="font-black uppercase tracking-tighter text-lg">Cantidad</span>
+                                <div className="flex items-center gap-2 bg-background p-1.5 rounded-2xl border border-border shadow-inner">
+                                    <button onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))} className="h-14 w-14 rounded-xl font-black text-2xl hover:bg-secondary transition-all active:scale-90">-</button>
+                                    <span className="w-16 text-center font-black text-3xl italic text-primary">{itemQuantity}</span>
+                                    <button onClick={() => setItemQuantity(itemQuantity + 1)} className="h-14 w-14 rounded-xl bg-primary text-white font-black text-2xl shadow-xl shadow-primary/30 hover:scale-105 active:scale-95">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-border flex gap-4">
+                            <button onClick={() => setShowModifierModal(false)} className="capsula-btn capsula-btn-secondary flex-1 py-5 text-sm">CANCELAR</button>
+                            <button onClick={confirmAddToCart} disabled={selectedItemForModifier?.modifierGroups.some(g => !isGroupValid(g.modifierGroup))} className="capsula-btn capsula-btn-primary flex-[2] py-5 text-sm shadow-xl shadow-primary/30">AGREGAR AL CARRITO</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showPinModal && (
+                <div className="fixed inset-0 bg-background/90 backdrop-blur-xl flex items-center justify-center z-[60] animate-in fade-in duration-500">
+                    <div className="bg-card glass-panel p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl border-purple-500/20">
+                        <div className="text-center mb-6">
+                            <div className="h-16 w-16 bg-purple-500/10 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4">🎁</div>
+                            <h3 className="font-black text-2xl uppercase tracking-tighter text-purple-600 dark:text-purple-400 italic">Autorizar Cortesía</h3>
+                            <p className="text-xs font-medium text-muted-foreground mt-1">Este descuento requiere validación de gerencia</p>
+                        </div>
+                        
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center mb-3">Selecciona el % de descuento</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {['25','50','75','100'].map(v => (
+                                        <button key={v} onClick={() => setCortesiaPercent(v)}
+                                            className={`py-3 rounded-2xl text-sm font-black transition-all active:scale-95 ${cortesiaPercent === v ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'bg-secondary text-muted-foreground hover:bg-purple-500/10 hover:text-purple-600'}`}>
+                                            {v}%
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="mt-3 relative">
+                                    <input type="number" min="1" max="100" value={cortesiaPercent}
+                                        onChange={e => setCortesiaPercent(e.target.value)}
+                                        className="w-full bg-secondary/50 border border-border rounded-2xl py-4 text-center font-black text-xl focus:border-purple-500 focus:outline-none transition-all placeholder:text-muted-foreground/30"
+                                        placeholder="Valor %" />
+                                    <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-purple-600">%</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center mb-3">Introduce tu PIN de Seguridad</label>
+                                <div className="bg-secondary/40 border border-border rounded-3xl p-6 text-4xl tracking-[1.5em] mb-4 font-black flex justify-center items-center h-24 text-purple-600 shadow-inner">
+                                    {pinInput.length > 0 ? pinInput.replace(/./g, '•') : <span className="text-muted-foreground/10 tracking-normal text-xl font-medium">MODO PIN...</span>}
+                                </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+                                        <button key={n} onClick={() => handlePinKey(n.toString())} className="h-16 rounded-2xl bg-secondary hover:bg-purple-500/10 hover:text-purple-600 font-black text-2xl transition-all active:scale-90 border border-border/50 shadow-sm">{n}</button>
+                                    ))}
+                                    <button onClick={() => handlePinKey('clear')} className="h-16 rounded-2xl bg-red-500/10 text-red-500 font-black text-lg hover:bg-red-500 hover:text-white transition-all active:scale-90 border border-red-500/20 shadow-sm">CLR</button>
+                                    <button key={0} onClick={() => handlePinKey('0')} className="h-16 rounded-2xl bg-secondary hover:bg-purple-500/10 hover:text-purple-600 font-black text-2xl transition-all active:scale-90 border border-border/50 shadow-sm">0</button>
+                                    <button onClick={() => handlePinKey('back')} className="h-16 rounded-2xl bg-secondary hover:bg-purple-500/10 hover:text-purple-600 font-black text-2xl transition-all active:scale-90 border border-border/50 shadow-sm">⌫</button>
+                                </div>
+                            </div>
+
+                            {pinError && <div className="bg-red-500/10 border border-red-500/20 text-red-600 text-xs font-black text-center py-3 rounded-2xl animate-bounce">{pinError}</div>}
+
+                            <div className="grid grid-cols-2 gap-4 pt-2">
+                                <button onClick={() => { setShowPinModal(false); setPinInput(''); }} className="capsula-btn capsula-btn-secondary py-4 font-black uppercase tracking-widest">Cerrar</button>
+                                <button onClick={handlePinSubmit} disabled={!pinInput} className="capsula-btn capsula-btn-primary bg-purple-600 border-purple-700 shadow-lg shadow-purple-500/20 py-4 font-black uppercase tracking-widest">Validar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

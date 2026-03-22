@@ -87,6 +87,9 @@ export async function registrarEntradaMercancia(
             return { success: false, message: 'Insumo no encontrado en el sistema' };
         }
 
+        const area = await prisma.area.findUnique({ where: { id: input.areaId } });
+        const areaName = area ? area.name : 'Almacén Desconocido';
+
         // 2. Convertir cantidad a unidad base si es diferente
         const conversionRate = getConversionRate(item.id, item.sku, input.unit);
         const quantityInBaseUnit = input.quantity * conversionRate;
@@ -137,7 +140,7 @@ export async function registrarEntradaMercancia(
                     // documentUrl: input.documentUrl,
                     // documentType: input.documentType || 'nota_entrega',
                     notes: input.notes,
-                    reason: `Entrada mercancía: ${input.quantity} ${input.unit}${input.referenceNumber ? ` - Ref: ${input.referenceNumber}` : ''}`,
+                    reason: `Entrada mercancía: ${input.quantity} ${input.unit} (${areaName})${input.referenceNumber ? ` - Ref: ${input.referenceNumber}` : ''}`,
                     createdById: finalUserId,
                 },
             });

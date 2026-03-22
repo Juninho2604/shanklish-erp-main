@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/server/db'; // Correct path from previous files
 import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 
@@ -93,5 +93,49 @@ export async function toggleUserStatus(userId: string, isActive: boolean) {
     } catch (error) {
         console.error('Error toggling user status:', error);
         return { success: false, message: 'Error al cambiar estado del usuario' };
+    }
+}
+
+/**
+ * Cambiar contraseña del usuario actual
+ */
+export async function changePasswordAction(currentPassword: string, newPassword: string) {
+    const session = await getSession();
+
+    if (!session?.id) {
+        return { success: false, message: 'No autorizado' };
+    }
+
+    try {
+        // 1. Obtener usuario actual
+        const user = await prisma.user.findUnique({
+            where: { id: session.id },
+        });
+
+        if (!user) {
+            return { success: false, message: 'Usuario no encontrado' };
+        }
+
+        // 2. Verificar contraseña actual (Comparación simple por ahora, igual que login)
+        if (user.passwordHash !== currentPassword) {
+            return { success: false, message: 'La contraseña actual es incorrecta' };
+        }
+
+        // 3. Validar nueva contraseña (longitud mínima)
+        if (newPassword.length < 6) {
+            return { success: false, message: 'La nueva contraseña debe tener al menos 6 caracteres' };
+        }
+
+        // 4. Actualizar contraseña
+        await prisma.user.update({
+            where: { id: session.id },
+            data: { passwordHash: newPassword },
+        });
+
+        return { success: true, message: 'Contraseña actualizada correctamente' };
+
+    } catch (error) {
+        console.error('Error changing password:', error);
+        return { success: false, message: 'Error al cambiar la contraseña' };
     }
 }

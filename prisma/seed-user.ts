@@ -18,10 +18,10 @@ async function main() {
     const user = await prisma.user.create({
         data: {
             email: 'admin@shanklish.com',
-            password: 'admin', // En prod usar hash
+            passwordHash: 'admin', // En prod usar hash real, esto es para dev
             firstName: 'Admin',
             lastName: 'Sistema',
-            role: 'ADMIN',
+            role: 'OWNER', // Actualizado a rol válido del enum
         }
     });
 

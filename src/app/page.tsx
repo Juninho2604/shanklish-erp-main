@@ -21,11 +21,15 @@ export default function HomePage() {
                         </div>
 
                         {/* Title */}
-                        <h1 className="mb-4 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 bg-clip-text text-5xl font-bold tracking-tight text-transparent sm:text-6xl lg:text-7xl">
-                            Shanklish Caracas
+                        <h1 className="mb-2 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 bg-clip-text text-5xl font-bold tracking-tight text-transparent sm:text-6xl lg:text-7xl">
+                            CAPSULA
                         </h1>
 
-                        <p className="mx-auto mb-2 max-w-2xl text-xl text-gray-600 dark:text-gray-300">
+                        <p className="mx-auto mb-2 max-w-2xl text-xl text-gray-800 font-medium dark:text-gray-200">
+                            Shanklish Caracas
+                        </p>
+
+                        <p className="mx-auto mb-2 max-w-2xl text-lg text-gray-600 dark:text-gray-300">
                             Sistema de Gestión Empresarial
                         </p>
 
@@ -34,10 +38,10 @@ export default function HomePage() {
                         </p>
 
                         {/* CTA Buttons */}
-                        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+                        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row px-4">
                             <Link
                                 href="/dashboard"
-                                className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-amber-500/30 transition-all hover:shadow-xl hover:shadow-amber-500/40"
+                                className="group relative inline-flex w-full sm:w-auto items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-amber-500/30 transition-all hover:shadow-xl hover:shadow-amber-500/40"
                             >
                                 <span className="relative z-10">Entrar al Sistema</span>
                                 <svg className="relative z-10 h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -97,7 +101,7 @@ export default function HomePage() {
             {/* Footer */}
             <footer className="border-t border-amber-200/50 bg-white/50 py-6 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-900/50">
                 <div className="mx-auto max-w-7xl px-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <p>© 2026 Shanklish Caracas. Sistema ERP v0.1.0</p>
+                    <p>© 2026 CAPSULA - Shanklish Caracas</p>
                 </div>
             </footer>
         </div>

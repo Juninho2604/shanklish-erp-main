@@ -172,28 +172,64 @@ shanklish-erp/
 
 ## Módulos del Sistema
 
-### Fase 1: Gerencia Operativa (Actual)
-- ✅ Inventario Multi-nivel
-- ✅ Recetas/BOM con sub-recetas
-- ✅ Cálculo de costos (COGS)
+### Fase 1: Gerencia Operativa (Activa - En Mejora Continua)
+- ✅ Inventario Multi-nivel (áreas: restaurante, almacén, producción)
+- ✅ Recetas/BOM con sub-recetas (FINISHED_GOOD, SUB_RECIPE, RAW_MATERIAL)
+- ✅ Cálculo de costos (COGS) - con recálculo manual por botón
 - ✅ Control de mermas/yield
 - ✅ Órdenes de producción
+- ✅ Transferencias entre almacenes (Requisiciones) - con flujo: Solicitud → Despacho → Recepción
+- ✅ Procesamiento de Proteínas (desposte multi-paso con plantillas)
+- ✅ Inventario Diario - apertura/cierre con items críticos por área
+- ✅ Auditorías de inventario retroactivas
+- ✅ Órdenes de Compra (con carga vía WhatsApp/OCR)
+- ✅ Préstamos entre operaciones
+- ✅ Historial de Movimientos
+
+### Módulo POS (Punto de Venta) - En Integración Activa
+- ✅ POS Restaurante - interfaz de cajera con categorías y modificadores
+- ✅ Menú con categorías, precios editables, activar/desactivar items
+- ✅ Órdenes de venta con descuento de inventario automático (por receta)
+- ✅ Métodos de pago: BS_POS, ZELLE, CASH_USD, MOBILE_PAY
+- ✅ Descuento automático 33% para pagos en divisas (Zelle/Efectivo USD)
+- ✅ Cortesías con % variable (0-100%) + descripción + autorización por PIN
+- ✅ Impresión de tickets (factura + comanda de cocina)
+- 🔄 Recetas vinculadas a Menú - auto-creación al agregar plato (EN PROGRESO)
+- 🔄 Descargo de inventario por receta al procesar venta (EN PROGRESO)
+- ⏳ POS Delivery - pendiente de integración completa
+- ⏳ Reportes de ventas detallados
 
 ### Fase 2: Administración
-- 👤 Gestión de usuarios
-- 🔐 Roles y permisos
-- ⚙️ Configuración del sistema
+- ✅ Gestión de usuarios (CRUD básico)
+- ✅ Roles y permisos (OWNER, OPS_MANAGER, CHEF, AREA_LEAD, etc.)
+- ✅ PIN de autorización para acciones sensibles
+- ⏳ Configuración del sistema
 
 ### Fase 3: Finanzas
-- 💰 Ingresos y egresos
-- 📊 Cuentas por pagar/cobrar
-- 📈 Reportes financieros
-- 🧾 Facturación
+- ⏳ Ingresos y egresos
+- ⏳ Cuentas por pagar/cobrar
+- ⏳ Reportes financieros
+- ⏳ Facturación
 
 ### Fase 4: RRHH
-- 👥 Gestión de empleados
-- 💵 Nómina
-- ⏰ Control de asistencia
+- ⏳ Gestión de empleados
+- ⏳ Nómina
+- ⏳ Control de asistencia
+
+---
+
+## Prioridades Actuales (Marzo 2026)
+
+### Prioridad 1 - Completar Integración POS ↔ Recetario
+- **Problema**: Los platos del Menú no tienen recetas creadas → no hay descargo automático de inventario
+- **Solución**: Al crear plato en Menú → auto-crear stub de receta → el chef completa los ingredientes
+- **Filtro de faltantes**: Módulo de Recetas muestra qué platos del Menú no tienen receta aún
+
+### Prioridad 2 - Módulo Inventario Diario
+- Apertura de día con inventario de productos críticos
+- Jefes de cocina/producción pueden crear productos nuevos al hacer transferencias
+- Al crear producto de venta final sin receta → auto-crear stub de receta
+- Aviso de coordinación de nomenclatura al crear productos nuevos
 
 ---
 
