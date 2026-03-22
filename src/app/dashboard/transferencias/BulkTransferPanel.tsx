@@ -105,48 +105,53 @@ export default function BulkTransferPanel({ areasList }: Props) {
     };
 
     return (
-        <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-6 dark:border-purple-900/50 dark:from-purple-900/10 dark:to-indigo-900/10">
-            <div className="mb-6">
-                <h3 className="flex items-center gap-2 text-lg font-semibold text-purple-900 dark:text-purple-300">
-                    ⚡ Transferencia Rápida por Categoría
-                </h3>
-                <p className="text-sm text-purple-600 dark:text-purple-400">
-                    Mueve TODO el stock de una categoría de un área a otra en un solo clic
-                </p>
+        <div className="capsula-card border-primary/20 bg-gradient-to-br from-background to-secondary/30 p-8">
+            <div className="mb-6 flex items-center justify-between">
+                <div>
+                    <h3 className="flex items-center gap-2 text-xl font-bold text-primary dark:text-primary">
+                        ⚡ Transferencia Rápida
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                        Mueve stock por categoría con un solo toque táctil
+                    </p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl">
+                    🚀
+                </div>
             </div>
 
             {/* Selectores */}
-            <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            <div className="mb-8 grid gap-6 sm:grid-cols-3">
                 {/* Categoría */}
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <div className="space-y-1.5">
+                    <label className="block text-sm font-bold text-foreground/80 ml-1">
                         Categoría
                     </label>
                     <select
                         value={selectedCategory}
                         onChange={e => setSelectedCategory(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-gray-900 shadow-sm focus:border-primary focus:ring-4 focus:ring-primary/10 dark:text-white min-h-[52px]"
                     >
-                        <option value="">Seleccionar categoría...</option>
+                        <option value="">Seleccionar...</option>
                         {categories.map(cat => (
                             <option key={cat.name} value={cat.name}>
-                                {cat.name} ({cat.count} items)
+                                {cat.name} ({cat.count})
                             </option>
                         ))}
                     </select>
                 </div>
 
                 {/* Origen */}
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <div className="space-y-1.5">
+                    <label className="block text-sm font-bold text-foreground/80 ml-1">
                         Desde (Origen)
                     </label>
                     <select
                         value={sourceAreaId}
                         onChange={e => setSourceAreaId(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-gray-900 shadow-sm focus:border-primary focus:ring-4 focus:ring-primary/10 dark:text-white min-h-[52px]"
                     >
-                        <option value="">Seleccionar origen...</option>
+                        <option value="">Seleccionar...</option>
                         {areasList.map(a => (
                             <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
@@ -154,16 +159,16 @@ export default function BulkTransferPanel({ areasList }: Props) {
                 </div>
 
                 {/* Destino */}
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <div className="space-y-1.5">
+                    <label className="block text-sm font-bold text-foreground/80 ml-1">
                         Hacia (Destino)
                     </label>
                     <select
                         value={targetAreaId}
                         onChange={e => setTargetAreaId(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-gray-900 shadow-sm focus:border-primary focus:ring-4 focus:ring-primary/10 dark:text-white min-h-[52px]"
                     >
-                        <option value="">Seleccionar destino...</option>
+                        <option value="">Seleccionar...</option>
                         {areasList.filter(a => a.id !== sourceAreaId).map(a => (
                             <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
@@ -173,33 +178,34 @@ export default function BulkTransferPanel({ areasList }: Props) {
 
             {/* Preview */}
             {isLoading ? (
-                <div className="py-8 text-center text-gray-500">
-                    <span className="animate-pulse">Cargando preview...</span>
+                <div className="py-12 text-center text-primary">
+                    <div className="inline-block animate-bounce text-3xl mb-2">🔄</div>
+                    <p className="font-bold animate-pulse">Preparando lotes...</p>
                 </div>
             ) : previewItems.length > 0 ? (
-                <div className="mb-6 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                <div className="mb-8 max-h-64 overflow-y-auto rounded-2xl border-2 border-border bg-card shadow-inner">
                     <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-gray-50 dark:bg-gray-700">
+                        <thead className="sticky top-0 bg-secondary/50 backdrop-blur-md">
                             <tr>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Producto</th>
-                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Stock a Transferir</th>
-                                <th className="w-10 px-4 py-2"></th>
+                                <th className="px-6 py-4 text-left font-bold text-foreground/70 uppercase tracking-wider">Producto</th>
+                                <th className="px-6 py-4 text-right font-bold text-foreground/70 uppercase tracking-wider">Stock</th>
+                                <th className="w-16 px-6 py-4"></th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        <tbody className="divide-y divide-border">
                             {previewItems.filter(i => !excludedIds.includes(i.id)).map(item => (
-                                <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    <td className="px-4 py-2 text-gray-900 dark:text-white">{item.name}</td>
-                                    <td className="px-4 py-2 text-right font-mono text-purple-600">
+                                <tr key={item.id} className="hover:bg-primary/5 transition-colors group">
+                                    <td className="px-6 py-4 font-medium text-foreground">{item.name}</td>
+                                    <td className="px-6 py-4 text-right font-mono font-bold text-primary">
                                         {formatNumber(item.currentStock)} {item.unit}
                                     </td>
-                                    <td className="px-4 py-2 text-center">
+                                    <td className="px-6 py-4 text-center">
                                         <button
                                             onClick={() => setExcludedIds([...excludedIds, item.id])}
-                                            className="text-gray-400 hover:text-red-500 transition-colors"
-                                            title="Excluir item de la transferencia"
+                                            className="h-10 w-10 flex items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all active:scale-90"
+                                            title="Excluir"
                                         >
-                                            <Trash2 className="h-4 w-4" />
+                                            <Trash2 className="h-5 w-5" />
                                         </button>
                                     </td>
                                 </tr>
@@ -212,11 +218,14 @@ export default function BulkTransferPanel({ areasList }: Props) {
             {/* Message */}
             {message && (
                 <div className={cn(
-                    "mb-4 rounded-lg px-4 py-2 text-sm font-medium",
-                    message.type === 'success' ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
-                        message.type === 'error' ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" :
-                            "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                    "mb-6 rounded-2xl p-4 text-sm font-bold flex items-center gap-3 animate-in fade-in zoom-in duration-300",
+                    message.type === 'success' ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-200" :
+                        message.type === 'error' ? "bg-red-100 text-red-800 border-2 border-red-200" :
+                            "bg-blue-100 text-blue-800 border-2 border-blue-200"
                 )}>
+                    <span className="text-xl">
+                        {message.type === 'success' ? '✅' : message.type === 'error' ? '❌' : 'ℹ️'}
+                    </span>
                     {message.text}
                 </div>
             )}
@@ -225,14 +234,16 @@ export default function BulkTransferPanel({ areasList }: Props) {
             <button
                 onClick={handleExecuteTransfer}
                 disabled={isExecuting || previewItems.length === 0 || !targetAreaId}
-                className="w-full rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+                className="capsula-btn capsula-btn-primary w-full text-lg shadow-primary/20"
             >
                 {isExecuting ? (
-                    <span className="flex items-center justify-center gap-2">
-                        <span className="animate-spin">⏳</span> Ejecutando...
+                    <span className="flex items-center justify-center gap-3">
+                        <span className="animate-spin text-2xl">⚡</span> Procesando transferencia...
                     </span>
                 ) : (
-                    <span>⚡ Transferir {previewItems.length - excludedIds.length} items de "{selectedCategory}"</span>
+                    <span className="flex items-center justify-center gap-2">
+                        🚀 Confirmar Movimiento de {previewItems.length - excludedIds.length} Items
+                    </span>
                 )}
             </button>
         </div>

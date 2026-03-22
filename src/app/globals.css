@@ -4,48 +4,62 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 37 40% 98%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 37 75% 53%;
+    --primary: 37 95% 45%; /* Amber Shanklish principal */
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 28 80% 59%;
+    --secondary: 37 30% 90%;
+    --secondary-foreground: 37 90% 20%;
+    --muted: 37 20% 94%;
+    --muted-foreground: 37 10% 40%;
+    --accent: 37 90% 55%;
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 37 75% 53%;
-    --radius: 0.5rem;
+    --border: 37 20% 88%;
+    --input: 37 20% 88%;
+    --ring: 37 95% 45%;
+    --radius: 1rem; /* Bordes más redondeados para tablet */
+    
+    /* CAPSULA INNOVATION TOKENS */
+    --tactile-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --tactile-shadow-raised: 0 10px 15px -3px rgba(145, 71, 0, 0.15), 0 4px 6px -2px rgba(145, 71, 0, 0.05);
+    --tactile-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+    --glass-background: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.5);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 37 75% 53%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 28 80% 59%;
-    --accent-foreground: 210 40% 98%;
+    --background: 37 50% 4%;
+    --foreground: 37 10% 98%;
+    --card: 37 40% 6%;
+    --card-foreground: 37 10% 98%;
+    --popover: 37 40% 6%;
+    --popover-foreground: 37 10% 98%;
+    --primary: 37 95% 53%;
+    --primary-foreground: 37 10% 10%;
+    --secondary: 37 30% 15%;
+    --secondary-foreground: 37 10% 98%;
+    --muted: 37 30% 12%;
+    --muted-foreground: 37 10% 65%;
+    --accent: 37 90% 60%;
+    --accent-foreground: 37 10% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 37 75% 53%;
+    --border: 37 30% 18%;
+    --input: 37 30% 18%;
+    --ring: 37 95% 53%;
+    
+    /* DARK CAPSULA INNOVATION TOKENS */
+    --tactile-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --tactile-shadow-raised: 0 10px 20px -5px rgba(0, 0, 0, 0.6);
+    --tactile-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.4);
+    --glass-background: rgba(15, 12, 10, 0.8);
+    --glass-border: rgba(255, 150, 0, 0.1);
   }
 }
 
@@ -60,41 +74,53 @@
 }
 
 @layer components {
+  /* BOTONES VIVOS - FEEDBACK TÁCTIL INNOVADOR */
+  .capsula-btn {
+    @apply relative inline-flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation min-h-[48px] px-6 rounded-xl font-bold;
+    box-shadow: var(--tactile-shadow);
+  }
+
+  .capsula-btn-primary {
+    @apply bg-gradient-to-br from-primary to-accent text-white border-b-4 border-primary/40 active:border-b-0 active:translate-y-[2px];
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+
+  .capsula-btn-secondary {
+    @apply bg-secondary text-secondary-foreground border-b-4 border-muted-foreground/20 active:border-b-0 active:translate-y-[2px];
+  }
+
+  /* TARJETAS CON PESO VISUAL */
+  .capsula-card {
+    @apply relative overflow-hidden rounded-2xl border bg-card p-6 transition-all duration-500 hover:translate-y-[-4px];
+    box-shadow: var(--tactile-shadow);
+  }
+
+  .capsula-card:hover {
+    box-shadow: var(--tactile-shadow-raised);
+  }
+
   .stat-card {
-    @apply relative overflow-hidden rounded-xl border bg-card p-6 shadow-sm transition-all duration-300 hover:shadow-md;
+    @apply capsula-card border-primary/10;
   }
   
   .stat-card::before {
     content: '';
-    @apply absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity duration-300;
+    @apply absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 transition-opacity duration-300;
   }
   
   .stat-card:hover::before {
     @apply opacity-100;
   }
 
-  .alert-badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
-  }
-
-  .alert-badge-critical {
-    @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
-  }
-
-  .alert-badge-warning {
-    @apply bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400;
-  }
-
-  .alert-badge-success {
-    @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400;
-  }
-
+  /* GLASSMORPHISM MEJORADO (CAPSULA MODERN) */
   .glass-panel {
-    @apply backdrop-blur-md bg-white/80 dark:bg-gray-900/80 border border-white/20 dark:border-gray-700/50;
+    @apply backdrop-blur-xl border;
+    background: var(--glass-background);
+    border-color: var(--glass-border);
   }
 
   .shimmer {
-    @apply relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/60 before:to-transparent;
+    @apply relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent;
   }
 }
 
