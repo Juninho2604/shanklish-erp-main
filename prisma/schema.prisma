@@ -1410,6 +1410,19 @@ model PaymentSplit {
 // TASA DE CAMBIO USD / BOLÍVARES (BCV)
 // ============================================================================
 
+// ============================================================================
+// CONFIGURACIÓN DEL SISTEMA (clave-valor persistente)
+// ============================================================================
+// Usada para guardar config de instalación sin depender de variables de entorno.
+// Clave: 'enabled_modules' → valor: JSON array de ids de módulos activos.
+
+model SystemConfig {
+  key       String   @id          // 'enabled_modules', 'business_name', etc.
+  value     String               // JSON string o texto plano
+  updatedAt DateTime @updatedAt
+  updatedBy String?              // userId quien lo cambió
+}
+
 model ExchangeRate {
   id            String   @id @default(cuid())
   rate          Float    // Bs por 1 USD

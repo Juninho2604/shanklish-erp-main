@@ -14,6 +14,7 @@ import { getModulesBySection, type ModuleDefinition } from '@/lib/constants/modu
 
 interface SidebarProps {
     initialUser?: any; // SessionPayload
+    enabledModuleIds?: string[]; // Viene de la BD vía DashboardLayout
 }
 
 /**
@@ -83,7 +84,7 @@ function SidebarSection({
     );
 }
 
-export function Sidebar({ initialUser }: SidebarProps) {
+export function Sidebar({ initialUser, enabledModuleIds }: SidebarProps) {
     const pathname = usePathname();
     const { user, login } = useAuthStore();
     const { sidebarOpen, closeSidebar } = useUIStore();
@@ -110,8 +111,9 @@ export function Sidebar({ initialUser }: SidebarProps) {
     const activeUser = user || (initialUser as any);
     const userRole = (activeUser?.role as string) || 'CHEF';
 
-    // Obtener módulos visibles según habilitación + rol
-    const sections = getModulesBySection(userRole);
+    // Obtener módulos visibles según habilitación (BD) + rol
+    // enabledModuleIds viene del servidor (DashboardLayout → BD), nunca del env var
+    const sections = getModulesBySection(userRole, enabledModuleIds);
 
     const roleInfo = userRole ? ROLE_INFO[userRole as UserRole] : null;
 

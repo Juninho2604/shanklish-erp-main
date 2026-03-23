@@ -410,17 +410,16 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
 
 /**
  * Obtener la lista de módulos habilitados para esta instancia.
- * Lee de la variable de entorno ENABLED_MODULES (comma-separated)
- * Si no existe, usa los módulos con enabledByDefault=true.
+ * NOTA: Esta función lee de env var (solo para fallback en cliente).
+ * En producción, usa getEnabledModulesFromDB() desde un Server Component.
  */
 export function getEnabledModuleIds(): string[] {
   const envModules = process.env.NEXT_PUBLIC_ENABLED_MODULES;
-  
+
   if (envModules) {
     return envModules.split(',').map(m => m.trim()).filter(Boolean);
   }
 
-  // Default: todos los que tienen enabledByDefault
   return MODULE_REGISTRY
     .filter(m => m.enabledByDefault)
     .map(m => m.id);
@@ -428,14 +427,17 @@ export function getEnabledModuleIds(): string[] {
 
 /**
  * Obtener módulos filtrados por:
- *  1. Si están habilitados en esta instancia
+ *  1. Si están habilitados (enabledIds explícito o env var)
  *  2. Si el usuario tiene el rol correcto
+ *
+ * @param userRole  - Rol del usuario autenticado
+ * @param enabledIds - Lista de IDs habilitados (viene de la BD, pasada desde el servidor)
  */
-export function getVisibleModules(userRole: string): ModuleDefinition[] {
-  const enabledIds = getEnabledModuleIds();
+export function getVisibleModules(userRole: string, enabledIds?: string[]): ModuleDefinition[] {
+  const ids = enabledIds ?? getEnabledModuleIds();
 
-  // module_config siempre visible para OWNER (para que pueda desbloquear módulos)
-  const visibleIds = new Set(enabledIds);
+  const visibleIds = new Set(ids);
+  // module_config siempre visible para OWNER
   if (userRole === 'OWNER') {
     visibleIds.add('module_config');
   }
@@ -444,22 +446,25 @@ export function getVisibleModules(userRole: string): ModuleDefinition[] {
     .filter(m => visibleIds.has(m.id))
     .filter(m => {
       const allowedRoles = MODULE_ROLE_ACCESS[m.id];
-      if (!allowedRoles) return true; // Sin restricción de rol
+      if (!allowedRoles) return true;
       return allowedRoles.includes(userRole);
     })
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 /**
- * Agrupar módulos visibles por sección del sidebar
+ * Agrupar módulos visibles por sección del sidebar.
+ *
+ * @param userRole   - Rol del usuario
+ * @param enabledIds - IDs habilitados desde la BD (pasados desde DashboardLayout)
  */
-export function getModulesBySection(userRole: string) {
-  const modules = getVisibleModules(userRole);
-  
+export function getModulesBySection(userRole: string, enabledIds?: string[]) {
+  const modules = getVisibleModules(userRole, enabledIds);
+
   return {
     operations: modules.filter(m => m.section === 'operations'),
-    sales: modules.filter(m => m.section === 'sales'),
-    games: modules.filter(m => m.section === 'games'),
-    admin: modules.filter(m => m.section === 'admin'),
+    sales:      modules.filter(m => m.section === 'sales'),
+    games:      modules.filter(m => m.section === 'games'),
+    admin:      modules.filter(m => m.section === 'admin'),
   };
 }
