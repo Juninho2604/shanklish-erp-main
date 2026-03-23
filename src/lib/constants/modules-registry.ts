@@ -364,6 +364,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     enabledByDefault: true,
     sortOrder: 520,
   },
+  {
+    id: 'tasa_cambio',
+    label: 'Tasa de Cambio',
+    description: 'Actualizar la tasa de cambio BCV diariamente',
+    icon: '💱',
+    href: '/dashboard/config/tasa-cambio',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 530,
+  },
 ];
 
 /**
@@ -406,6 +416,7 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   users: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER', 'AUDITOR'],
   roles_config: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   module_config: ['OWNER'], // Solo el OWNER puede activar/desactivar módulos
+  tasa_cambio: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
 };
 
 /**
@@ -427,13 +438,19 @@ export function getEnabledModuleIds(): string[] {
 
 /**
  * Obtener módulos filtrados por:
- *  1. Si están habilitados (enabledIds explícito o env var)
+ *  1. Si están habilitados a nivel de instalación (enabledIds explícito o env var)
  *  2. Si el usuario tiene el rol correcto
+ *  3. Si el usuario tiene acceso individual (userAllowedModules — null/undefined = sin restricción extra)
  *
- * @param userRole  - Rol del usuario autenticado
- * @param enabledIds - Lista de IDs habilitados (viene de la BD, pasada desde el servidor)
+ * @param userRole           - Rol del usuario autenticado
+ * @param enabledIds         - IDs habilitados en la instalación (desde la BD, vía DashboardLayout)
+ * @param userAllowedModules - IDs permitidos para este usuario específico (null = sin restricción extra)
  */
-export function getVisibleModules(userRole: string, enabledIds?: string[]): ModuleDefinition[] {
+export function getVisibleModules(
+  userRole: string,
+  enabledIds?: string[],
+  userAllowedModules?: string[] | null,
+): ModuleDefinition[] {
   const ids = enabledIds ?? getEnabledModuleIds();
 
   const visibleIds = new Set(ids);
@@ -442,6 +459,9 @@ export function getVisibleModules(userRole: string, enabledIds?: string[]): Modu
     visibleIds.add('module_config');
   }
 
+  // Si el usuario tiene permisos individuales, intersectar
+  const userFilter = userAllowedModules ? new Set(userAllowedModules) : null;
+
   return MODULE_REGISTRY
     .filter(m => visibleIds.has(m.id))
     .filter(m => {
@@ -449,17 +469,28 @@ export function getVisibleModules(userRole: string, enabledIds?: string[]): Modu
       if (!allowedRoles) return true;
       return allowedRoles.includes(userRole);
     })
+    .filter(m => {
+      // Si hay restricciones individuales, el módulo debe estar en la lista
+      // module_config nunca se filtra por allowedModules (siempre visible para OWNER)
+      if (!userFilter || m.id === 'module_config') return true;
+      return userFilter.has(m.id);
+    })
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 /**
  * Agrupar módulos visibles por sección del sidebar.
  *
- * @param userRole   - Rol del usuario
- * @param enabledIds - IDs habilitados desde la BD (pasados desde DashboardLayout)
+ * @param userRole           - Rol del usuario
+ * @param enabledIds         - IDs habilitados desde la BD (pasados desde DashboardLayout)
+ * @param userAllowedModules - IDs permitidos para este usuario (null = sin restricción extra)
  */
-export function getModulesBySection(userRole: string, enabledIds?: string[]) {
-  const modules = getVisibleModules(userRole, enabledIds);
+export function getModulesBySection(
+  userRole: string,
+  enabledIds?: string[],
+  userAllowedModules?: string[] | null,
+) {
+  const modules = getVisibleModules(userRole, enabledIds, userAllowedModules);
 
   return {
     operations: modules.filter(m => m.section === 'operations'),
