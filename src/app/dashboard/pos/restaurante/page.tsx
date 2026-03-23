@@ -777,7 +777,7 @@ export default function POSSportBarPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+      <div className="min-h-screen bg-background flex items-center justify-center text-white">
         <div className="text-center">
           <div className="text-4xl mb-4">🍸</div>
           <div className="text-xl font-bold">Cargando Restaurante...</div>
@@ -865,7 +865,7 @@ export default function POSSportBarPage() {
               </div>
             </div>
             {!layout && !layoutError && (
-              <div className="flex-1 text-center text-xs text-slate-500 py-2">Cargando...</div>
+              <div className="flex-1 text-center text-xs text-muted-foreground py-2">Cargando...</div>
             )}
             {layoutError && (
               <button onClick={loadData} className="flex-1 text-xs text-red-400 hover:text-red-300 py-2 text-center">
@@ -916,7 +916,7 @@ export default function POSSportBarPage() {
 
           {/* Selected table info & open tab CTA */}
           {selectedTable && (
-            <div className="border-t border-slate-800 p-3 bg-slate-900">
+            <div className="border-t border-border p-3 bg-card">
               {!activeTab ? (
                 <button
                   onClick={() => setShowOpenTabModal(true)}
@@ -927,16 +927,16 @@ export default function POSSportBarPage() {
               ) : (
                 <div className="space-y-1 text-xs">
                   <div className="font-bold text-emerald-300 truncate">{activeTab.customerLabel}</div>
-                  {activeTab.customerPhone && <div className="text-slate-400">📞 {activeTab.customerPhone}</div>}
-                  <div className="text-slate-400">
+                  {activeTab.customerPhone && <div className="text-muted-foreground">📞 {activeTab.customerPhone}</div>}
+                  <div className="text-muted-foreground">
                     Abrió:{" "}
                     <span className="text-white">
                       {activeTab.openedBy.firstName} {activeTab.openedBy.lastName}
                     </span>
-                    <span className="text-slate-500"> · {formatTime(activeTab.openedAt)}</span>
+                    <span className="text-muted-foreground"> · {formatTime(activeTab.openedAt)}</span>
                   </div>
                   {activeTab.assignedWaiter && (
-                    <div className="text-slate-400">
+                    <div className="text-muted-foreground">
                       Mesonero: <span className="text-white">{(activeTab as any).waiterLabel || "—"}</span>
                     </div>
                   )}
@@ -947,9 +947,9 @@ export default function POSSportBarPage() {
         </aside>
 
         {/* ══ CENTER: MENU ════════════════════════════════════════════════ */}
-        <main className="flex-1 flex flex-col border-r border-slate-800 bg-slate-950 overflow-hidden">
+        <main className="flex-1 flex flex-col border-r border-border bg-background overflow-hidden">
           {/* Search + Categories */}
-          <div className="p-3 border-b border-slate-800 space-y-2 shrink-0">
+          <div className="p-3 border-b border-border space-y-2 shrink-0">
             {/* Active tab banner */}
             {activeTab ? (
               <div className="bg-emerald-900/30 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs flex items-center justify-between">
@@ -962,29 +962,29 @@ export default function POSSportBarPage() {
                 </span>
               </div>
             ) : selectedTable ? (
-              <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-400">
+              <div className="bg-secondary border border-border rounded-xl px-3 py-2 text-xs text-muted-foreground">
                 {selectedTable.name} · Sin cuenta abierta — presiona &quot;Abrir cuenta&quot; para empezar
               </div>
             ) : (
-              <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-500">
+              <div className="bg-secondary border border-border rounded-xl px-3 py-2 text-xs text-muted-foreground">
                 Selecciona una mesa para empezar
               </div>
             )}
 
             {/* Search */}
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">🔍</span>
               <input
                 type="text"
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 placeholder={`Buscar producto... ${isPickupMode ? "(Modo Pickup)" : ""}`}
-                className={`w-full bg-slate-800 border ${isPickupMode ? "border-indigo-600/50" : "border-slate-700"} rounded-xl py-2 pl-9 pr-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500`}
+                className={`w-full bg-secondary border ${isPickupMode ? "border-indigo-600/50" : "border-border"} rounded-xl py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-foreground focus:outline-none focus:border-amber-500`}
               />
               {productSearch && (
                 <button
                   onClick={() => setProductSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
                 >
                   ✕
                 </button>
@@ -1000,7 +1000,7 @@ export default function POSSportBarPage() {
                     setSelectedCategory(cat.id);
                     setProductSearch("");
                   }}
-                  className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition ${selectedCategory === cat.id ? "bg-amber-500 text-black" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                  className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition ${selectedCategory === cat.id ? "bg-amber-500 text-black" : "bg-secondary text-foreground/70 hover:bg-muted"}`}
                 >
                   {cat.name}
                 </button>
@@ -1030,7 +1030,7 @@ export default function POSSportBarPage() {
                 </button>
               ))}
               {filteredMenuItems.length === 0 && (
-                <div className="col-span-full text-center text-slate-500 py-12 text-sm">
+                <div className="col-span-full text-center text-muted-foreground py-12 text-sm">
                   {productSearch ? `Sin resultados para "${productSearch}"` : "Sin productos en esta categoría"}
                 </div>
               )}
@@ -1039,9 +1039,9 @@ export default function POSSportBarPage() {
         </main>
 
         {/* ══ RIGHT: ACCOUNT PANEL ════════════════════════════════════════ */}
-        <aside className="w-80 xl:w-96 shrink-0 bg-slate-900/80 flex flex-col overflow-hidden">
+        <aside className="w-80 xl:w-96 shrink-0 bg-card/80 flex flex-col overflow-hidden">
           {isPickupMode ? (
-            <div className="flex-1 flex flex-col overflow-hidden bg-slate-800/80">
+            <div className="flex-1 flex flex-col overflow-hidden bg-secondary/80">
               <div className="p-4 border-b border-indigo-900/50 bg-indigo-900/20 space-y-2 shrink-0">
                 <h2 className="font-black text-lg text-indigo-300 flex items-center gap-2">
                   🛍️ Pickup - Venta Directa
@@ -1051,27 +1051,27 @@ export default function POSSportBarPage() {
                   value={pickupCustomerName}
                   onChange={(e) => setPickupCustomerName(e.target.value)}
                   placeholder="Nombre del Cliente..."
-                  className="w-full bg-slate-950/50 border border-indigo-500/30 rounded py-2 px-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  className="w-full bg-background/50 border border-indigo-500/30 rounded py-2 px-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                 />
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-2 relative">
                 {cart.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+                  <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
                     Carrito vacío
                   </div>
                 )}
                 {cart.map((item, idx) => (
                   <div
                     key={idx}
-                    className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex justify-between shadow-sm"
+                    className="bg-card p-3 rounded-xl border border-border flex justify-between shadow-sm"
                   >
                     <div>
                       <div className="font-bold text-sm">
                         <span className="text-indigo-400">x{item.quantity}</span> {item.name}
                       </div>
                       {item.modifiers.length > 0 && (
-                        <div className="text-xs text-slate-400 pl-4">
+                        <div className="text-xs text-muted-foreground pl-4">
                           {item.modifiers.map((m) => m.name).join(", ")}
                         </div>
                       )}
@@ -1090,12 +1090,12 @@ export default function POSSportBarPage() {
                 ))}
               </div>
 
-              <div className="p-4 bg-slate-900 border-t border-slate-800 space-y-3 shrink-0">
+              <div className="p-4 bg-card border-t border-border space-y-3 shrink-0">
                 {/* Descuento */}
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     onClick={clearDiscount}
-                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-slate-500 text-white ring-1 ring-white" : "bg-slate-800 hover:bg-slate-700"}`}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-muted-foreground/60 text-white ring-1 ring-white" : "bg-secondary hover:bg-muted"}`}
                   >
                     Normal
                   </button>
@@ -1103,13 +1103,13 @@ export default function POSSportBarPage() {
                     onClick={() => isPagoDivisas ? setDiscountType("DIVISAS_33") : undefined}
                     disabled={!isPagoDivisas}
                     title={!isPagoDivisas ? "Solo con Efectivo o Zelle" : ""}
-                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-indigo-600 text-white" : isPagoDivisas ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-800 text-slate-600 cursor-not-allowed opacity-50"}`}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-indigo-600 text-white" : isPagoDivisas ? "bg-secondary text-foreground/70 hover:bg-muted" : "bg-secondary text-foreground/50 cursor-not-allowed opacity-50"}`}
                   >
                     Divisas -33%
                   </button>
                   <button
                     onClick={openCortesiaModal}
-                    className={`col-span-2 py-1.5 text-xs font-bold rounded-lg transition ${(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                    className={`col-span-2 py-1.5 text-xs font-bold rounded-lg transition ${(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") ? "bg-purple-600 text-white" : "bg-secondary text-foreground/70 hover:bg-muted"}`}
                   >
                     {(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT")
                       ? `🎁 Cortesía ${discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum + "%" : "100%"}`
@@ -1185,7 +1185,7 @@ export default function POSSportBarPage() {
                         serviceFee: 0,
                       });
                     }}
-                    className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 border border-slate-600 text-sm"
+                    className="w-full py-3 bg-muted hover:bg-secondary/80 text-white rounded-xl font-bold flex items-center justify-center gap-2 border border-border text-sm"
                   >
                     🖨️ Imprimir factura {lastPickupOrder.orderNumber}
                   </button>
@@ -1193,7 +1193,7 @@ export default function POSSportBarPage() {
               </div>
             </div>
           ) : !activeTab ? (
-            <div className="flex-1 flex items-center justify-center p-6 text-center text-slate-400 text-sm">
+            <div className="flex-1 flex items-center justify-center p-6 text-center text-muted-foreground text-sm">
               {selectedTable
                 ? "Abre una cuenta para gestionar consumos"
                 : "Selecciona una mesa o usa Venta Directa (Pickup)"}
@@ -1201,32 +1201,32 @@ export default function POSSportBarPage() {
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Tab header */}
-              <div className="p-3 border-b border-slate-800 bg-slate-900 space-y-1.5 shrink-0">
+              <div className="p-3 border-b border-border bg-card space-y-1.5 shrink-0">
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="font-black text-base">{activeTab.customerLabel}</div>
                     {activeTab.customerPhone && (
-                      <div className="text-xs text-slate-400">📞 {activeTab.customerPhone}</div>
+                      <div className="text-xs text-muted-foreground">📞 {activeTab.customerPhone}</div>
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="text-xs text-slate-500 uppercase">Saldo</div>
+                    <div className="text-xs text-muted-foreground uppercase">Saldo</div>
                     <div className="text-xl font-black text-amber-400">
                       <PriceDisplay usd={activeTab.balanceDue} rate={exchangeRate} size="md" showBs={false} />
                     </div>
                   </div>
                 </div>
-                <div className="text-[10px] text-slate-500 space-y-0.5">
+                <div className="text-[10px] text-muted-foreground space-y-0.5">
                   <div>
                     🔓 Abrió:{" "}
-                    <span className="text-slate-300">
+                    <span className="text-foreground/70">
                       {activeTab.openedBy.firstName} {activeTab.openedBy.lastName}
                     </span>{" "}
                     · {formatDateTime(activeTab.openedAt)}
                   </div>
                   {(activeTab as any).waiterLabel && (
                     <div>
-                      👤 Mesonero: <span className="text-slate-300">{(activeTab as any).waiterLabel}</span>
+                      👤 Mesonero: <span className="text-foreground/70">{(activeTab as any).waiterLabel}</span>
                     </div>
                   )}
                   <div>
@@ -1240,28 +1240,28 @@ export default function POSSportBarPage() {
 
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {/* Temporary cart */}
-                <div className="rounded-xl border border-slate-700 bg-slate-800 p-3">
+                <div className="rounded-xl border border-border bg-secondary p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase">Carrito (nueva tanda)</span>
+                    <span className="text-xs font-bold text-muted-foreground uppercase">Carrito (nueva tanda)</span>
                     <span className="text-xs font-bold text-amber-400">
                       <PriceDisplay usd={cartTotal} rate={exchangeRate} size="sm" showBs={false} />
                     </span>
                   </div>
                   {cart.length === 0 ? (
-                    <div className="text-xs text-slate-500 text-center py-2">Agrega items del menú</div>
+                    <div className="text-xs text-muted-foreground text-center py-2">Agrega items del menú</div>
                   ) : (
                     <div className="space-y-1.5 max-h-36 overflow-y-auto">
                       {cart.map((item, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center justify-between text-xs bg-slate-900 rounded-lg px-2 py-1.5"
+                          className="flex items-center justify-between text-xs bg-card rounded-lg px-2 py-1.5"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="font-medium truncate">
                               {item.quantity}× {item.name}
                             </div>
                             {item.modifiers.length > 0 && (
-                              <div className="text-slate-500 truncate">
+                              <div className="text-muted-foreground truncate">
                                 {item.modifiers.map((m) => m.name).join(", ")}
                               </div>
                             )}
@@ -1282,7 +1282,7 @@ export default function POSSportBarPage() {
                   <button
                     onClick={handleSendToTab}
                     disabled={cart.length === 0 || isProcessing}
-                    className="mt-2 w-full py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-black transition disabled:opacity-40"
+                    className="mt-2 w-full py-2 bg-muted hover:bg-secondary/80 rounded-lg text-xs font-black transition disabled:opacity-40"
                   >
                     Agregar consumo a la cuenta →
                   </button>
@@ -1290,12 +1290,12 @@ export default function POSSportBarPage() {
 
                 {/* Consumed orders */}
                 {activeTab.orders.length > 0 && (
-                  <div className="rounded-xl border border-slate-700 bg-slate-800 p-3">
-                    <div className="text-xs font-bold text-slate-400 uppercase mb-2">Consumos cargados</div>
+                  <div className="rounded-xl border border-border bg-secondary p-3">
+                    <div className="text-xs font-bold text-muted-foreground uppercase mb-2">Consumos cargados</div>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {activeTab.orders.map((order) => (
-                        <div key={order.id} className="bg-slate-900 rounded-lg p-2">
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                        <div key={order.id} className="bg-card rounded-lg p-2">
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
                             <span>{order.orderNumber}</span>
                             <span className="flex items-center gap-1">
                               {order.createdBy && <span>{order.createdBy.firstName}</span>}·{" "}
@@ -1304,11 +1304,11 @@ export default function POSSportBarPage() {
                           </div>
                           {order.items.map((item) => (
                             <div key={item.id} className="flex items-center justify-between text-xs py-0.5">
-                              <span className="text-slate-300 flex-1 truncate">
+                              <span className="text-foreground/70 flex-1 truncate">
                                 {item.quantity}× {item.itemName}
                               </span>
                               <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                                <span className="text-slate-400">${item.lineTotal.toFixed(2)}</span>
+                                <span className="text-muted-foreground">${item.lineTotal.toFixed(2)}</span>
                                 <button
                                   onClick={() => openRemoveModal(order.id, item)}
                                   className="text-red-500 hover:text-red-400 text-[10px] font-bold border border-red-800/50 rounded px-1 py-0.5 hover:border-red-600"
@@ -1329,16 +1329,16 @@ export default function POSSportBarPage() {
                 )}
 
                 {/* Payment section */}
-                <div className="rounded-xl border border-slate-700 bg-slate-800 p-3">
-                  <div className="text-xs font-bold text-slate-400 uppercase mb-2">Cobrar cuenta</div>
+                <div className="rounded-xl border border-border bg-secondary p-3">
+                  <div className="text-xs font-bold text-muted-foreground uppercase mb-2">Cobrar cuenta</div>
 
                   {/* 1. Descuento */}
                   <div className="mb-3">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">1. Descuento</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">1. Descuento</p>
                     <div className="grid grid-cols-2 gap-1.5">
                       <button
                         onClick={clearDiscount}
-                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-slate-500 text-white ring-1 ring-white" : "bg-slate-900 text-slate-300 hover:bg-slate-700"}`}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "NONE" ? "bg-muted-foreground/60 text-white ring-1 ring-white" : "bg-card text-foreground/70 hover:bg-muted"}`}
                       >
                         Normal
                       </button>
@@ -1346,13 +1346,13 @@ export default function POSSportBarPage() {
                         onClick={() => isPagoDivisas && setDiscountType("DIVISAS_33")}
                         disabled={!isPagoDivisas}
                         title={!isPagoDivisas ? "Solo con Efectivo o Zelle" : "Descuento por pago en divisas"}
-                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-blue-600 text-white ring-1 ring-white" : isPagoDivisas ? "bg-slate-900 text-slate-300 hover:bg-slate-700" : "bg-slate-900 text-slate-600 cursor-not-allowed opacity-50"}`}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-blue-600 text-white ring-1 ring-white" : isPagoDivisas ? "bg-card text-foreground/70 hover:bg-muted" : "bg-card text-foreground/50 cursor-not-allowed opacity-50"}`}
                       >
                         Divisas -33%
                       </button>
                       <button
                         onClick={openCortesiaModal}
-                        className={`col-span-2 py-1.5 text-xs font-bold rounded-lg transition ${(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") ? "bg-purple-600 text-white ring-1 ring-purple-400" : "bg-slate-900 text-slate-300 hover:bg-slate-700"}`}
+                        className={`col-span-2 py-1.5 text-xs font-bold rounded-lg transition ${(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") ? "bg-purple-600 text-white ring-1 ring-purple-400" : "bg-card text-foreground/70 hover:bg-muted"}`}
                       >
                         {(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT")
                           ? `🎁 Cortesía ${discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum + "%" : "100%"} — ${authorizedManager?.name || ""}`
@@ -1374,13 +1374,13 @@ export default function POSSportBarPage() {
 
                   {/* 2. Método de pago */}
                   <div className="mb-3">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">2. Forma de pago</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">2. Forma de pago</p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
                         <button
                           key={m}
                           onClick={() => setPaymentMethod(m)}
-                          className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? "bg-amber-500 text-black" : "bg-slate-900 text-slate-300 hover:bg-slate-700"}`}
+                          className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? "bg-amber-500 text-black" : "bg-card text-foreground/70 hover:bg-muted"}`}
                         >
                           {PAYMENT_LABELS[m]}
                         </button>
@@ -1391,8 +1391,8 @@ export default function POSSportBarPage() {
                   {/* Resumen */}
                   {(() => {
                     return (
-                      <div className="bg-slate-900 rounded-lg px-3 py-2 mb-2 text-xs space-y-1">
-                        <div className="flex justify-between text-slate-400">
+                      <div className="bg-card rounded-lg px-3 py-2 mb-2 text-xs space-y-1">
+                        <div className="flex justify-between text-muted-foreground">
                           <span>Saldo</span>
                           <span>${activeTab.balanceDue.toFixed(2)}</span>
                         </div>
@@ -1407,11 +1407,11 @@ export default function POSSportBarPage() {
                             type="checkbox"
                             checked={serviceFeeIncluded}
                             onChange={(e) => setServiceFeeIncluded(e.target.checked)}
-                            className="rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
+                            className="rounded border-border bg-secondary text-amber-500 focus:ring-amber-500"
                           />
-                          <span className="text-slate-300">Incluir 10% servicio</span>
+                          <span className="text-foreground/70">Incluir 10% servicio</span>
                         </label>
-                        <div className="flex justify-between font-bold text-white border-t border-slate-700 pt-1">
+                        <div className="flex justify-between font-bold text-white border-t border-border pt-1">
                           <span>A cobrar</span>
                           <span>${paymentAmountToCharge.toFixed(2)}</span>
                         </div>
@@ -1429,7 +1429,7 @@ export default function POSSportBarPage() {
                     value={amountReceived}
                     onChange={(e) => setAmountReceived(e.target.value)}
                     placeholder={`Monto a recibir ($${paymentAmountToCharge.toFixed(2)})`}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
+                    className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
                   />
 
                   {/* CurrencyCalculator */}
@@ -1462,7 +1462,7 @@ export default function POSSportBarPage() {
                         return (
                           <div
                             key={p.id}
-                            className="flex justify-between items-center text-[10px] text-slate-400 bg-slate-900 rounded px-2 py-1"
+                            className="flex justify-between items-center text-[10px] text-muted-foreground bg-card rounded px-2 py-1"
                           >
                             <span>
                               {label}
@@ -1477,12 +1477,12 @@ export default function POSSportBarPage() {
                     </div>
                   )}
 
-                  <p className="mt-2 text-[10px] text-slate-500 text-center">La factura se imprime al registrar el pago. Reimprimir desde Historial de Ventas.</p>
+                  <p className="mt-2 text-[10px] text-muted-foreground text-center">La factura se imprime al registrar el pago. Reimprimir desde Historial de Ventas.</p>
                   {/* Close tab - permitir cerrar cuando no hay consumo (saldo 0) o ya se cobró */}
                   <button
                     onClick={handleCloseTab}
                     disabled={(Number(activeTab.balanceDue ?? 0) > 0.01) || isProcessing}
-                    className="mt-2 w-full py-2 border border-slate-600 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700 transition disabled:opacity-30"
+                    className="mt-2 w-full py-2 border border-border rounded-lg text-xs font-bold text-foreground/70 hover:bg-muted transition disabled:opacity-30"
                   >
                     Cerrar cuenta (saldo ${(Number(activeTab.balanceDue ?? 0)).toFixed(2)})
                   </button>
@@ -1497,20 +1497,20 @@ export default function POSSportBarPage() {
       {/* MODAL: ABRIR CUENTA                                              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showOpenTabModal && selectedTable && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="border-b border-slate-800 p-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-background/90 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black">Abrir cuenta — {selectedTable.name}</h3>
               <button
                 onClick={() => setShowOpenTabModal(false)}
-                className="text-slate-400 hover:text-white text-2xl leading-none"
+                className="text-muted-foreground hover:text-white text-2xl leading-none"
               >
                 ×
               </button>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">
+                <label className="block text-xs font-bold text-muted-foreground mb-1">
                   Nombre del cliente <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -1518,11 +1518,11 @@ export default function POSSportBarPage() {
                   value={openTabName}
                   onChange={(e) => setOpenTabName(e.target.value)}
                   placeholder="Ej: Juan Pérez"
-                  className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">
+                <label className="block text-xs font-bold text-muted-foreground mb-1">
                   Teléfono del cliente <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -1530,16 +1530,16 @@ export default function POSSportBarPage() {
                   value={openTabPhone}
                   onChange={(e) => setOpenTabPhone(e.target.value)}
                   placeholder="Ej: 0414-1234567"
-                  className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1">Número de personas</label>
+                  <label className="block text-xs font-bold text-muted-foreground mb-1">Número de personas</label>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setOpenTabGuests(Math.max(1, openTabGuests - 1))}
-                      className="w-9 h-9 bg-slate-800 rounded-lg font-bold text-lg"
+                      className="w-9 h-9 bg-secondary rounded-lg font-bold text-lg"
                     >
                       −
                     </button>
@@ -1553,11 +1553,11 @@ export default function POSSportBarPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1">Mesonero asignado</label>
+                  <label className="block text-xs font-bold text-muted-foreground mb-1">Mesonero asignado</label>
                   <select
                     value={openTabWaiter}
                     onChange={(e) => setOpenTabWaiter(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
+                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
                   >
                     <option value="">— Ninguno —</option>
                     <option value="1">Mesonero 1</option>
@@ -1567,10 +1567,10 @@ export default function POSSportBarPage() {
                 </div>
               </div>
             </div>
-            <div className="border-t border-slate-800 p-4 flex gap-3">
+            <div className="border-t border-border p-4 flex gap-3">
               <button
                 onClick={() => setShowOpenTabModal(false)}
-                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold text-sm transition"
+                className="flex-1 py-3 bg-secondary hover:bg-muted rounded-xl font-bold text-sm transition"
               >
                 Cancelar
               </button>
@@ -1590,21 +1590,21 @@ export default function POSSportBarPage() {
       {/* MODAL: PIN CAJERA — REGISTRAR PAGO                               */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showPaymentPinModal && activeTab && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl">
-            <div className="border-b border-slate-800 p-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-background/90 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black">🔐 Autorizar cobro</h3>
               <button
                 onClick={() => setShowPaymentPinModal(false)}
-                className="text-slate-400 hover:text-white text-2xl"
+                className="text-muted-foreground hover:text-white text-2xl"
               >
                 ×
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <div className="bg-slate-800 rounded-xl p-3 text-sm space-y-1">
+              <div className="bg-secondary rounded-xl p-3 text-sm space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Método:</span>
+                  <span className="text-muted-foreground">Método:</span>
                   <span className="font-bold">{PAYMENT_LABELS[paymentMethod]}</span>
                 </div>
                 {discountType === "DIVISAS_33" && activeTab && (
@@ -1614,18 +1614,18 @@ export default function POSSportBarPage() {
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Monto:</span>
+                  <span className="text-muted-foreground">Monto:</span>
                   <span className="font-black text-emerald-400 text-base">${paidAmount.toFixed(2)}</span>
                 </div>
                 {exchangeRate && (
-                  <div className="flex justify-between text-slate-500 text-xs">
+                  <div className="flex justify-between text-muted-foreground text-xs">
                     <span>Equivalente Bs:</span>
                     <span>Bs. {(paidAmount * exchangeRate).toFixed(2)}</span>
                   </div>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">PIN de cajera / gerente</label>
+                <label className="block text-xs font-bold text-muted-foreground mb-1">PIN de cajera / gerente</label>
                 <input
                   type="password"
                   inputMode="numeric"
@@ -1636,15 +1636,15 @@ export default function POSSportBarPage() {
                   }}
                   onKeyDown={(e) => e.key === "Enter" && handlePaymentPinConfirm()}
                   placeholder="••••••"
-                  className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-3 text-white text-center text-xl tracking-widest focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-3 text-white text-center text-xl tracking-widest focus:border-amber-500 focus:outline-none"
                 />
                 {paymentPinError && <p className="text-red-400 text-xs mt-1">{paymentPinError}</p>}
               </div>
             </div>
-            <div className="border-t border-slate-800 p-4 flex gap-3">
+            <div className="border-t border-border p-4 flex gap-3">
               <button
                 onClick={() => setShowPaymentPinModal(false)}
-                className="flex-1 py-3 bg-slate-800 rounded-xl font-bold text-sm"
+                className="flex-1 py-3 bg-secondary rounded-xl font-bold text-sm"
               >
                 Cancelar
               </button>
@@ -1665,18 +1665,18 @@ export default function POSSportBarPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showCortesiaModal && (
         <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-purple-800/60 rounded-2xl w-full max-w-sm shadow-2xl">
-            <div className="border-b border-slate-800 p-5 flex items-center justify-between">
+          <div className="bg-card border border-purple-800/60 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-purple-300">🎁 Cortesía</h3>
-              <button onClick={() => setShowCortesiaModal(false)} className="text-slate-400 hover:text-white text-2xl">×</button>
+              <button onClick={() => setShowCortesiaModal(false)} className="text-muted-foreground hover:text-white text-2xl">×</button>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">% de Cortesía</label>
+                <label className="block text-xs font-bold text-muted-foreground mb-1">% de Cortesía</label>
                 <div className="flex gap-2 mb-2">
                   {["25", "50", "75", "100"].map(v => (
                     <button key={v} onClick={() => setCortesiaPercent(v)}
-                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${cortesiaPercent === v ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${cortesiaPercent === v ? "bg-purple-600 text-white" : "bg-secondary text-foreground/70 hover:bg-muted"}`}>
                       {v}%
                     </button>
                   ))}
@@ -1685,28 +1685,28 @@ export default function POSSportBarPage() {
                   type="number" min="1" max="100"
                   value={cortesiaPercent}
                   onChange={e => setCortesiaPercent(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-white text-center text-lg font-bold focus:border-purple-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-center text-lg font-bold focus:border-purple-500 focus:outline-none"
                   placeholder="% personalizado"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">PIN de Gerente / Dueño</label>
-                <div className="bg-slate-800 p-3 rounded-xl text-2xl tracking-widest text-center font-mono mb-3 min-h-[3rem]">
+                <label className="block text-xs font-bold text-muted-foreground mb-1">PIN de Gerente / Dueño</label>
+                <div className="bg-secondary p-3 rounded-xl text-2xl tracking-widest text-center font-mono mb-3 min-h-[3rem]">
                   {cortesiaPin.replace(/./g, "•")}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {[1,2,3,4,5,6,7,8,9,0].map(n => (
                     <button key={n} onClick={() => handleCortesiaPinKey(n.toString())}
-                      className="bg-slate-700 hover:bg-slate-600 rounded-lg py-3 font-bold text-xl">{n}</button>
+                      className="bg-muted hover:bg-secondary/80 rounded-lg py-3 font-bold text-xl">{n}</button>
                   ))}
                   <button onClick={() => handleCortesiaPinKey("clear")} className="bg-red-900 hover:bg-red-800 rounded-lg py-3 font-bold text-red-200 text-sm">C</button>
-                  <button onClick={() => handleCortesiaPinKey("back")} className="bg-slate-600 hover:bg-slate-500 rounded-lg py-3 font-bold">⌫</button>
+                  <button onClick={() => handleCortesiaPinKey("back")} className="bg-secondary hover:bg-muted-foreground/60 rounded-lg py-3 font-bold">⌫</button>
                 </div>
                 {cortesiaPinError && <p className="text-red-400 text-xs mt-2 text-center">{cortesiaPinError}</p>}
               </div>
             </div>
-            <div className="border-t border-slate-800 p-4 flex gap-3">
-              <button onClick={() => setShowCortesiaModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl font-bold text-sm">Cancelar</button>
+            <div className="border-t border-border p-4 flex gap-3">
+              <button onClick={() => setShowCortesiaModal(false)} className="flex-1 py-3 bg-secondary rounded-xl font-bold text-sm">Cancelar</button>
               <button onClick={handleCortesiaPinConfirm} disabled={!cortesiaPin} className="flex-[2] py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-xl font-black text-sm transition">
                 Aplicar Cortesía
               </button>
@@ -1719,11 +1719,11 @@ export default function POSSportBarPage() {
       {/* MODAL: ELIMINAR ITEM (PIN + JUSTIFICACIÓN)                       */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showRemoveModal && removeTarget && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-red-900/50 rounded-2xl w-full max-w-sm shadow-2xl">
-            <div className="border-b border-slate-800 p-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-background/90 flex items-center justify-center p-4">
+          <div className="bg-card border border-red-900/50 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-red-400">🗑️ Eliminar item</h3>
-              <button onClick={() => setShowRemoveModal(false)} className="text-slate-400 hover:text-white text-2xl">
+              <button onClick={() => setShowRemoveModal(false)} className="text-muted-foreground hover:text-white text-2xl">
                 ×
               </button>
             </div>
@@ -1735,7 +1735,7 @@ export default function POSSportBarPage() {
                 <div className="text-red-400 font-black">−${removeTarget.lineTotal.toFixed(2)}</div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">
+                <label className="block text-xs font-bold text-muted-foreground mb-1">
                   Justificación <span className="text-red-400">*</span>
                 </label>
                 <textarea
@@ -1746,11 +1746,11 @@ export default function POSSportBarPage() {
                   }}
                   placeholder="Ej: Error de pedido, cliente cambió de opinión..."
                   rows={2}
-                  className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-white text-sm resize-none focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-sm resize-none focus:border-amber-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">
+                <label className="block text-xs font-bold text-muted-foreground mb-1">
                   PIN de cajera / gerente <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -1763,15 +1763,15 @@ export default function POSSportBarPage() {
                   }}
                   onKeyDown={(e) => e.key === "Enter" && handleRemoveItem()}
                   placeholder="••••••"
-                  className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-3 text-white text-center text-xl tracking-widest focus:border-red-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-3 text-white text-center text-xl tracking-widest focus:border-red-500 focus:outline-none"
                 />
                 {removeError && <p className="text-red-400 text-xs mt-1">{removeError}</p>}
               </div>
             </div>
-            <div className="border-t border-slate-800 p-4 flex gap-3">
+            <div className="border-t border-border p-4 flex gap-3">
               <button
                 onClick={() => setShowRemoveModal(false)}
-                className="flex-1 py-3 bg-slate-800 rounded-xl font-bold text-sm"
+                className="flex-1 py-3 bg-secondary rounded-xl font-bold text-sm"
               >
                 Cancelar
               </button>
@@ -1791,14 +1791,14 @@ export default function POSSportBarPage() {
       {/* MODAL: MODIFICADORES                                              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showModifierModal && selectedItemForModifier && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900">
-            <div className="border-b border-slate-800 p-5 flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4 text-foreground">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="border-b border-border p-5 flex items-start justify-between">
               <div>
-                <h3 className="text-xl font-black">{selectedItemForModifier.name}</h3>
+                <h3 className="text-xl font-black text-white">{selectedItemForModifier.name}</h3>
                 <p className="mt-1 text-lg font-bold text-amber-400">${selectedItemForModifier.price.toFixed(2)}</p>
               </div>
-              <button onClick={() => setShowModifierModal(false)} className="text-slate-400 hover:text-white text-2xl">
+              <button onClick={() => setShowModifierModal(false)} className="text-muted-foreground hover:text-white text-2xl">
                 ×
               </button>
             </div>
@@ -1810,13 +1810,13 @@ export default function POSSportBarPage() {
                   .filter((m) => m.groupId === group.id)
                   .reduce((s, m) => s + m.quantity, 0);
                 return (
-                  <div key={group.id} className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+                  <div key={group.id} className="rounded-xl border border-border bg-secondary p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="font-bold">
+                      <span className="font-bold text-white">
                         {group.name}
                         {group.isRequired && <span className="text-red-400 ml-1 text-xs">*</span>}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-muted-foreground">
                         {totalSel}/{group.maxSelections}
                       </span>
                     </div>
@@ -1830,39 +1830,39 @@ export default function POSSportBarPage() {
                           return (
                             <div
                               key={modifier.id}
-                              className="flex items-center justify-between rounded-lg bg-slate-900 px-3 py-2"
+                              className="flex items-center justify-between rounded-lg bg-card px-3 py-2"
                             >
                               <div>
-                                <div className="text-sm font-medium">{modifier.name}</div>
+                                <div className="text-sm font-medium text-foreground">{modifier.name}</div>
                                 {modifier.priceAdjustment !== 0 && (
-                                  <div className="text-xs text-slate-400">+${modifier.priceAdjustment.toFixed(2)}</div>
+                                  <div className="text-xs text-muted-foreground">+${modifier.priceAdjustment.toFixed(2)}</div>
                                 )}
                               </div>
                               {isRadio ? (
                                 <button
                                   onClick={() => updateModifierQuantity(group, modifier, 1)}
-                                  className={`h-7 w-7 rounded-full border text-sm ${qty > 0 ? "border-amber-500 bg-amber-500 text-black" : "border-slate-500"}`}
+                                  className={`h-7 w-7 rounded-full border text-sm ${qty > 0 ? "border-amber-500 bg-amber-500 text-black" : "border-muted-foreground/50"}`}
                                 >
                                   {qty > 0 ? "✓" : ""}
                                 </button>
                               ) : (
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => updateModifierQuantity(group, modifier, -1)}
-                                    className="h-8 w-8 rounded-lg bg-slate-700 font-bold"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="w-5 text-center font-black text-amber-400">{qty}</span>
-                                  <button
-                                    onClick={() => updateModifierQuantity(group, modifier, 1)}
-                                    className="h-8 w-8 rounded-lg bg-amber-600 font-bold"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => updateModifierQuantity(group, modifier, -1)}
+                                      className="h-8 w-8 rounded-lg bg-muted font-bold text-foreground"
+                                    >
+                                      −
+                                    </button>
+                                    <span className="w-5 text-center font-black text-amber-400">{qty}</span>
+                                    <button
+                                      onClick={() => updateModifierQuantity(group, modifier, 1)}
+                                      className="h-8 w-8 rounded-lg bg-amber-600 font-bold text-white"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                           );
                         })}
                     </div>
@@ -1870,29 +1870,29 @@ export default function POSSportBarPage() {
                 );
               })}
 
-              <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-                <label className="block text-xs font-bold text-slate-400 mb-2">Notas</label>
+              <div className="rounded-xl border border-border bg-secondary p-4">
+                <label className="block text-xs font-bold text-muted-foreground mb-2">Notas</label>
                 <textarea
                   value={itemNotes}
                   onChange={(e) => setItemNotes(e.target.value)}
-                  className="h-16 w-full resize-none rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                  className="h-16 w-full resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-amber-500 focus:outline-none"
                   placeholder="Sin hielo, extra limón..."
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800 p-4">
-                <span className="font-bold">Cantidad</span>
+              <div className="flex items-center justify-between rounded-xl border border-border bg-secondary p-4">
+                <span className="font-bold text-white">Cantidad</span>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))}
-                    className="h-10 w-10 rounded-full bg-slate-700 font-bold text-xl"
+                    className="h-10 w-10 rounded-full bg-muted font-bold text-xl text-foreground"
                   >
                     −
                   </button>
-                  <span className="w-8 text-center text-xl font-black">{itemQuantity}</span>
+                  <span className="w-8 text-center text-xl font-black text-foreground">{itemQuantity}</span>
                   <button
                     onClick={() => setItemQuantity(itemQuantity + 1)}
-                    className="h-10 w-10 rounded-full bg-amber-600 font-bold text-xl"
+                    className="h-10 w-10 rounded-full bg-amber-600 font-bold text-xl text-white"
                   >
                     +
                   </button>
@@ -1900,17 +1900,17 @@ export default function POSSportBarPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 border-t border-slate-800 p-5">
+            <div className="flex gap-3 border-t border-border p-5">
               <button
                 onClick={() => setShowModifierModal(false)}
-                className="flex-1 rounded-xl bg-slate-700 py-3 font-bold"
+                className="flex-1 rounded-xl bg-muted py-3 font-bold text-foreground"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmAddToCart}
                 disabled={selectedItemForModifier.modifierGroups.some((g) => !isGroupValid(g.modifierGroup))}
-                className="flex-[2] rounded-xl bg-amber-600 hover:bg-amber-500 py-3 font-black transition disabled:opacity-50"
+                className="flex-[2] rounded-xl bg-amber-600 hover:bg-amber-500 py-3 font-black transition disabled:opacity-50 text-white"
               >
                 Agregar al carrito
               </button>
