@@ -358,3 +358,160 @@ export async function updateItemCostAction(
         return { success: false, message: `Error: ${error}` };
     }
 }
+
+// ============================================================================
+// MARGEN POR PLATO
+// ============================================================================
+
+export type MarginStatus = 'COMPLETE' | 'PARTIAL_COSTS' | 'NO_RECIPE' | 'EMPTY_RECIPE';
+
+export interface DishMargin {
+    id: string;
+    sku: string;
+    name: string;
+    categoryName: string;
+    price: number;
+    recipeCost: number;           // Costo total de ingredientes en USD
+    margin: number;               // Precio - Costo
+    marginPct: number;            // (Margen / Precio) × 100
+    ingredientCount: number;
+    missingCostCount: number;     // Cuántos ingredientes no tienen costo registrado
+    status: MarginStatus;
+}
+
+export interface DishMarginsResult {
+    success: boolean;
+    data?: DishMargin[];
+    summary?: {
+        total: number;
+        withFullData: number;
+        avgMarginPct: number;
+        atRisk: number;           // Margen < 30%
+        healthy: number;          // Margen >= 50%
+        bestDish: string | null;
+        worstDish: string | null;
+    };
+    message?: string;
+}
+
+export async function getDishMarginsAction(): Promise<DishMarginsResult> {
+    try {
+        const session = await getSession();
+        if (!session) return { success: false, message: 'No autorizado' };
+
+        // 1. Obtener todos los items de menú activos con categoría
+        const menuItems = await prisma.menuItem.findMany({
+            where: { isActive: true },
+            include: { category: { select: { name: true } } },
+            orderBy: [{ categoryId: 'asc' }, { name: 'asc' }],
+        });
+
+        // 2. Obtener recetas con ingredientes y costos
+        const recipeIds = menuItems.map(m => m.recipeId).filter(Boolean) as string[];
+        const recipes = recipeIds.length
+            ? await prisma.recipe.findMany({
+                where: { id: { in: recipeIds }, isActive: true },
+                include: {
+                    ingredients: {
+                        include: {
+                            ingredientItem: {
+                                include: {
+                                    costHistory: {
+                                        where: { effectiveTo: null },
+                                        orderBy: { effectiveFrom: 'desc' },
+                                        take: 1,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            })
+            : [];
+
+        const recipeMap = new Map(recipes.map(r => [r.id, r]));
+
+        // 3. Calcular márgenes
+        const dishes: DishMargin[] = menuItems.map(item => {
+            const price = item.price;
+
+            if (!item.recipeId) {
+                return {
+                    id: item.id, sku: item.sku, name: item.name,
+                    categoryName: item.category.name,
+                    price, recipeCost: 0, margin: price, marginPct: 100,
+                    ingredientCount: 0, missingCostCount: 0, status: 'NO_RECIPE' as MarginStatus,
+                };
+            }
+
+            const recipe = recipeMap.get(item.recipeId);
+            if (!recipe) {
+                return {
+                    id: item.id, sku: item.sku, name: item.name,
+                    categoryName: item.category.name,
+                    price, recipeCost: 0, margin: price, marginPct: 100,
+                    ingredientCount: 0, missingCostCount: 0, status: 'NO_RECIPE' as MarginStatus,
+                };
+            }
+
+            if (recipe.ingredients.length === 0) {
+                return {
+                    id: item.id, sku: item.sku, name: item.name,
+                    categoryName: item.category.name,
+                    price, recipeCost: 0, margin: price, marginPct: 100,
+                    ingredientCount: 0, missingCostCount: 0, status: 'EMPTY_RECIPE' as MarginStatus,
+                };
+            }
+
+            let recipeCost = 0;
+            let missingCostCount = 0;
+
+            for (const ing of recipe.ingredients) {
+                const costRecord = ing.ingredientItem.costHistory[0];
+                if (!costRecord) {
+                    missingCostCount++;
+                } else {
+                    recipeCost += Number(costRecord.costPerUnit) * ing.quantity;
+                }
+            }
+
+            const margin = price - recipeCost;
+            const marginPct = price > 0 ? (margin / price) * 100 : 0;
+            const status: MarginStatus = missingCostCount > 0 ? 'PARTIAL_COSTS' : 'COMPLETE';
+
+            return {
+                id: item.id, sku: item.sku, name: item.name,
+                categoryName: item.category.name,
+                price, recipeCost, margin, marginPct,
+                ingredientCount: recipe.ingredients.length,
+                missingCostCount, status,
+            };
+        });
+
+        // 4. Summary (solo platos con datos completos)
+        const complete = dishes.filter(d => d.status === 'COMPLETE');
+        const avgMarginPct = complete.length
+            ? complete.reduce((s, d) => s + d.marginPct, 0) / complete.length
+            : 0;
+        const atRisk = complete.filter(d => d.marginPct < 30).length;
+        const healthy = complete.filter(d => d.marginPct >= 50).length;
+        const sorted = [...complete].sort((a, b) => b.marginPct - a.marginPct);
+
+        return {
+            success: true,
+            data: dishes.sort((a, b) => a.marginPct - b.marginPct), // menor margen primero
+            summary: {
+                total: dishes.length,
+                withFullData: complete.length,
+                avgMarginPct: Math.round(avgMarginPct * 10) / 10,
+                atRisk,
+                healthy,
+                bestDish: sorted[0]?.name ?? null,
+                worstDish: sorted[sorted.length - 1]?.name ?? null,
+            },
+        };
+    } catch (error) {
+        console.error('[costos] getDishMarginsAction error:', error);
+        return { success: false, message: 'Error calculando márgenes' };
+    }
+}
