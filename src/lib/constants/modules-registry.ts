@@ -194,6 +194,17 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     tags: ['food'],
   },
   {
+    id: 'sku_studio',
+    label: 'SKU Studio',
+    description: 'Creación guiada de productos con familias y plantillas. Chips de tipo, unidad y rol operativo.',
+    icon: '🎨',
+    href: '/dashboard/sku-studio',
+    section: 'operations',
+    enabledByDefault: true,
+    sortOrder: 106,
+    tags: ['sku', 'familias', 'plantillas', 'inventario'],
+  },
+  {
     id: 'asistente',
     label: 'Asistente de Nomenclatura',
     description: 'Asistente guiado para crear insumos con nombres y unidades estandarizadas, y verificar recetas vinculadas al menú',
@@ -389,6 +400,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     sortOrder: 500,
   },
   {
+    id: 'modulos_usuario',
+    label: 'Módulos por Usuario',
+    description: 'Configura qué módulos puede ver cada usuario en su menú, de forma individual.',
+    icon: '🧩',
+    href: '/dashboard/config/modulos-usuario',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 503,
+  },
+  {
     id: 'roles_config',
     label: 'Roles y Permisos',
     description: 'Configuración de roles y permisos',
@@ -409,6 +430,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     sortOrder: 520,
   },
   {
+    id: 'almacenes',
+    label: 'Almacenes',
+    description: 'Gestión de áreas de almacenamiento: crear, activar/desactivar y detectar duplicados.',
+    icon: '🏭',
+    href: '/dashboard/almacenes',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 528,
+  },
+  {
     id: 'tasa_cambio',
     label: 'Tasa de Cambio',
     description: 'Actualizar la tasa de cambio BCV diariamente',
@@ -417,6 +448,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     section: 'admin',
     enabledByDefault: true,
     sortOrder: 530,
+  },
+  {
+    id: 'anuncios',
+    label: 'Anuncios a Gerencia',
+    description: 'Crea y gestiona comunicados internos que aparecen en la campana 🔔 para todos los usuarios.',
+    icon: '📣',
+    href: '/dashboard/anuncios',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 542,
   },
   {
     id: 'metas',
@@ -453,6 +494,7 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   margen: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   purchases: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD'],
   proteins: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD'],
+  sku_studio: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF'],
   asistente: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF'],
   menu: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   modifiers: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
@@ -473,9 +515,12 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   intercompany: ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
   // Admin
   users: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER', 'AUDITOR'],
+  modulos_usuario: ['OWNER', 'ADMIN_MANAGER'],
   roles_config: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   module_config: ['OWNER'], // Solo el OWNER puede activar/desactivar módulos
+  almacenes: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   tasa_cambio: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
+  anuncios: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   metas: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'AUDITOR'],
 };
 

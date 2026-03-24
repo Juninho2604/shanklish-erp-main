@@ -153,3 +153,78 @@ export async function createProductFromTemplate(
     revalidatePath('/dashboard/inventario');
     return { ok: true, invItem, menuItem };
 }
+
+// ─── Crear ítem directo desde SKU Studio (UI con chips) ───────────────────
+
+export async function createSkuItemAction(input: {
+    name: string;
+    skuPrefix?: string;
+    type: 'RAW_MATERIAL' | 'SUB_RECIPE' | 'FINISHED_GOOD';
+    baseUnit: string;
+    category?: string;
+    productFamilyId?: string;
+    operativeRole?: string;
+    trackingMode?: string;
+    isBeverage?: boolean;
+    initialCost?: number;
+}): Promise<{ success: boolean; message: string; data?: { id: string; sku: string; name: string } }> {
+    try {
+        const session = await getSession();
+        if (!session) return { success: false, message: 'No autorizado' };
+        if (!input.name?.trim()) return { success: false, message: 'El nombre es obligatorio' };
+        if (!input.baseUnit) return { success: false, message: 'La unidad base es obligatoria' };
+
+        // Generar SKU
+        const prefix = input.skuPrefix?.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '') || 'SKU';
+        const count = await prisma.inventoryItem.count({ where: { sku: { startsWith: prefix } } });
+        const candidateSku = `${prefix}-${String(count + 1).padStart(3, '0')}`;
+        const existing = await prisma.inventoryItem.findUnique({ where: { sku: candidateSku } });
+        const finalSku = existing ? `${prefix}-${Date.now().toString().slice(-5)}` : candidateSku;
+
+        // Metadata SKU Studio en description
+        const descParts: string[] = [];
+        if (input.operativeRole && input.operativeRole !== 'Ninguno') descParts.push(`Rol: ${input.operativeRole}`);
+        if (input.trackingMode && input.trackingMode !== 'Por unidad') descParts.push(`Seguimiento: ${input.trackingMode}`);
+        const description = descParts.length ? descParts.join(' | ') : null;
+
+        const item = await prisma.inventoryItem.create({
+            data: {
+                name: input.name.trim(),
+                sku: finalSku,
+                type: input.type,
+                category: input.category?.trim() || null,
+                baseUnit: input.baseUnit.toUpperCase(),
+                purchaseUnit: input.baseUnit.toUpperCase(),
+                conversionRate: 1,
+                minimumStock: 0,
+                reorderPoint: 0,
+                description,
+                isBeverage: input.isBeverage ?? false,
+                isActive: true,
+                productFamilyId: input.productFamilyId || null,
+            },
+        });
+
+        if (input.initialCost && input.initialCost > 0) {
+            await prisma.costHistory.create({
+                data: {
+                    inventoryItemId: item.id,
+                    costPerUnit: input.initialCost,
+                    currency: 'USD',
+                    reason: 'Costo inicial — SKU Studio',
+                    createdById: session.id,
+                },
+            });
+        }
+
+        revalidatePath('/dashboard/sku-studio');
+        revalidatePath('/dashboard/inventario');
+        revalidatePath('/dashboard/costos');
+
+        return { success: true, message: `"${item.name}" creado · SKU: ${item.sku}`, data: { id: item.id, sku: item.sku, name: item.name } };
+    } catch (error: any) {
+        if (error?.code === 'P2002') return { success: false, message: 'El SKU ya existe — modifica el prefijo' };
+        console.error('[sku-studio] createSkuItemAction error:', error);
+        return { success: false, message: 'Error al crear ítem' };
+    }
+}

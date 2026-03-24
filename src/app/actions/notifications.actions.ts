@@ -171,6 +171,53 @@ export async function createBroadcastAction(input: {
 // DESACTIVAR MENSAJE (solo admin)
 // ============================================================================
 
+// ============================================================================
+// HISTORIAL COMPLETO PARA ADMIN (página Anuncios)
+// ============================================================================
+
+export interface BroadcastRecord {
+  id: string;
+  title: string;
+  body: string;
+  type: 'INFO' | 'WARNING' | 'ALERT' | 'SUCCESS';
+  isActive: boolean;
+  targetRoles: string[] | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export async function getAllBroadcastsAdminAction(): Promise<{ success: boolean; data?: BroadcastRecord[] }> {
+  try {
+    const session = await getSession();
+    if (!session) return { success: false };
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(session.role)) {
+      return { success: false };
+    }
+
+    const rows = await prisma.broadcastMessage.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return {
+      success: true,
+      data: rows.map(r => ({
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        type: (r.type as BroadcastRecord['type']) || 'INFO',
+        isActive: r.isActive,
+        targetRoles: (() => { try { return r.targetRoles ? JSON.parse(r.targetRoles) : null; } catch { return null; } })(),
+        createdAt: r.createdAt.toISOString(),
+        expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
+      })),
+    };
+  } catch (error) {
+    console.error('[notifications] getAllBroadcastsAdminAction error:', error);
+    return { success: false };
+  }
+}
+
 export async function dismissBroadcastAction(id: string): Promise<{ success: boolean }> {
   try {
     const session = await getSession();
