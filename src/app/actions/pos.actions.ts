@@ -431,49 +431,94 @@ async function assertOpenTabVersionUpdate(params: {
     }
 }
 
+/**
+ * Descarga de inventario por ingredientes de receta.
+ *
+ * ATOMICIDAD: Todos los decrementos se ejecutan en UNA sola transacción Prisma.
+ * Si cualquier operación falla, NINGÚN ingrediente queda descontado (rollback automático).
+ * Esto elimina el problema de deducción parcial donde algunos ingredientes bajaban
+ * y otros no al producirse un error a mitad del proceso.
+ */
 async function registerInventoryForCartItems(params: {
     items: CartItem[];
     areaId: string;
     orderId: string;
     userId: string;
-}) {
-    for (const item of params.items) {
-        const menuItem = await prisma.menuItem.findUnique({
-            where: { id: item.menuItemId },
-            select: {
-                name: true,
-                recipeId: true
-            }
-        });
+}): Promise<void> {
+    // ── FASE 1: Lecturas (sin escrituras) ────────────────────────────────────
+    // Recopilar todas las operaciones de descuento necesarias antes de escribir.
+    type DeductOp = {
+        inventoryItemId: string;
+        quantity: number;
+        unit: string;
+        label: string; // Para el campo reason del movimiento
+    };
 
+    const ops: DeductOp[] = [];
+
+    for (const cartItem of params.items) {
+        const menuItem = await prisma.menuItem.findUnique({
+            where: { id: cartItem.menuItemId },
+            select: { name: true, recipeId: true },
+        });
         if (!menuItem?.recipeId) continue;
 
         const recipe = await prisma.recipe.findUnique({
             where: { id: menuItem.recipeId },
-            include: {
-                ingredients: {
-                    include: { ingredientItem: true }
-                }
-            }
+            include: { ingredients: { select: { ingredientItemId: true, quantity: true, unit: true } } },
         });
+        if (!recipe?.isActive) continue;
 
-        if (!recipe || !recipe.isActive) continue;
-
-        for (const ingredient of recipe.ingredients) {
-            const totalQty = ingredient.quantity * item.quantity;
-
-            await registerSale({
-                inventoryItemId: ingredient.ingredientItemId,
-                quantity: totalQty,
-                unit: ingredient.unit as any,
-                areaId: params.areaId,
-                orderId: params.orderId,
-                userId: params.userId,
-                notes: `Venta POS: ${item.quantity}x ${menuItem.name}`,
-                allowNegative: true
+        for (const ing of recipe.ingredients) {
+            ops.push({
+                inventoryItemId: ing.ingredientItemId,
+                quantity: ing.quantity * cartItem.quantity,
+                unit: ing.unit,
+                label: `Venta POS: ${cartItem.quantity}x ${menuItem.name}`,
             });
         }
     }
+
+    if (ops.length === 0) return; // Ningún ítem tiene receta activa — nada que descontar
+
+    // ── FASE 2: Escrituras atómicas ───────────────────────────────────────────
+    // UNA sola transacción para todos los ingredientes.
+    // Si cualquier operación lanza, Prisma hace rollback de TODAS las anteriores.
+    await prisma.$transaction(async (tx) => {
+        for (const op of ops) {
+            // Registrar movimiento de inventario (trazabilidad)
+            await tx.inventoryMovement.create({
+                data: {
+                    inventoryItemId: op.inventoryItemId,
+                    movementType: 'SALE',
+                    quantity: op.quantity,
+                    unit: op.unit,
+                    reason: `Venta — Orden: ${params.orderId}`,
+                    notes: op.label,
+                    salesOrderId: params.orderId,
+                    createdById: params.userId,
+                },
+            });
+
+            // Decrementar stock (upsert por si el registro de ubicación no existe aún)
+            await tx.inventoryLocation.upsert({
+                where: {
+                    inventoryItemId_areaId: {
+                        inventoryItemId: op.inventoryItemId,
+                        areaId: params.areaId,
+                    },
+                },
+                create: {
+                    inventoryItemId: op.inventoryItemId,
+                    areaId: params.areaId,
+                    currentStock: -op.quantity, // Negativo intencional — allowNegative
+                },
+                update: {
+                    currentStock: { decrement: op.quantity },
+                },
+            });
+        }
+    });
 }
 
 // ============================================================================
@@ -675,7 +720,7 @@ export async function createSalesOrderAction(
         if (!newOrder) throw new Error('No se pudo crear la orden tras reintentos');
 
         // ====================================================================
-        // GESTIÓN DE INVENTARIO (Descargo de Recetas)
+        // GESTIÓN DE INVENTARIO (Descargo de Recetas — atómico)
         // ====================================================================
         try {
             await registerInventoryForCartItems({
@@ -685,8 +730,18 @@ export async function createSalesOrderAction(
                 userId: session.id
             });
         } catch (invError) {
-            console.error('Error descontando inventario:', invError);
-            // No fallamos la venta, solo logueamos
+            // La venta ocurrió — no revertimos la orden.
+            // Pero marcamos la orden con un flag visible para auditoría
+            // para que el gerente pueda aplicar el descuento manualmente.
+            console.error('[INVENTORY] Descargo falló para orden', newOrder.id, invError);
+            try {
+                await prisma.salesOrder.update({
+                    where: { id: newOrder.id },
+                    data: {
+                        notes: `[⚠️ DESCARGO INVENTARIO PENDIENTE — Revisar manualmente]${newOrder.notes ? ' | ' + newOrder.notes : ''}`,
+                    },
+                });
+            } catch { /* best effort */ }
         }
 
         revalidatePath('/dashboard/pos/restaurante');
@@ -962,7 +1017,15 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
                 userId: session.id
             });
         } catch (invError) {
-            console.error('Error descontando inventario de tab abierta:', invError);
+            console.error('[INVENTORY] Descargo falló para tab order', createdOrder.id, invError);
+            try {
+                await prisma.salesOrder.update({
+                    where: { id: createdOrder.id },
+                    data: {
+                        notes: `[⚠️ DESCARGO INVENTARIO PENDIENTE — Revisar manualmente]${createdOrder.notes ? ' | ' + createdOrder.notes : ''}`,
+                    },
+                });
+            } catch { /* best effort */ }
         }
 
         revalidatePath('/dashboard/pos/restaurante');
