@@ -6,7 +6,7 @@ import {
     getLowStockItemsAction, getAllItemsForPurchaseAction, getAllItemsWithStockConfigAction,
     createPurchaseOrderAction, getPurchaseOrdersAction, getSuppliersAction, getAreasForReceivingAction,
     sendPurchaseOrderAction, cancelPurchaseOrderAction, exportPurchaseOrderTextAction,
-    receivePurchaseOrderItemsAction, updateStockLevelsAction,
+    receivePurchaseOrderItemsAction, updateStockLevelsAction, createReorderBroadcastsAction,
     LowStockItem, StockConfigItem
 } from '@/app/actions/purchase.actions';
 import WhatsAppPurchaseOrderParser from '@/components/whatsapp-purchase-order-parser';
@@ -155,6 +155,15 @@ export default function PurchaseOrderView() {
         setIsSubmitting(false);
     }
 
+    async function handleCreateReorderAlerts() {
+        setIsSubmitting(true);
+        const r = await createReorderBroadcastsAction();
+        if (r.created > 0) alert(`✅ ${r.created} alerta(s) de reorden enviadas a la campana 🔔`);
+        else if (r.skipped > 0) alert(`ℹ️ Todas las alertas ya existen (${r.skipped} en curso). Revisa la campana 🔔`);
+        else alert('ℹ️ No hay items bajo punto de reorden en este momento');
+        setIsSubmitting(false);
+    }
+
     async function handleSaveConfig() {
         const items: StockConfigItem[] = Object.entries(configEdits).map(([id, vals]) => ({ id, minimumStock: vals.min, reorderPoint: vals.reorder }));
         setIsSubmitting(true);
@@ -277,9 +286,18 @@ export default function PurchaseOrderView() {
             {viewMode === 'auto' && (
                 <div className="grid gap-6 lg:grid-cols-2">
                     <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700 flex items-center justify-between">
+                        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700 flex items-center justify-between gap-3 flex-wrap">
                             <h2 className="font-semibold text-gray-900 dark:text-white">⚠️ Items con Stock Bajo</h2>
-                            <button onClick={addAllSuggestions} className="text-sm text-amber-600 hover:text-amber-700 font-medium">Agregar todos →</button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleCreateReorderAlerts}
+                                    disabled={isSubmitting}
+                                    className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 border border-amber-500/30 hover:bg-amber-500/20 font-medium transition-colors disabled:opacity-50"
+                                >
+                                    🔔 Enviar alertas
+                                </button>
+                                <button onClick={addAllSuggestions} className="text-sm text-amber-600 hover:text-amber-700 font-medium">Agregar todos →</button>
+                            </div>
                         </div>
                         <div className="max-h-[60vh] overflow-y-auto">
                             {lowStockItems.length === 0 ? (

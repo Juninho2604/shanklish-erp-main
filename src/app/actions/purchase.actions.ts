@@ -698,6 +698,74 @@ export async function getAreasForReceivingAction() {
 }
 
 // ============================================================================
+// ACTION: CREAR ALERTAS DE REORDEN EN BROADCAST (auto o manual)
+// ============================================================================
+
+/**
+ * Detecta items bajo su punto de reorden y crea BroadcastMessages activos.
+ * - No duplica alertas: si ya existe un broadcast activo para ese item, lo omite.
+ * - Se puede llamar manualmente desde Compras o automáticamente tras descargo.
+ * Retorna el número de alertas nuevas creadas.
+ */
+export async function createReorderBroadcastsAction(): Promise<{ created: number; skipped: number }> {
+    try {
+        // Obtener usuario para createdById (requerido por el modelo)
+        const session = await getSession();
+        // Si no hay sesión activa, buscar el primer OWNER como fallback (ej. llamada fire-and-forget)
+        let authorId: string | null = session?.id ?? null;
+        if (!authorId) {
+            const owner = await prisma.user.findFirst({ where: { role: 'OWNER', isActive: true }, select: { id: true } });
+            authorId = owner?.id ?? null;
+        }
+        if (!authorId) return { created: 0, skipped: 0 };
+
+        const lowStockItems = await getLowStockItemsAction();
+        if (lowStockItems.length === 0) return { created: 0, skipped: 0 };
+
+        // No duplicar alertas activas del mismo item
+        const existingBroadcasts = await prisma.broadcastMessage.findMany({
+            where: { isActive: true, title: { startsWith: '🔁 Reorden:' } },
+            select: { title: true },
+        });
+        const existingTitles = new Set(existingBroadcasts.map(b => b.title));
+
+        let created = 0;
+        let skipped = 0;
+
+        for (const item of lowStockItems) {
+            const title = `🔁 Reorden: ${item.name}`;
+            if (existingTitles.has(title)) { skipped++; continue; }
+
+            const severity = item.isCritical ? 'ALERT' : 'WARNING';
+            const stockLabel = `${item.currentStock.toFixed(2)} ${item.baseUnit}`;
+            const minLabel = item.minimumStock > 0
+                ? `mínimo ${item.minimumStock} ${item.baseUnit}`
+                : `reorden ${item.reorderPoint} ${item.baseUnit}`;
+            const body = `Stock actual: ${stockLabel} (${minLabel}). SKU: ${item.sku}${item.category ? ` · ${item.category}` : ''}`;
+
+            await prisma.broadcastMessage.create({
+                data: {
+                    title,
+                    body,
+                    type: severity,
+                    targetRoles: JSON.stringify(['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF']),
+                    isActive: true,
+                    expiresAt: null,
+                    createdById: authorId,
+                },
+            });
+
+            created++;
+        }
+
+        return { created, skipped };
+    } catch (error) {
+        console.error('[compras] createReorderBroadcastsAction error:', error);
+        return { created: 0, skipped: 0 };
+    }
+}
+
+// ============================================================================
 // ACTION: EXPORTAR ORDEN DE COMPRA A TEXTO (para WhatsApp/Email)
 // ============================================================================
 

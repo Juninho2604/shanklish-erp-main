@@ -12,6 +12,7 @@ import { getSession } from '@/lib/auth';
 import { registerSale } from '@/server/services/inventory.service';
 import { getCaracasDateStamp, getCaracasDayRange } from '@/lib/datetime';
 import { getStockValidationEnabled } from '@/app/actions/system-config.actions';
+import { createReorderBroadcastsAction } from '@/app/actions/purchase.actions';
 
 // ============================================================================
 // TIPOS
@@ -519,6 +520,12 @@ async function registerInventoryForCartItems(params: {
             });
         }
     });
+
+    // Fire-and-forget: detectar items bajo reorden y crear BroadcastMessages.
+    // No bloqueamos la venta si esto falla.
+    void createReorderBroadcastsAction().catch(err =>
+        console.error('[pos] reorder broadcast check failed:', err)
+    );
 }
 
 // ============================================================================
