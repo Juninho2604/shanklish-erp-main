@@ -50,6 +50,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     sortOrder: 0,
   },
   {
+    id: 'estadisticas',
+    label: 'Estadísticas',
+    description: 'Análisis en tiempo real personalizado por rol — ventas, cocina, inventario, auditoría',
+    icon: '📈',
+    href: '/dashboard/estadisticas',
+    section: 'operations',
+    enabledByDefault: true,
+    sortOrder: 5,
+  },
+  {
     id: 'inventory_daily',
     label: 'Inventario Diario',
     description: 'Conteo y control diario de inventario',
@@ -395,6 +405,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
  */
 export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   dashboard: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER', 'CHEF', 'AREA_LEAD'],
+  estadisticas: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CHEF', 'KITCHEN_CHEF', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'WAITER'],
   inventory_daily: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD'],
   inventory: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD'],
   inventory_count: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD', 'AUDITOR'],
