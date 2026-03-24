@@ -130,15 +130,21 @@ export default function MenuManagementPage() {
         setCreatingRecipeFor(null);
     };
 
-    // Conteo de items sin receta
-    const itemsWithoutRecipe = categories.flatMap(c => c.items).filter((i: any) => !i.recipeId).length;
+    // Helper: estado de receta 3 niveles
+    const getRecipeStatus = (item: any): 'COMPLETE' | 'STUB' | 'NONE' => {
+        if (!item.recipeId) return 'NONE';
+        return (item._recipeIngredientCount ?? 0) > 0 ? 'COMPLETE' : 'STUB';
+    };
+
+    // Conteo de items sin receta completa (NONE + STUB)
+    const itemsWithoutRecipe = categories.flatMap(c => c.items).filter((i: any) => getRecipeStatus(i) !== 'COMPLETE').length;
 
     // Filtrado de búsqueda + filtro sin receta
     const filteredCategories = categories.map(cat => ({
         ...cat,
         items: cat.items.filter((item: any) => {
             const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesRecipeFilter = !showOnlyNoRecipe || !item.recipeId;
+            const matchesRecipeFilter = !showOnlyNoRecipe || getRecipeStatus(item) !== 'COMPLETE';
             return matchesSearch && matchesRecipeFilter;
         })
     })).filter(cat => cat.items.length > 0);
@@ -235,21 +241,34 @@ export default function MenuManagementPage() {
                                     </div>
 
                                     <div className="flex items-center gap-3 flex-wrap justify-end">
-                                        {/* Receta Status */}
-                                        {item.recipeId ? (
-                                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1">
-                                                📋 Receta ✓
-                                            </span>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleCreateRecipeStub(item.id)}
-                                                disabled={creatingRecipeFor === item.id}
-                                                className="px-2 py-1 rounded-full text-xs font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                                title="Crear receta vacía para este plato"
-                                            >
-                                                {creatingRecipeFor === item.id ? '⏳' : '⚠️'} Sin Receta
-                                            </button>
-                                        )}
+                                        {/* Receta Status — 3 estados */}
+                                        {(() => {
+                                            const rs = getRecipeStatus(item);
+                                            if (rs === 'COMPLETE') return (
+                                                <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1">
+                                                    ✅ Receta lista
+                                                </span>
+                                            );
+                                            if (rs === 'STUB') return (
+                                                <a
+                                                    href={`/dashboard/recetas`}
+                                                    className="px-2 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors flex items-center gap-1"
+                                                    title="Receta creada pero sin ingredientes — complétala en Recetas"
+                                                >
+                                                    🟡 Receta vacía
+                                                </a>
+                                            );
+                                            return (
+                                                <button
+                                                    onClick={() => handleCreateRecipeStub(item.id)}
+                                                    disabled={creatingRecipeFor === item.id}
+                                                    className="px-2 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                                    title="Sin receta — click para crear estructura vacía"
+                                                >
+                                                    {creatingRecipeFor === item.id ? '⏳' : '❌'} Sin receta
+                                                </button>
+                                            );
+                                        })()}
 
                                         {/* Precio Editable */}
                                         <div className="flex items-center bg-gray-900 rounded-lg border border-gray-600 px-3 py-1">

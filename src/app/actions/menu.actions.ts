@@ -32,12 +32,33 @@ export async function getFullMenuAction() {
         const categories = await prisma.menuCategory.findMany({
             include: {
                 items: {
-                    orderBy: { name: 'asc' }
-                }
+                    orderBy: { name: 'asc' },
+                },
             },
             orderBy: { sortOrder: 'asc' }
         });
-        return { success: true, data: categories };
+
+        // Fetch recipe ingredient counts for items that have a recipeId
+        const allItems = categories.flatMap((c) => c.items);
+        const recipeIds = allItems.map((i) => i.recipeId).filter(Boolean) as string[];
+        const recipesWithCounts = recipeIds.length
+            ? await prisma.recipe.findMany({
+                  where: { id: { in: recipeIds } },
+                  select: { id: true, _count: { select: { ingredients: true } } },
+              })
+            : [];
+        const recipeCountMap = new Map(recipesWithCounts.map((r) => [r.id, r._count.ingredients]));
+
+        // Enrich each item with _recipeIngredientCount
+        const enrichedCategories = categories.map((cat) => ({
+            ...cat,
+            items: cat.items.map((item) => ({
+                ...item,
+                _recipeIngredientCount: item.recipeId ? (recipeCountMap.get(item.recipeId) ?? 0) : null,
+            })),
+        }));
+
+        return { success: true, data: enrichedCategories };
     } catch (error) {
         console.error('Error fetching menu:', error);
         return { success: false, message: 'Error al cargar el menú' };
