@@ -224,6 +224,20 @@ export function printKitchenCommand(data: any) {
     const formattedTime = date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
     const orderNum = data.orderNumber.split('-').pop();
 
+    // Deduplicar items: combinar entradas con mismo nombre + mismos modificadores
+    const deduped: any[] = [];
+    for (const item of (data.items || [])) {
+        const modsKey = (item.modifiers || []).slice().sort().join('|');
+        const existing = deduped.find(
+            d => d.name === item.name && d._modsKey === modsKey
+        );
+        if (existing) {
+            existing.quantity += item.quantity;
+        } else {
+            deduped.push({ ...item, _modsKey: modsKey });
+        }
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -235,33 +249,46 @@ export function printKitchenCommand(data: any) {
         body {
             font-family: 'Courier New', Courier, monospace;
             width: 72mm;
-            font-weight: bold;
             background: white;
             color: black;
             font-size: 14px;
+            padding: 4mm 3mm 0 3mm;
         }
-        .header {
+        .sep {
+            font-size: 13px;
+            letter-spacing: 1px;
             text-align: center;
-            padding: 6px 4px;
-            border-bottom: 2px dashed #000;
-            margin-bottom: 6px;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: 900;
-            letter-spacing: 3px;
-        }
-        .order-num {
-            font-size: 40px;
-            font-weight: 900;
-            line-height: 1;
             margin: 4px 0;
         }
-        .meta { font-size: 13px; margin-top: 4px; }
-        .customer { font-size: 13px; margin-top: 2px; }
+        .title {
+            text-align: center;
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            margin: 4px 0;
+        }
+        .order-num {
+            text-align: center;
+            font-size: 56px;
+            font-weight: 900;
+            line-height: 1;
+            margin: 6px 0 4px;
+        }
+        .meta {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 2px 0;
+        }
+        .customer {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
         .item {
             border-bottom: 1px dashed #000;
-            padding: 6px 4px;
+            padding: 7px 2px;
             display: flex;
             align-items: flex-start;
             gap: 6px;
@@ -270,47 +297,53 @@ export function printKitchenCommand(data: any) {
             background: #000;
             color: #fff;
             font-size: 22px;
+            font-weight: 900;
             padding: 2px 8px;
-            min-width: 36px;
+            min-width: 38px;
             text-align: center;
             flex-shrink: 0;
         }
         .details { flex: 1; }
-        .name { font-size: 17px; line-height: 1.2; }
+        .name {
+            font-size: 17px;
+            font-weight: 900;
+            line-height: 1.2;
+        }
         .mods {
-            font-size: 12px;
+            font-size: 13px;
             margin-top: 3px;
             font-style: italic;
             font-weight: normal;
         }
         .notes {
-            font-size: 12px;
-            background: #eee;
+            font-size: 13px;
+            font-weight: 900;
+            margin-top: 4px;
             padding: 2px 4px;
-            margin-top: 3px;
-            font-weight: normal;
+            border: 1px solid #000;
         }
-        .footer {
+        .tail {
             text-align: center;
-            padding: 6px 4px 2px;
-            font-size: 12px;
-            font-weight: normal;
+            font-size: 13px;
+            margin-top: 6px;
             letter-spacing: 1px;
         }
         @media print {
-            @page { margin: 2mm; size: 72mm auto; }
+            @page { margin: 0; size: 72mm auto; }
+            body { padding: 4mm 3mm 0 3mm; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="title">-- COCINA --</div>
-        <div class="order-num">#${orderNum}</div>
-        <div class="meta">${formattedTime} - ${data.orderType === 'RESTAURANT' ? 'SALA' : 'DELIVERY'}</div>
-        ${data.customerName ? `<div class="customer">${data.customerName}</div>` : ''}
-    </div>
+    <div class="sep">--------------------------------</div>
+    <div class="title">C O C I N A</div>
+    <div class="order-num">#${orderNum}</div>
+    <div class="sep">--------------------------------</div>
+    <div class="meta">${formattedTime} &nbsp;|&nbsp; ${data.orderType === 'RESTAURANT' ? 'SALA' : 'DELIVERY'}</div>
+    ${data.customerName ? `<div class="customer">${data.customerName}</div>` : ''}
+    <div class="sep">--------------------------------</div>
 
-    ${data.items.map((item: any) => `
+    ${deduped.map((item: any) => `
     <div class="item">
         <div class="qty-box">${item.quantity}</div>
         <div class="details">
@@ -318,12 +351,13 @@ export function printKitchenCommand(data: any) {
             ${item.modifiers && item.modifiers.length > 0 ? `
                 <div class="mods">+ ${item.modifiers.join('<br>+ ')}</div>
             ` : ''}
-            ${item.notes ? `<div class="notes">Nota: ${item.notes}</div>` : ''}
+            ${item.notes ? `<div class="notes">*** ${item.notes} ***</div>` : ''}
         </div>
     </div>
     `).join('')}
 
-    <div class="footer">--------------------------------</div>
+    <div class="tail">--------------------------------</div>
+    <br><br><br><br><br>
 </body>
 </html>`;
 

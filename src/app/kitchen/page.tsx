@@ -100,6 +100,7 @@ export default function KitchenDisplayPage() {
     const [userRole, setUserRole] = useState<string>('');
     const [currentTime, setCurrentTime] = useState(new Date());
     const previousOrdersRef = useRef<string[]>([]);
+    const printedOrdersRef = useRef<Set<string>>(new Set());
     const isFirstLoadRef = useRef(true);
     const urgentAlertIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -173,9 +174,12 @@ export default function KitchenDisplayPage() {
                     if (newOrderIds.length > 0) {
                         playNotificationSound();
 
-                        // Imprimir comanda automáticamente para cada orden nueva
-                        const ordersToprint = newOrders.filter(o => newOrderIds.includes(o.id));
+                        // Imprimir comanda automáticamente (solo una vez por orden)
+                        const ordersToprint = newOrders.filter(
+                            o => newOrderIds.includes(o.id) && !printedOrdersRef.current.has(o.id)
+                        );
                         for (const order of ordersToprint) {
+                            printedOrdersRef.current.add(order.id);
                             printKitchenCommand({
                                 orderNumber: order.orderNumber,
                                 orderType: order.orderType,
