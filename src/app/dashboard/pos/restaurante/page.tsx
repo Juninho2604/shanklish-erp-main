@@ -238,6 +238,7 @@ export default function POSSportBarPage() {
   const [showChangeCashierModal, setShowChangeCashierModal] = useState(false);
   const [isPickupMode, setIsPickupMode] = useState(false);
   const [pickupCustomerName, setPickupCustomerName] = useState("");
+  const [keepChangeAsTip, setKeepChangeAsTip] = useState(false);
   const [lastPickupOrder, setLastPickupOrder] = useState<{
     orderNumber: string;
     total: number;
@@ -662,6 +663,7 @@ export default function POSSportBarPage() {
         items: cart,
         paymentMethod,
         amountPaid: paidAmount || finalTotal,
+        keepChangeAsTip,
         notes: "Venta Directa Pickup",
         discountType,
         discountPercent: discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum : undefined,
@@ -722,6 +724,7 @@ export default function POSSportBarPage() {
         setCart([]);
         setPaymentMethod("CASH");
         setAmountReceived("");
+        setKeepChangeAsTip(false);
         clearDiscount();
         setPickupCustomerName("");
       } else {
@@ -1151,13 +1154,30 @@ export default function POSSportBarPage() {
                         <input
                           type="number"
                           value={amountReceived}
-                          onChange={(e) => setAmountReceived(e.target.value)}
+                          onChange={(e) => { setAmountReceived(e.target.value); setKeepChangeAsTip(false); }}
                           placeholder={`Recibido...`}
-                          className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30"
+                          className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30 text-foreground"
                         />
                         <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
                       </div>
-                      
+
+                      {/* Vuelto / Propina */}
+                      {paidAmount > pickupTotal && (
+                        <div className="rounded-2xl border border-border bg-card p-3 space-y-2">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Vuelto:</span>
+                            <span className="font-black text-lg text-amber-400">${(paidAmount - pickupTotal).toFixed(2)}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setKeepChangeAsTip(!keepChangeAsTip)}
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all ${keepChangeAsTip ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground border border-border"}`}
+                          >
+                            {keepChangeAsTip ? "✓ El cliente deja el excedente como propina" : "El cliente desea dejar el excedente como propina"}
+                          </button>
+                        </div>
+                      )}
+
                       <div className="glass-panel p-4 rounded-2xl border-primary/5">
                         <CurrencyCalculator
                           totalUsd={pickupTotal}

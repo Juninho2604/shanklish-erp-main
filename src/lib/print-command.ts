@@ -250,11 +250,11 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Courier New', Courier, monospace;
-            width: 72mm;
+            width: 80mm;
             background: white;
             color: black;
             font-size: 14px;
-            padding: 4mm 3mm 0 3mm;
+            padding: 2mm 2mm 0 2mm;
         }
         .sep {
             font-size: 13px;
@@ -330,9 +330,23 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
             margin-top: 6px;
             letter-spacing: 1px;
         }
+        .order-type {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 900;
+            margin: 4px 0 2px;
+            letter-spacing: 1px;
+        }
+        .correlativo {
+            text-align: center;
+            font-size: 11px;
+            font-weight: normal;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
         @media print {
-            @page { margin: 0; size: 72mm auto; }
-            body { padding: 4mm 3mm 0 3mm; }
+            @page { margin: 0mm 2mm; size: 80mm auto; }
+            body { padding: 2mm 2mm 0 2mm; }
         }
     </style>
 </head>
@@ -340,9 +354,17 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
     <div class="sep">--------------------------------</div>
     <div class="title">${stationLabel}</div>
     <div class="order-num">#${orderNum}</div>
+    <div class="order-type">${
+        data.orderType === 'DELIVERY'
+            ? '🛵 DELIVERY'
+            : data.sourceChannel === 'POS_PEDIDOSYA'
+                ? '📱 PEDIDOS YA'
+                : data.tableName
+                    ? `🪑 ${data.tableName}`
+                    : '🥡 PICKUP'
+    }</div>
     <div class="sep">--------------------------------</div>
-    <div class="meta">${formattedTime} &nbsp;|&nbsp; ${data.orderType === 'RESTAURANT' ? 'SALA' : 'DELIVERY'}</div>
-    ${data.tableName ? `<div style="text-align:center;font-size:22px;font-weight:900;margin:4px 0;">${data.tableName}</div>` : ''}
+    <div class="meta">${formattedTime}</div>
     ${data.customerName ? `<div class="customer">${data.customerName}</div>` : ''}
     ${data.address ? `<div style="text-align:center;font-size:12px;font-weight:normal;margin:2px 4px;">${data.address}</div>` : ''}
     <div class="sep">--------------------------------</div>
@@ -361,7 +383,8 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
     `).join('')}
 
     <div class="tail">--------------------------------</div>
-    <br><br><br><br><br><br>
+    <div class="correlativo">${data.orderNumber}</div>
+    <br><br><br><br><br><br><br><br>
 </body>
 </html>`;
 

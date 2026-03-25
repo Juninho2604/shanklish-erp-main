@@ -42,6 +42,7 @@ export interface CreateOrderData {
     items: CartItem[];
     paymentMethod?: POSPaymentMethod;
     amountPaid?: number;
+    keepChangeAsTip?: boolean; // Si el cliente deja el excedente como propina (no dar vuelto)
     notes?: string;
     discountType?: string; // 'DIVISAS_33', 'CORTESIA_100', 'CORTESIA_PERCENT', 'NONE'
     discountPercent?: number; // Para CORTESIA_PERCENT (ej: 20 = 20%)
@@ -679,7 +680,7 @@ export async function createSalesOrderAction(
                         discount,
                         total,
                         amountPaid: data.amountPaid || total,
-                        change: change > 0 ? change : 0,
+                        change: data.keepChangeAsTip ? 0 : (change > 0 ? change : 0),
 
                         discountType: data.discountType,
                         discountReason: discountReason,

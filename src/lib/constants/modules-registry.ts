@@ -290,6 +290,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     sortOrder: 250,
   },
   {
+    id: 'barra_display',
+    label: 'Comandera Barra',
+    description: 'Pantalla de bebidas pendientes para barra',
+    icon: '🥤',
+    href: '/kitchen/barra',
+    section: 'sales',
+    enabledByDefault: true,
+    sortOrder: 251,
+  },
+  {
     id: 'pos_config',
     label: 'Configuración POS',
     description: 'Ajustes de impresión, comanda y factura',
@@ -450,6 +460,7 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   sales_entry: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
   sales_history: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CHEF'],
   kitchen_display: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'KITCHEN_CHEF'],
+  barra_display: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'KITCHEN_CHEF', 'AREA_LEAD', 'CASHIER_RESTAURANT'],
   pos_config: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
   // Juegos (Table Pong)
   games: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],

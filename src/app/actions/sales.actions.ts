@@ -131,15 +131,20 @@ export async function getSalesHistoryAction(limit = 100) {
                 });
             } else if (!o.openTabId || o.orderType !== 'RESTAURANT') {
                 const ordTotal = o.total || 0;
+                const amountPaid = o.amountPaid || ordTotal;
+                // Propina = excedente pagado que no se devolvió como vuelto (change=0)
+                const propina = o.change === 0 && amountPaid > ordTotal
+                    ? Math.max(0, amountPaid - ordTotal)
+                    : 0;
                 result.push({
                     ...o,
                     _consolidated: false,
                     totalFactura: ordTotal,
-                    totalCobrado: ordTotal,
+                    totalCobrado: amountPaid,
                     totalProductos: ordTotal,
                     servicioAmount: 0,
-                    propina: 0,
-                    paymentBreakdown: [{ method: o.paymentMethod || 'CASH', amount: ordTotal }]
+                    propina,
+                    paymentBreakdown: [{ method: o.paymentMethod || 'CASH', amount: amountPaid }]
                 });
             }
         }
