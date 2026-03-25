@@ -342,9 +342,9 @@ async function getMenuItemMetadata(menuItemIds: string[]) {
 
 function requiresKitchenRouting(menuItem: any) {
     if (menuItem?.kitchenRouting === 'NONE') return false;
-    if (menuItem?.kitchenRouting === 'KITCHEN' || menuItem?.kitchenRouting === 'BAR') return true;
-    if (menuItem?.serviceCategory === 'PACKAGED_DRINK') return false;
-    return Boolean(menuItem?.recipeId);
+    // AUTO o cualquier otro valor → siempre va a cocina/barra sin excepción
+    // La segmentación cocina/barra se hace en el API por categoría, no aquí
+    return true;
 }
 
 function requiresStockValidation(menuItem: any) {

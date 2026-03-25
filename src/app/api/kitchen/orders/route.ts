@@ -1,50 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET: Obtener órdenes pendientes para cocina
-export async function GET() {
+// Categorías que van a BARRA (solo Bebidas)
+const BAR_CATEGORIES = ['Bebidas'];
+
+// GET: Obtener órdenes pendientes para cocina o barra
+// ?station=kitchen (default) → excluye Bebidas
+// ?station=bar              → solo Bebidas
+export async function GET(request: NextRequest) {
     try {
+        const { searchParams } = new URL(request.url);
+        const station = searchParams.get('station') ?? 'kitchen'; // 'kitchen' | 'bar'
+        const isBar = station === 'bar';
+
         const orders = await prisma.salesOrder.findMany({
             where: {
-                status: {
-                    in: ['PENDING', 'CONFIRMED', 'PREPARING']
-                },
-                createdAt: {
-                    // Solo órdenes del día actual
-                    gte: new Date(new Date().setHours(0, 0, 0, 0))
-                }
+                status: { in: ['PENDING', 'CONFIRMED', 'PREPARING'] },
+                kitchenStatus: 'SENT',
+                createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
             },
             include: {
                 items: {
                     include: {
-                        menuItem: true,
+                        menuItem: { include: { category: true } },
                         modifiers: true
                     }
                 },
                 tableOrStation: true
             },
-            orderBy: {
-                createdAt: 'asc' // Las más antiguas primero
-            }
+            orderBy: { createdAt: 'asc' }
         });
 
-        const formattedOrders = orders.map(order => ({
-            id: order.id,
-            orderNumber: order.orderNumber,
-            orderType: order.orderType,
-            customerName: order.customerName,
-            tableName: order.tableOrStation?.name ?? null,
-            status: order.status,
-            createdAt: order.createdAt.toISOString(),
-            items: order.items.map(item => ({
-                name: item.menuItem?.name || item.itemName || 'Item',
-                quantity: item.quantity,
-                modifiers: item.modifiers.map(mod => ({
-                    name: mod.name
-                })),
-                notes: item.notes
-            }))
-        }));
+        const formattedOrders = orders
+            .map(order => {
+                // Filtrar items por estación
+                const stationItems = order.items.filter(item => {
+                    const catName = item.menuItem?.category?.name ?? '';
+                    const isBeverage = BAR_CATEGORIES.includes(catName);
+                    return isBar ? isBeverage : !isBeverage;
+                });
+
+                if (stationItems.length === 0) return null; // orden sin items para esta estación
+
+                return {
+                    id: order.id,
+                    orderNumber: order.orderNumber,
+                    orderType: order.orderType,
+                    customerName: order.customerName,
+                    tableName: order.tableOrStation?.name ?? null,
+                    status: order.status,
+                    createdAt: order.createdAt.toISOString(),
+                    items: stationItems.map(item => ({
+                        name: item.menuItem?.name || item.itemName || 'Item',
+                        quantity: item.quantity,
+                        modifiers: item.modifiers.map(mod => ({ name: mod.name })),
+                        notes: item.notes
+                    }))
+                };
+            })
+            .filter(Boolean);
 
         return NextResponse.json({ orders: formattedOrders });
     } catch (error) {

@@ -219,10 +219,12 @@ export function printReceipt(data: ReceiptData) {
  * Para impresión completamente silenciosa (sin diálogo), lanzar Chrome con:
  *   --kiosk-printing
  */
-export function printKitchenCommand(data: any) {
+// station: 'kitchen' (default) | 'bar'
+export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kitchen') {
     const date = new Date(data.createdAt);
     const formattedTime = date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
     const orderNum = data.orderNumber.split('-').pop();
+    const stationLabel = station === 'bar' ? '-- BARRA --' : '-- COCINA --';
 
     // Deduplicar items: combinar entradas con mismo nombre + mismos modificadores
     const deduped: any[] = [];
@@ -269,7 +271,7 @@ export function printKitchenCommand(data: any) {
         }
         .order-num {
             text-align: center;
-            font-size: 56px;
+            font-size: 64px;
             font-weight: 900;
             line-height: 1;
             margin: 6px 0 4px;
@@ -336,7 +338,7 @@ export function printKitchenCommand(data: any) {
 </head>
 <body>
     <div class="sep">--------------------------------</div>
-    <div class="title">C O C I N A</div>
+    <div class="title">${stationLabel}</div>
     <div class="order-num">#${orderNum}</div>
     <div class="sep">--------------------------------</div>
     <div class="meta">${formattedTime} &nbsp;|&nbsp; ${data.orderType === 'RESTAURANT' ? 'SALA' : 'DELIVERY'}</div>
@@ -359,7 +361,7 @@ export function printKitchenCommand(data: any) {
     `).join('')}
 
     <div class="tail">--------------------------------</div>
-    <br><br><br><br><br>
+    <br><br><br><br><br><br>
 </body>
 </html>`;
 
