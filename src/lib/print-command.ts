@@ -225,6 +225,7 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
     const formattedTime = date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
     const orderNum = data.orderNumber.split('-').pop();
     const stationLabel = station === 'bar' ? '-- BARRA --' : '-- COCINA --';
+    const waiterLabel = data.waiterLabel ? data.waiterLabel : null;
 
     // Deduplicar items: combinar entradas con mismo nombre + mismos modificadores
     const deduped: any[] = [];
@@ -366,6 +367,7 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
     <div class="sep">--------------------------------</div>
     <div class="meta">${formattedTime}</div>
     ${data.customerName ? `<div class="customer">${data.customerName}</div>` : ''}
+    ${waiterLabel ? `<div style="text-align:center;font-size:13px;font-weight:bold;margin:2px 0;">🧑‍🍽️ ${waiterLabel}</div>` : ''}
     ${data.address ? `<div style="text-align:center;font-size:12px;font-weight:normal;margin:2px 4px;">${data.address}</div>` : ''}
     <div class="sep">--------------------------------</div>
 
@@ -374,6 +376,7 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
         <div class="qty-box">${item.quantity}</div>
         <div class="details">
             <div class="name">${item.name}</div>
+            ${item.takeaway ? `<div style="font-size:13px;font-weight:900;color:#000;background:#ffe066;display:inline-block;padding:1px 6px;margin:2px 0;border-radius:4px;">🥡 LLEVAR</div>` : ''}
             ${item.modifiers && item.modifiers.length > 0 ? `
                 <div class="mods">+ ${item.modifiers.join('<br>+ ')}</div>
             ` : ''}

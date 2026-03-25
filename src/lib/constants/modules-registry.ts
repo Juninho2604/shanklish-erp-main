@@ -182,6 +182,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     tags: ['food'],
   },
   {
+    id: 'mesoneros',
+    label: 'Mesoneros',
+    description: 'Gestión de mesoneros del restaurante: CRUD de nombre, apellido y estado activo',
+    icon: '🧑‍🍽️',
+    href: '/dashboard/mesoneros',
+    section: 'operations',
+    enabledByDefault: true,
+    sortOrder: 55,
+  },
+  {
     id: 'asistente',
     label: 'Asistente de Nomenclatura',
     description: 'Asistente guiado para crear insumos con nombres y unidades estandarizadas, y verificar recetas vinculadas al menú',
@@ -470,6 +480,7 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   // Intercompany
   intercompany: ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
   // Admin
+  mesoneros: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER'],
   users: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER', 'AUDITOR'],
   roles_config: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   module_config: ['OWNER'], // Solo el OWNER puede activar/desactivar módulos

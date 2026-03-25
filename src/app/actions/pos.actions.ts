@@ -29,6 +29,7 @@ export interface CartItem {
     }[];
     notes?: string;
     lineTotal: number;
+    takeaway?: boolean; // Item para llevar dentro de una mesa
 }
 
 export type POSOrderType = 'RESTAURANT' | 'DELIVERY' | 'PICKUP';
@@ -1327,16 +1328,15 @@ export async function getUsersForTabAction(): Promise<ActionResult> {
     try {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
-        
-        // Return fixed Mesonero options instead of all system users
-        const mesoneros = [
-            { id: 'mesonero-1', firstName: 'Mesonero', lastName: '1', role: 'WAITER' },
-            { id: 'mesonero-2', firstName: 'Mesonero', lastName: '2', role: 'WAITER' },
-            { id: 'mesonero-3', firstName: 'Mesonero', lastName: '3', role: 'WAITER' },
-        ];
-        
-        return { success: true, message: 'Mesoneros cargados', data: mesoneros };
-    } catch (error) {
-        return { success: false, message: 'Error cargando mesoneros' };
+        const branch = await prisma.branch.findFirst({ where: { isActive: true } });
+        if (!branch) return { success: false, message: 'Sin sucursal', data: [] };
+        const waiters = await prisma.waiter.findMany({
+            where: { branchId: branch.id, isActive: true },
+            orderBy: { firstName: 'asc' },
+            select: { id: true, firstName: true, lastName: true },
+        });
+        return { success: true, message: 'Mesoneros cargados', data: waiters };
+    } catch {
+        return { success: false, message: 'Error cargando mesoneros', data: [] };
     }
 }

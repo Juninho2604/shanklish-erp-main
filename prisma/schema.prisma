@@ -1278,6 +1278,20 @@ model Branch {
   openTabs        OpenTab[]
   salesOrders     SalesOrder[]
   gameStations    GameStation[]
+  waiters         Waiter[]
+}
+
+model Waiter {
+  id        String   @id @default(cuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  firstName String
+  lastName  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, isActive])
 }
 
 model ServiceZone {

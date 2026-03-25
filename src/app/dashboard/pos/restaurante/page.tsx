@@ -83,7 +83,7 @@ interface UserSummary {
   id: string;
   firstName: string;
   lastName: string;
-  role: string;
+  role?: string;
 }
 interface OpenTabSummary {
   id: string;
@@ -95,6 +95,7 @@ interface OpenTabSummary {
   runningTotal: number;
   balanceDue: number;
   openedAt: string;
+  waiterLabel?: string | null;
   openedBy: UserSummary;
   assignedWaiter?: UserSummary | null;
   closedBy?: UserSummary | null;
@@ -177,6 +178,9 @@ export default function POSSportBarPage() {
   const [selectedZoneId, setSelectedZoneId] = useState("");
   const [selectedTableId, setSelectedTableId] = useState("");
 
+  // ── Mesa selection modal ──────────────────────────────────────────────────
+  const [showTableModal, setShowTableModal] = useState(false);
+
   // ── Open tab form (modal) ─────────────────────────────────────────────────
   const [showOpenTabModal, setShowOpenTabModal] = useState(false);
   const [openTabName, setOpenTabName] = useState("");
@@ -224,6 +228,7 @@ export default function POSSportBarPage() {
   const [currentModifiers, setCurrentModifiers] = useState<SelectedModifier[]>([]);
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemNotes, setItemNotes] = useState("");
+  const [itemTakeaway, setItemTakeaway] = useState(false);
 
   // ── State flags ───────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
@@ -358,12 +363,15 @@ export default function POSSportBarPage() {
     }
     setIsProcessing(true);
     try {
+      const selectedWaiter = users.find((u) => u.id === openTabWaiter);
       const result = await openTabAction({
         tableOrStationId: selectedTable.id,
         customerLabel: openTabName.trim(),
         customerPhone: openTabPhone.trim(),
         guestCount: openTabGuests,
-        waiterLabel: openTabWaiter ? `Mesonero ${openTabWaiter}` : undefined,
+        waiterLabel: selectedWaiter
+          ? `${selectedWaiter.firstName} ${selectedWaiter.lastName}`
+          : undefined,
       });
       if (!result.success) {
         alert(result.message);
@@ -390,6 +398,7 @@ export default function POSSportBarPage() {
     setCurrentModifiers([]);
     setItemQuantity(1);
     setItemNotes("");
+    setItemTakeaway(false);
     setShowModifierModal(true);
   };
 
@@ -463,6 +472,7 @@ export default function POSSportBarPage() {
         modifiers: exploded,
         notes: itemNotes || undefined,
         lineTotal,
+        takeaway: itemTakeaway || undefined,
       },
     ]);
     setShowModifierModal(false);
@@ -487,11 +497,13 @@ export default function POSSportBarPage() {
           orderType: "RESTAURANT",
           tableName: selectedTable?.name ?? null,
           customerName: activeTab.customerLabel || null,
+          waiterLabel: activeTab.waiterLabel || null,
           items: cart.map((i) => ({
             name: i.name,
             quantity: i.quantity,
             modifiers: i.modifiers.map((m) => m.name),
             notes: i.notes,
+            takeaway: i.takeaway,
           })),
           createdAt: new Date(),
         });
@@ -895,14 +907,14 @@ export default function POSSportBarPage() {
 
           {/* Table grid */}
           <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 gap-3">
               {selectedZone?.tablesOrStations.map((table) => {
                 const tab = table.openTabs[0];
                 const isSelected = table.id === selectedTableId;
                 return (
                   <button
                     key={table.id}
-                    onClick={() => setSelectedTableId(table.id)}
+                    onClick={() => { setSelectedTableId(table.id); setShowTableModal(true); }}
                     className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all duration-200 active:scale-90 border-2 ${
                       isSelected
                         ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 z-10"
@@ -1079,8 +1091,14 @@ export default function POSSportBarPage() {
                     className="bg-card p-3 rounded-xl border border-border flex justify-between shadow-sm"
                   >
                     <div>
-                      <div className="font-bold text-sm">
-                        <span className="text-indigo-400">x{item.quantity}</span> {item.name}
+                      <div className="font-bold text-sm flex items-center gap-1.5 flex-wrap">
+                        <span className="text-indigo-400">x{item.quantity}</span>
+                        {item.name}
+                        {item.takeaway && (
+                          <span className="inline-flex items-center rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-black text-amber-400 uppercase tracking-wide">
+                            🥡 Llevar
+                          </span>
+                        )}
                       </div>
                       {item.modifiers.length > 0 && (
                         <div className="text-xs text-muted-foreground pl-4">
@@ -1523,6 +1541,78 @@ export default function POSSportBarPage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: SELECCIÓN DE MESA                                         */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {showTableModal && selectedTable && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setShowTableModal(false)}
+        >
+          <div
+            className="bg-card border border-border w-full max-w-sm mx-auto rounded-t-3xl sm:rounded-3xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-border p-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black">{selectedTable.name}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {selectedTable.currentStatus === "AVAILABLE" ? "Mesa disponible" :
+                   selectedTable.currentStatus === "OCCUPIED" ? "Mesa ocupada" :
+                   selectedTable.currentStatus === "RESERVED" ? "Mesa reservada" : selectedTable.currentStatus}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowTableModal(false)}
+                className="text-muted-foreground hover:text-white text-2xl leading-none"
+              >×</button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {!activeTab ? (
+                /* Mesa libre */
+                <>
+                  <p className="text-sm text-muted-foreground">¿Qué deseas hacer con esta mesa?</p>
+                  <button
+                    onClick={() => { setShowTableModal(false); setShowOpenTabModal(true); }}
+                    className="w-full min-h-[52px] bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black text-lg transition active:scale-95"
+                  >
+                    ✚ Abrir cuenta
+                  </button>
+                </>
+              ) : (
+                /* Mesa ocupada */
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-secondary p-3 text-sm space-y-1">
+                    <div className="font-bold text-emerald-400 truncate">{activeTab.customerLabel}</div>
+                    {activeTab.customerPhone && <div className="text-muted-foreground text-xs">📞 {activeTab.customerPhone}</div>}
+                    {(activeTab as any).waiterLabel && (
+                      <div className="text-muted-foreground text-xs">🧑‍🍽️ {(activeTab as any).waiterLabel}</div>
+                    )}
+                    <div className="flex justify-between pt-1 border-t border-border">
+                      <span className="text-muted-foreground">Balance:</span>
+                      <span className="font-black text-amber-400">${activeTab.balanceDue.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setShowTableModal(false); setMobileTab("menu"); }}
+                    className="w-full min-h-[52px] bg-amber-600 hover:bg-amber-500 rounded-2xl font-black transition active:scale-95"
+                  >
+                    🍽️ Agregar pedido
+                  </button>
+                  <button
+                    onClick={() => { setShowTableModal(false); setMobileTab("account"); }}
+                    className="w-full min-h-[48px] bg-secondary hover:bg-muted rounded-2xl font-bold text-sm transition active:scale-95 border border-border"
+                  >
+                    🧾 Ver cuenta
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
       {/* MODAL: ABRIR CUENTA                                              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showOpenTabModal && selectedTable && (
@@ -1589,9 +1679,11 @@ export default function POSSportBarPage() {
                     className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
                   >
                     <option value="">— Ninguno —</option>
-                    <option value="1">Mesonero 1</option>
-                    <option value="2">Mesonero 2</option>
-                    <option value="3">Mesonero 3</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.firstName} {u.lastName}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1927,6 +2019,24 @@ export default function POSSportBarPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Para llevar — solo disponible en mesas (no pickup) */}
+              {activeTab && (
+                <button
+                  type="button"
+                  onClick={() => setItemTakeaway(!itemTakeaway)}
+                  className={`w-full rounded-xl border p-4 flex items-center justify-between transition-all ${
+                    itemTakeaway
+                      ? "border-amber-500 bg-amber-500/10 text-amber-400"
+                      : "border-border bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  <span className="font-bold">🥡 Para llevar</span>
+                  <span className={`text-xs font-black uppercase ${itemTakeaway ? "text-amber-400" : "text-muted-foreground"}`}>
+                    {itemTakeaway ? "SÍ — aparecerá en comanda" : "No"}
+                  </span>
+                </button>
+              )}
             </div>
 
             <div className="flex gap-3 border-t border-border p-5">
@@ -1948,7 +2058,7 @@ export default function POSSportBarPage() {
         </div>
       )}
       {/* Navegación móvil — solo visible en móvil/tablet */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex z-50 shadow-2xl">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex z-50 shadow-2xl safe-area-inset-bottom">
         {(["tables", "menu", "account"] as const).map((tab) => {
           const icons = { tables: "🪑", menu: "🍽️", account: "🧾" };
           const labels = { tables: "MESAS", menu: "MENÚ", account: "CUENTA" };
@@ -1956,7 +2066,7 @@ export default function POSSportBarPage() {
             <button
               key={tab}
               onClick={() => setMobileTab(tab)}
-              className={`flex-1 py-3 flex flex-col items-center gap-1 text-[9px] font-black uppercase tracking-widest relative transition-colors  
+              className={`flex-1 min-h-[56px] py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest relative transition-colors
                 ${mobileTab === tab ? "text-primary bg-primary/5" : "text-muted-foreground"}`}
             >
               {mobileTab === tab && <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary rounded-b" />}
