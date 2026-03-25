@@ -18,6 +18,10 @@ export default function RootLayout({
 }) {
     return (
         <html lang="es" suppressHydrationWarning>
+            <head>
+                {/* Aplica el tema antes del render para evitar flash */}
+                <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme'),d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(t==='dark'||(t===null&&d))document.documentElement.classList.add('dark');}())` }} />
+            </head>
             <body className={`${inter.variable} font-sans antialiased`}>
                 {children}
                 <Toaster position="top-right" />

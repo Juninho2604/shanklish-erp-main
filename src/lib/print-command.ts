@@ -68,38 +68,39 @@ export function printReceipt(data: ReceiptData) {
     <style>
         * { box-sizing: border-box; }
         body {
-            font-family: Arial, Helvetica, 'Segoe UI', sans-serif;
-            font-size: 11px;
-            line-height: 1.35;
-            color: #1a1a1a;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #000000;
             max-width: 80mm;
             margin: 0 auto;
-            padding: 8px;
+            padding: 6px;
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
         .text-left { text-align: left; }
-        .bold { font-weight: 700; }
+        .bold { font-weight: 800; }
         .uppercase { text-transform: uppercase; }
-        .separator { border-top: 1px dashed #333; margin: 8px 0; }
-        .separator-thick { border-top: 2px solid #333; margin: 10px 0; }
-        .header { margin-bottom: 12px; padding-bottom: 8px; }
-        .company-name { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
-        .doc-title { font-size: 13px; font-weight: 700; margin-top: 6px; letter-spacing: 1px; }
+        .separator { border-top: 1px dashed #000; margin: 7px 0; }
+        .separator-thick { border-top: 2px solid #000; margin: 9px 0; }
+        .header { margin-bottom: 10px; padding-bottom: 6px; }
+        .company-name { font-size: 20px; font-weight: 900; letter-spacing: 0.5px; }
+        .doc-title { font-size: 14px; font-weight: 900; margin-top: 6px; letter-spacing: 1px; }
         .info-row { display: flex; justify-content: space-between; margin: 3px 0; }
-        .info-label { font-weight: 600; }
-        .items-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10px; }
-        .items-table th { border-bottom: 1px solid #333; padding: 4px 0; text-align: left; font-weight: 700; }
+        .info-label { font-weight: 800; }
+        .items-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 11px; }
+        .items-table th { border-bottom: 2px solid #000; padding: 4px 0; text-align: left; font-weight: 900; }
         .items-table td { padding: 4px 0; vertical-align: top; }
-        .items-table .item-name { font-weight: 600; }
-        .items-table .item-detail { font-size: 9px; color: #444; }
+        .items-table .item-name { font-weight: 800; }
+        .items-table .item-detail { font-size: 10px; color: #000000; font-style: italic; }
         .totals-section { margin-top: 10px; }
-        .total-row { display: flex; justify-content: space-between; padding: 3px 0; }
-        .total-final { font-size: 14px; font-weight: 700; margin-top: 4px; padding-top: 6px; border-top: 2px solid #333; }
-        .footer { text-align: center; margin-top: 16px; font-size: 10px; font-weight: 600; }
+        .total-row { display: flex; justify-content: space-between; padding: 3px 0; font-weight: 700; }
+        .total-final { font-size: 15px; font-weight: 900; margin-top: 4px; padding-top: 6px; border-top: 3px solid #000; }
+        .footer { text-align: center; margin-top: 16px; font-size: 11px; font-weight: 900; letter-spacing: 1px; }
         @media print {
-            @page { margin: 5mm; size: auto; }
-            body { padding: 0; }
+            @page { margin: 4mm; size: auto; }
+            body { padding: 0; color: #000 !important; }
+            * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
 </head>

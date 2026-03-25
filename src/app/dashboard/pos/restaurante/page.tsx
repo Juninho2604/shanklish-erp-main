@@ -938,14 +938,14 @@ export default function POSSportBarPage() {
                   {activeTab.customerPhone && <div className="text-muted-foreground">📞 {activeTab.customerPhone}</div>}
                   <div className="text-muted-foreground">
                     Abrió:{" "}
-                    <span className="text-white">
+                    <span className="text-foreground">
                       {activeTab.openedBy.firstName} {activeTab.openedBy.lastName}
                     </span>
                     <span className="text-muted-foreground"> · {formatTime(activeTab.openedAt)}</span>
                   </div>
                   {activeTab.assignedWaiter && (
                     <div className="text-muted-foreground">
-                      Mesonero: <span className="text-white">{(activeTab as any).waiterLabel || "—"}</span>
+                      Mesonero: <span className="text-foreground">{(activeTab as any).waiterLabel || "—"}</span>
                     </div>
                   )}
                 </div>
@@ -987,12 +987,12 @@ export default function POSSportBarPage() {
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 placeholder={`Buscar producto... ${isPickupMode ? "(Modo Pickup)" : ""}`}
-                className={`w-full bg-secondary border ${isPickupMode ? "border-indigo-600/50" : "border-border"} rounded-xl py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-foreground focus:outline-none focus:border-amber-500`}
+                className={`w-full bg-secondary border ${isPickupMode ? "border-indigo-600/50" : "border-border"} rounded-xl py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-amber-500`}
               />
               {productSearch && (
                 <button
                   onClick={() => setProductSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   ✕
                 </button>
@@ -1193,7 +1193,7 @@ export default function POSSportBarPage() {
                         serviceFee: 0,
                       });
                     }}
-                    className="w-full py-3 bg-muted hover:bg-secondary/80 text-white rounded-xl font-bold flex items-center justify-center gap-2 border border-border text-sm"
+                    className="w-full py-3 bg-secondary hover:bg-muted text-foreground rounded-xl font-bold flex items-center justify-center gap-2 border border-border text-sm"
                   >
                     🖨️ Imprimir factura {lastPickupOrder.orderNumber}
                   </button>
@@ -1419,7 +1419,7 @@ export default function POSSportBarPage() {
                           />
                           <span className="text-foreground/70">Incluir 10% servicio</span>
                         </label>
-                        <div className="flex justify-between font-bold text-white border-t border-border pt-1">
+                        <div className="flex justify-between font-bold text-foreground border-t border-border pt-1">
                           <span>A cobrar</span>
                           <span>${paymentAmountToCharge.toFixed(2)}</span>
                         </div>
@@ -1437,7 +1437,7 @@ export default function POSSportBarPage() {
                     value={amountReceived}
                     onChange={(e) => setAmountReceived(e.target.value)}
                     placeholder={`Monto a recibir ($${paymentAmountToCharge.toFixed(2)})`}
-                    className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
+                    className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-foreground text-sm focus:border-amber-500 focus:outline-none mb-2"
                   />
 
                   {/* CurrencyCalculator */}
@@ -1511,7 +1511,7 @@ export default function POSSportBarPage() {
               <h3 className="text-lg font-black">Abrir cuenta — {selectedTable.name}</h3>
               <button
                 onClick={() => setShowOpenTabModal(false)}
-                className="text-muted-foreground hover:text-white text-2xl leading-none"
+                className="text-muted-foreground hover:text-destructive text-2xl leading-none"
               >
                 ×
               </button>
@@ -1526,7 +1526,7 @@ export default function POSSportBarPage() {
                   value={openTabName}
                   onChange={(e) => setOpenTabName(e.target.value)}
                   placeholder="Ej: Juan Pérez"
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-foreground text-sm focus:border-amber-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -1538,7 +1538,7 @@ export default function POSSportBarPage() {
                   value={openTabPhone}
                   onChange={(e) => setOpenTabPhone(e.target.value)}
                   placeholder="Ej: 0414-1234567"
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-foreground text-sm focus:border-amber-500 focus:outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1565,7 +1565,7 @@ export default function POSSportBarPage() {
                   <select
                     value={openTabWaiter}
                     onChange={(e) => setOpenTabWaiter(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
+                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground text-sm focus:border-amber-500 focus:outline-none"
                   >
                     <option value="">— Ninguno —</option>
                     <option value="1">Mesonero 1</option>
@@ -1604,7 +1604,7 @@ export default function POSSportBarPage() {
               <h3 className="text-lg font-black">🔐 Autorizar cobro</h3>
               <button
                 onClick={() => setShowPaymentPinModal(false)}
-                className="text-muted-foreground hover:text-white text-2xl"
+                className="text-muted-foreground hover:text-destructive text-2xl"
               >
                 ×
               </button>
@@ -1644,7 +1644,7 @@ export default function POSSportBarPage() {
                   }}
                   onKeyDown={(e) => e.key === "Enter" && handlePaymentPinConfirm()}
                   placeholder="••••••"
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-3 text-white text-center text-xl tracking-widest focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-3 text-foreground text-center text-xl tracking-widest focus:border-amber-500 focus:outline-none"
                 />
                 {paymentPinError && <p className="text-red-400 text-xs mt-1">{paymentPinError}</p>}
               </div>
@@ -1676,7 +1676,7 @@ export default function POSSportBarPage() {
           <div className="bg-card border border-purple-800/60 w-full max-w-sm mx-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
             <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-purple-300">🎁 Cortesía</h3>
-              <button onClick={() => setShowCortesiaModal(false)} className="text-muted-foreground hover:text-white text-2xl">×</button>
+              <button onClick={() => setShowCortesiaModal(false)} className="text-muted-foreground hover:text-destructive text-2xl">×</button>
             </div>
             <div className="p-5 space-y-4">
               <div>
@@ -1693,7 +1693,7 @@ export default function POSSportBarPage() {
                   type="number" min="1" max="100"
                   value={cortesiaPercent}
                   onChange={e => setCortesiaPercent(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-center text-lg font-bold focus:border-purple-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground text-center text-lg font-bold focus:border-purple-500 focus:outline-none"
                   placeholder="% personalizado"
                 />
               </div>
@@ -1731,13 +1731,13 @@ export default function POSSportBarPage() {
           <div className="bg-card border border-red-900/50 w-full max-w-sm mx-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
             <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-red-400">🗑️ Eliminar item</h3>
-              <button onClick={() => setShowRemoveModal(false)} className="text-muted-foreground hover:text-white text-2xl">
+              <button onClick={() => setShowRemoveModal(false)} className="text-muted-foreground hover:text-destructive text-2xl">
                 ×
               </button>
             </div>
             <div className="p-5 space-y-4">
               <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-3 text-sm">
-                <div className="font-bold text-white">
+                <div className="font-bold text-foreground">
                   {removeTarget.qty}× {removeTarget.itemName}
                 </div>
                 <div className="text-red-400 font-black">−${removeTarget.lineTotal.toFixed(2)}</div>
@@ -1754,7 +1754,7 @@ export default function POSSportBarPage() {
                   }}
                   placeholder="Ej: Error de pedido, cliente cambió de opinión..."
                   rows={2}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-sm resize-none focus:border-amber-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-foreground text-sm resize-none focus:border-amber-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -1771,7 +1771,7 @@ export default function POSSportBarPage() {
                   }}
                   onKeyDown={(e) => e.key === "Enter" && handleRemoveItem()}
                   placeholder="••••••"
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-3 text-white text-center text-xl tracking-widest focus:border-red-500 focus:outline-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-3 text-foreground text-center text-xl tracking-widest focus:border-red-500 focus:outline-none"
                 />
                 {removeError && <p className="text-red-400 text-xs mt-1">{removeError}</p>}
               </div>
@@ -1803,10 +1803,10 @@ export default function POSSportBarPage() {
           <div className="max-h-[92vh] sm:max-h-[90vh] w-full max-w-lg mx-auto overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-border bg-card shadow-2xl">
             <div className="border-b border-border p-5 flex items-start justify-between">
               <div>
-                <h3 className="text-xl font-black text-white">{selectedItemForModifier.name}</h3>
+                <h3 className="text-xl font-black text-foreground">{selectedItemForModifier.name}</h3>
                 <p className="mt-1 text-lg font-bold text-amber-400">${selectedItemForModifier.price.toFixed(2)}</p>
               </div>
-              <button onClick={() => setShowModifierModal(false)} className="text-muted-foreground hover:text-white text-2xl">
+              <button onClick={() => setShowModifierModal(false)} className="text-muted-foreground hover:text-destructive text-2xl">
                 ×
               </button>
             </div>
@@ -1820,7 +1820,7 @@ export default function POSSportBarPage() {
                 return (
                   <div key={group.id} className="rounded-xl border border-border bg-secondary p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="font-bold text-white">
+                      <span className="font-bold text-foreground">
                         {group.name}
                         {group.isRequired && <span className="text-red-400 ml-1 text-xs">*</span>}
                       </span>
@@ -1889,7 +1889,7 @@ export default function POSSportBarPage() {
               </div>
 
               <div className="flex items-center justify-between rounded-xl border border-border bg-secondary p-4">
-                <span className="font-bold text-white">Cantidad</span>
+                <span className="font-bold text-foreground">Cantidad</span>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))}
