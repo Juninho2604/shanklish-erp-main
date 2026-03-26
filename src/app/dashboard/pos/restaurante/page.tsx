@@ -346,13 +346,13 @@ export default function POSSportBarPage() {
   // Unique subcategory labels in current category
   const subcategories = useMemo(() => {
     const subcats = menuItems.map((i) => i.posSubcategory).filter(Boolean) as string[];
-    return [...new Set(subcats)];
+    return Array.from(new Set(subcats));
   }, [menuItems]);
 
   // Unique group labels after subcategory filter
   const groupsInView = useMemo(() => {
     const groups = subcatFilteredItems.map((i) => i.posGroup).filter(Boolean) as string[];
-    return [...new Set(groups)];
+    return Array.from(new Set(groups));
   }, [subcatFilteredItems]);
 
   const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
