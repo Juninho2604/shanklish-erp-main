@@ -79,6 +79,13 @@ model User {
   gameSessionsEnded   GameSession[]    @relation("GameSessionEnder")
   createdReservations Reservation[]    @relation("ReservationCreator")
 
+  // Módulo Financiero
+  createdExpenses         Expense[]         @relation("ExpenseCreator")
+  openedCashRegisters     CashRegister[]    @relation("CashRegisterOpener")
+  closedCashRegisters     CashRegister[]    @relation("CashRegisterCloser")
+  createdAccountsPayable  AccountPayable[]  @relation("AccountPayableCreator")
+  createdAccountPayments  AccountPayment[]  @relation("AccountPaymentCreator")
+
   @@index([email])
   @@index([role])
 }
@@ -1122,6 +1129,8 @@ model Supplier {
   suppliedItems  SupplierItem[]
   // Procesamiento de Proteínas
   proteinProcessings ProteinProcessing[]
+  // Módulo Financiero
+  accountsPayable AccountPayable[]
 
   @@index([name])
 }
@@ -1180,6 +1189,7 @@ model PurchaseOrder {
 
   // Items de la orden
   items           PurchaseOrderItem[]
+  accountsPayable AccountPayable[]
 
   // Soft Delete
   deletedAt       DateTime?
@@ -1255,6 +1265,187 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@index([module])
+}
+
+// ============================================================================
+// MÓDULO FINANCIERO - GASTOS, CAJA Y CUENTAS POR PAGAR
+// ============================================================================
+
+/// Categorías de gastos operativos (alquiler, servicios, nómina, etc.)
+model ExpenseCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique  // ej: "Alquiler", "Servicios Públicos", "Nómina"
+  description String?
+  color       String?  // hex color para UI, ej: "#3B82F6"
+  icon        String?  // emoji, ej: "🏠"
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  expenses    Expense[]
+
+  @@index([isActive])
+}
+
+/// Registro de gastos operativos (no de compras de inventario)
+model Expense {
+  id              String   @id @default(cuid())
+
+  // Descripción
+  description     String   // Ej: "Pago alquiler local enero 2026"
+  notes           String?  // Notas adicionales o referencia
+
+  // Clasificación
+  categoryId      String
+  category        ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  // Monto
+  amountUsd       Float    // Monto en USD (moneda base del sistema)
+  amountBs        Float?   // Monto en Bs (opcional, para referencia)
+  exchangeRate    Float?   // Tasa usada para conversión
+
+  // Pago
+  paymentMethod   String   // CASH_USD, CASH_BS, ZELLE, BANK_TRANSFER, MOBILE_PAY, CHECK, OTHER
+  paymentRef      String?  // Referencia de pago (número de transacción, cheque, etc.)
+  paidAt          DateTime // Fecha del pago/gasto
+
+  // Estado
+  status          String   @default("CONFIRMED") // CONFIRMED, VOID
+  voidReason      String?
+  voidedAt        DateTime?
+  voidedById      String?
+
+  // Comprobante
+  receiptUrl      String?  // URL de imagen/PDF del comprobante (opcional)
+
+  // Período al que pertenece
+  periodMonth     Int      // 1-12
+  periodYear      Int
+
+  // Auditoría
+  createdById     String
+  createdBy       User     @relation("ExpenseCreator", fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([paidAt])
+  @@index([periodYear, periodMonth])
+  @@index([status])
+  @@index([createdById])
+}
+
+/// Apertura y cierre de caja (para cuadre de efectivo al inicio/fin del turno)
+model CashRegister {
+  id              String   @id @default(cuid())
+
+  // Identificador de caja/terminal
+  registerName    String   // ej: "Caja Restaurante", "Caja Delivery"
+  shiftDate       DateTime // Fecha del turno (solo fecha, sin hora)
+  shiftType       String   @default("DAY") // DAY, NIGHT, MORNING
+
+  // Estado
+  status          String   @default("OPEN") // OPEN, CLOSED
+
+  // Apertura
+  openingCashUsd  Float    @default(0)  // Fondo inicial en USD
+  openingCashBs   Float    @default(0)  // Fondo inicial en Bs
+  openedAt        DateTime @default(now())
+  openedById      String
+  openedBy        User     @relation("CashRegisterOpener", fields: [openedById], references: [id])
+
+  // Cierre
+  closingCashUsd  Float?   // Efectivo contado al cierre en USD
+  closingCashBs   Float?   // Efectivo contado al cierre en Bs
+  closedAt        DateTime?
+  closedById      String?
+  closedBy        User?    @relation("CashRegisterCloser", fields: [closedById], references: [id])
+
+  // Resumen calculado al cierre
+  totalSalesUsd   Float?   // Total ventas del turno
+  totalExpenses   Float?   // Total gastos del turno
+  expectedCash    Float?   // Efectivo esperado (apertura + ventas efectivo - gastos)
+  difference      Float?   // Diferencia (cierre contado - esperado)
+
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shiftDate])
+  @@index([status])
+  @@index([openedById])
+}
+
+/// Cuentas por pagar — facturas/deudas pendientes con proveedores u otros acreedores
+model AccountPayable {
+  id              String   @id @default(cuid())
+
+  // Descripción
+  description     String   // Ej: "Factura vegetales 15/03/2026"
+  invoiceNumber   String?  // Número de factura del proveedor
+  invoiceUrl      String?  // URL del comprobante
+
+  // Acreedor
+  supplierId      String?  // Si es un proveedor del sistema
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  creditorName    String?  // Si no está en el sistema de proveedores
+
+  // Montos
+  totalAmountUsd  Float    // Monto total de la deuda en USD
+  paidAmountUsd   Float    @default(0) // Monto pagado acumulado
+  remainingUsd    Float    // Monto pendiente (calculado: total - paid)
+
+  // Fechas
+  invoiceDate     DateTime // Fecha de la factura
+  dueDate         DateTime? // Fecha de vencimiento (opcional)
+  fullyPaidAt     DateTime? // Fecha en que quedó saldada
+
+  // Estado
+  status          String   @default("PENDING") // PENDING, PARTIAL, PAID, OVERDUE, DISPUTED, VOID
+
+  // Relación con PurchaseOrder (si aplica)
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  // Auditoría
+  createdById     String
+  createdBy       User     @relation("AccountPayableCreator", fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  payments        AccountPayment[]
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+  @@index([createdById])
+}
+
+/// Pagos individuales aplicados a una cuenta por pagar
+model AccountPayment {
+  id               String         @id @default(cuid())
+  accountPayableId String
+  accountPayable   AccountPayable @relation(fields: [accountPayableId], references: [id], onDelete: Cascade)
+
+  amountUsd        Float
+  amountBs         Float?
+  exchangeRate     Float?
+  paymentMethod    String   // CASH_USD, CASH_BS, ZELLE, BANK_TRANSFER, MOBILE_PAY, CHECK
+  paymentRef       String?  // Referencia de transferencia, cheque, etc.
+  paidAt           DateTime
+
+  notes            String?
+
+  createdById      String
+  createdBy        User     @relation("AccountPaymentCreator", fields: [createdById], references: [id])
+  createdAt        DateTime @default(now())
+
+  @@index([accountPayableId])
+  @@index([paidAt])
 }
 
 // ============================================================================

@@ -437,6 +437,54 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     sortOrder: 540,
     tags: ['kpi', 'metas', 'objetivos'],
   },
+
+  // ═══════════════════════════════════════════
+  // ADMINISTRACIÓN FINANCIERA
+  // ═══════════════════════════════════════════
+  {
+    id: 'finanzas',
+    label: 'Dashboard Financiero',
+    description: 'Estado de resultados (P&L), flujo de caja y análisis financiero mensual',
+    icon: '📊',
+    href: '/dashboard/finanzas',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 550,
+    tags: ['finanzas', 'pl', 'resultados', 'caja'],
+  },
+  {
+    id: 'gastos',
+    label: 'Gastos',
+    description: 'Registro y control de gastos operativos: alquiler, servicios, nómina, mantenimiento y más',
+    icon: '💸',
+    href: '/dashboard/gastos',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 560,
+    tags: ['gastos', 'egresos', 'operativos'],
+  },
+  {
+    id: 'caja',
+    label: 'Control de Caja',
+    description: 'Apertura y cierre de caja diaria con cuadre de efectivo y diferencias',
+    icon: '🏧',
+    href: '/dashboard/caja',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 570,
+    tags: ['caja', 'cierre', 'efectivo', 'cuadre'],
+  },
+  {
+    id: 'cuentas_pagar',
+    label: 'Cuentas por Pagar',
+    description: 'Control de facturas y deudas pendientes con proveedores y acreedores',
+    icon: '📄',
+    href: '/dashboard/cuentas-pagar',
+    section: 'admin',
+    enabledByDefault: true,
+    sortOrder: 580,
+    tags: ['cuentas', 'pagar', 'proveedores', 'deudas'],
+  },
 ];
 
 /**
@@ -486,6 +534,11 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   module_config: ['OWNER'], // Solo el OWNER puede activar/desactivar módulos
   tasa_cambio: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
   metas: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'AUDITOR'],
+  // Módulo Financiero
+  finanzas:      ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
+  gastos:        ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
+  caja:          ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AUDITOR'],
+  cuentas_pagar: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
 };
 
 /**
