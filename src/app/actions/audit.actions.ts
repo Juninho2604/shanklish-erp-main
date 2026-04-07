@@ -422,8 +422,9 @@ export async function deleteAuditAction(auditId: string) {
     if (!session?.id) return { success: false };
 
     try {
-        await prisma.inventoryAudit.delete({
-            where: { id: auditId }
+        await prisma.inventoryAudit.update({
+            where: { id: auditId },
+            data: { deletedAt: new Date(), deletedById: session.id }
         });
         revalidatePath('/dashboard/inventario/auditorias');
         return { success: true };
