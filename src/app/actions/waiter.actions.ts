@@ -87,7 +87,7 @@ export async function deleteWaiterAction(id: string) {
     try {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
-        await prisma.waiter.delete({ where: { id } });
+        await prisma.waiter.update({ where: { id }, data: { isActive: false } });
         return { success: true, message: 'Mesonero eliminado' };
     } catch {
         return { success: false, message: 'Error eliminando mesonero' };

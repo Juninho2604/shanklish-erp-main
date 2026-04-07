@@ -768,8 +768,12 @@ model MenuModifier {
   // Relaciones
   orderItemModifiers SalesOrderItemModifier[]
 
+  // Soft Delete
+  deletedAt   DateTime?
+
   @@index([groupId])
   @@index([linkedMenuItemId])
+  @@index([deletedAt])
 }
 
 // Tabla pivote: QuÃ© grupos de modificadores aplican a quÃ© productos

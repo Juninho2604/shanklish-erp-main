@@ -14,6 +14,7 @@ export async function getModifierGroupsWithItemsAction() {
             orderBy: { sortOrder: 'asc' },
             include: {
                 modifiers: {
+                    where: { deletedAt: null },
                     orderBy: { sortOrder: 'asc' },
                     include: {
                         linkedMenuItem: {
@@ -209,7 +210,10 @@ export async function updateModifierNamePriceAction(id: string, name: string, pr
 
 export async function deleteModifierAction(id: string) {
     try {
-        await prisma.menuModifier.delete({ where: { id } });
+        await prisma.menuModifier.update({
+            where: { id },
+            data: { isAvailable: false, deletedAt: new Date() }
+        });
         revalidatePath('/dashboard/menu/modificadores');
         return { success: true };
     } catch (error) {
