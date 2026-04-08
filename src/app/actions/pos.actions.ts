@@ -57,6 +57,9 @@ export interface CreateOrderData {
     keepChangeAsTip?: boolean;
     // New: multi-method payments
     payments?: PaymentLine[];
+    // USD amount eligible for the -33% divisas discount (only used in pago mixto)
+    // If not set, the full subtotal gets the -33% when discountType === 'DIVISAS_33'
+    divisasUsdAmount?: number;
     notes?: string;
     discountType?: string; // 'DIVISAS_33', 'CORTESIA_100', 'CORTESIA_PERCENT', 'NONE'
     discountPercent?: number;
@@ -259,7 +262,7 @@ async function resolveSalesAreaForBranch(branchId?: string) {
 const DELIVERY_FEE_NORMAL = 4.5;
 const DELIVERY_FEE_DIVISAS = 3;
 
-function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' | 'discountType' | 'discountPercent' | 'amountPaid'>) {
+function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' | 'discountType' | 'discountPercent' | 'amountPaid' | 'divisasUsdAmount'>) {
     const itemsSubtotal = data.items.reduce((sum, item) => sum + item.lineTotal, 0);
 
     // DELIVERY: $4.5 fee normal, $3 en divisas. Sin 10% servicio.
@@ -270,11 +273,14 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' |
         let discountReason = '';
 
         if (data.discountType === 'DIVISAS_33') {
-            const itemsDiscounted = itemsSubtotal * (2 / 3);
+            // Partial divisas: only the USD portion gets -33%
+            const divisasBase = data.divisasUsdAmount ?? itemsSubtotal;
             subtotal = itemsSubtotal + DELIVERY_FEE_NORMAL;
-            discount = itemsSubtotal / 3 + (DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS);
-            total = itemsDiscounted + DELIVERY_FEE_DIVISAS;
-            discountReason = 'Pago en Divisas (33.33%) - Delivery $3';
+            discount = divisasBase / 3 + (DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS);
+            total = subtotal - discount;
+            discountReason = divisasBase < itemsSubtotal - 0.01
+                ? `Pago Mixto Divisas (33.33% sobre $${divisasBase.toFixed(2)}) - Delivery $3`
+                : 'Pago en Divisas (33.33%) - Delivery $3';
         } else if (data.discountType === 'CORTESIA_100') {
             subtotal = itemsSubtotal + DELIVERY_FEE_NORMAL;
             discount = subtotal;
@@ -302,8 +308,11 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' |
     let discountReason = '';
 
     if (data.discountType === 'DIVISAS_33') {
-        discount = subtotal / 3;
-        discountReason = 'Pago en Divisas (33.33%)';
+        const divisasBase = data.divisasUsdAmount ?? subtotal;
+        discount = divisasBase / 3;
+        discountReason = divisasBase < subtotal - 0.01
+            ? `Pago Mixto Divisas (33.33% sobre $${divisasBase.toFixed(2)})`
+            : 'Pago en Divisas (33.33%)';
     } else if (data.discountType === 'CORTESIA_100') {
         discount = subtotal;
         discountReason = 'Cortesía Autorizada (100%)';

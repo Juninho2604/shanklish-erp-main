@@ -103,12 +103,7 @@ export default function MixedPaymentSelector({
     notify(next);
   };
 
-  // Reset when totalAmount changes significantly
-  useEffect(() => {
-    setLines([]);
-    onChange([], 0, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalAmount]);
+  // No auto-reset on totalAmount change — parent controls reset via key prop
 
   const visibleMethods = allowCortesia
     ? METHODS
