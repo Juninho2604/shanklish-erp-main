@@ -1636,6 +1636,15 @@ model SystemConfig {
   updatedBy String?              // userId quien lo cambió
 }
 
+// Contador global de correlativo por canal (nunca se resetea)
+model InvoiceCounter {
+  id        String   @id @default(cuid())
+  channel   String   @unique
+  // "DELIVERY" | "PICKUP" | "RESTAURANT" | "PEDIDOS_YA" | "OPEN_TAB" | "GAME_SESSION"
+  lastValue Int      @default(100)
+  updatedAt DateTime @updatedAt
+}
+
 model ExchangeRate {
   id            String   @id @default(cuid())
   rate          Float    // Bs por 1 USD

@@ -11,6 +11,7 @@ import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { registerSale } from '@/server/services/inventory.service';
 import { getCaracasDateStamp, getCaracasDayRange } from '@/lib/datetime';
+import { getNextCorrelativo } from '@/lib/invoice-counter';
 import { getStockValidationEnabled } from '@/app/actions/system-config.actions';
 import { createReorderBroadcastsAction } from '@/app/actions/purchase.actions';
 
@@ -316,25 +317,7 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' |
 }
 
 async function generateTabCode(): Promise<string> {
-    const today = new Date();
-    const startOfDay = new Date(today);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(today);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const count = await prisma.openTab.count({
-        where: {
-            openedAt: {
-                gte: startOfDay,
-                lte: endOfDay
-            }
-        }
-    });
-
-    const sequence = String(count + 1).padStart(3, '0');
-    const dateStr = today.toISOString().split('T')[0];
-    return `TAB-${dateStr}-${sequence}`;
+    return getNextCorrelativo('OPEN_TAB');
 }
 
 async function getMenuItemMetadata(menuItemIds: string[]) {
@@ -617,25 +600,10 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 // ============================================================================
 
 async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
-    const dateStr = getCaracasDateStamp();
-    const prefix = orderType === 'RESTAURANT' ? 'REST' : 'DELV';
-    const orderPrefix = `${prefix}-${dateStr}-`;
-
-    const lastOrder = await prisma.salesOrder.findFirst({
-        where: { orderNumber: { startsWith: orderPrefix } },
-        orderBy: { orderNumber: 'desc' },
-        select: { orderNumber: true },
-    });
-
-    let nextSeq = 1;
-    if (lastOrder) {
-        const parts = lastOrder.orderNumber.split('-');
-        const lastSeq = parseInt(parts[parts.length - 1], 10);
-        nextSeq = isNaN(lastSeq) ? 1 : lastSeq + 1;
-    }
-
-    const sequence = String(nextSeq).padStart(3, '0');
-    return `${orderPrefix}${sequence}`;
+    const channel = orderType === 'RESTAURANT' ? 'RESTAURANT'
+        : orderType === 'PICKUP' ? 'PICKUP'
+        : 'DELIVERY';
+    return getNextCorrelativo(channel);
 }
 
 function isOrderNumberUniqueError(err: unknown): boolean {

@@ -2,7 +2,7 @@
 
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
-import { getCaracasDateStamp } from '@/lib/datetime';
+import { getNextCorrelativo } from '@/lib/invoice-counter';
 import { revalidatePath } from 'next/cache';
 
 export interface PedidosYAItem {
@@ -25,20 +25,7 @@ export interface CreatePedidosYAOrderData {
 }
 
 async function generatePYAOrderNumber(): Promise<string> {
-    const dateStr = getCaracasDateStamp();
-    const prefix = `PYA-${dateStr}-`;
-    const lastOrder = await prisma.salesOrder.findFirst({
-        where: { orderNumber: { startsWith: prefix } },
-        orderBy: { orderNumber: 'desc' },
-        select: { orderNumber: true },
-    });
-    let nextSeq = 1;
-    if (lastOrder) {
-        const parts = lastOrder.orderNumber.split('-');
-        const lastSeq = parseInt(parts[parts.length - 1], 10);
-        nextSeq = isNaN(lastSeq) ? 1 : lastSeq + 1;
-    }
-    return `${prefix}${String(nextSeq).padStart(3, '0')}`;
+    return getNextCorrelativo('PEDIDOS_YA');
 }
 
 export async function createPedidosYAOrderAction(data: CreatePedidosYAOrderData) {

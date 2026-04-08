@@ -10,6 +10,7 @@
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { getNextCorrelativo } from '@/lib/invoice-counter';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -202,9 +203,8 @@ export async function startSession(data: {
         throw new Error(`La estación "${station.name}" no está disponible (estado: ${station.currentStatus})`);
     }
 
-    // Generar código de sesión
-    const count = await prisma.gameSession.count();
-    const code  = `GSN-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    // Generar código de sesión (contador global, nunca se resetea)
+    const code = await getNextCorrelativo('GAME_SESSION');
 
     const [gameSession] = await prisma.$transaction([
         prisma.gameSession.create({
@@ -485,10 +485,8 @@ export async function checkInReservation(reservationId: string) {
     }
 
     // Marcar como CHECKED_IN y arrancar sesión automáticamente
+    const code = await getNextCorrelativo('GAME_SESSION');
     const [updatedReservation, gameSession] = await prisma.$transaction(async tx => {
-        const count = await tx.gameSession.count();
-        const code  = `GSN-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
-
         const sess = await tx.gameSession.create({
             data: {
                 code,
