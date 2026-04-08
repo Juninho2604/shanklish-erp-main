@@ -35,7 +35,7 @@ export interface CartItem {
 }
 
 export type POSOrderType = 'RESTAURANT' | 'DELIVERY' | 'PICKUP';
-export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE' | 'CORTESIA';
+export type POSPaymentMethod = 'CASH' | 'CASH_BS' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE' | 'CORTESIA';
 
 export interface PaymentLine {
     method: string;          // CASH | ZELLE | CARD | MOBILE_PAY | TRANSFER | CORTESIA

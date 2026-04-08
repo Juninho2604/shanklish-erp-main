@@ -21,7 +21,8 @@ interface Props {
 }
 
 const METHODS = [
-  { id: 'CASH',       label: '💵 Efectivo' },
+  { id: 'CASH',       label: '💵 Efectivo $' },
+  { id: 'CASH_BS',    label: '💴 Efectivo Bs' },
   { id: 'ZELLE',      label: '⚡ Zelle' },
   { id: 'CARD',       label: '💳 Punto' },
   { id: 'MOBILE_PAY', label: '📱 P.Móvil' },
@@ -30,7 +31,7 @@ const METHODS = [
 ] as const;
 
 /** These methods are paid in Bs — show conversion when exchangeRate available */
-const BS_METHODS = new Set(['CARD', 'MOBILE_PAY', 'TRANSFER']);
+const BS_METHODS = new Set(['CASH_BS', 'CARD', 'MOBILE_PAY', 'TRANSFER']);
 
 function methodLabel(id: string) {
   return METHODS.find((m) => m.id === id)?.label ?? id;
