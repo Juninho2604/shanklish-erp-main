@@ -1265,7 +1265,7 @@ export default function POSSportBarPage() {
                 ))}
               </div>
 
-              <div className="p-4 bg-card border-t border-border space-y-3 shrink-0">
+              <div className="overflow-y-auto p-4 bg-card border-t border-border space-y-3 shrink-0 max-h-[calc(100vh-200px)]">
                 {/* Descuento */}
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -1374,7 +1374,7 @@ export default function POSSportBarPage() {
                         </div>
                       )}
 
-                      <CurrencyCalculator totalUsd={pickupTotal} hasServiceFee={false} onRateUpdated={setExchangeRate} inline />
+                      <CurrencyCalculator totalUsd={pickupTotal} hasServiceFee={false} onRateUpdated={setExchangeRate} inline startCollapsed />
 
                       <button onClick={handleCheckoutPickup} disabled={cart.length === 0 || isProcessing}
                         className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-xl shadow-primary/20">
@@ -1682,6 +1682,7 @@ export default function POSSportBarPage() {
                     hasServiceFee={false}
                     onRateUpdated={setExchangeRate}
                     inline
+                    startCollapsed
                   />
 
                   {/* Register payment (requiere PIN) */}

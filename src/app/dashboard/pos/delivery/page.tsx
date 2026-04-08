@@ -438,7 +438,7 @@ export default function POSDeliveryPage() {
                         <div className="space-y-3">
                             <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="👤 Nombre Cliente" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all" />
                             <input type="text" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="📞 Teléfono" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all" />
-                            <textarea value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="📍 Dirección exacta de entrega..." className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all h-24 resize-none" />
+                            <textarea value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="📍 Dirección exacta de entrega..." className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-primary focus:ring-0 transition-all h-16 resize-none" />
                         </div>
                     </div>
 
@@ -465,7 +465,7 @@ export default function POSDeliveryPage() {
                         ))}
                     </div>
 
-                    <div className="p-6 bg-secondary/30 border-t border-border space-y-4">
+                    <div className="overflow-y-auto p-6 bg-secondary/30 border-t border-border space-y-4 shrink-0 max-h-[calc(100vh-220px)]">
                         <div className="capsula-card p-4 space-y-2 border-primary/10 shadow-lg">
                             <div className="flex justify-between text-xs font-black text-muted-foreground uppercase tracking-widest">
                                 <span>Subtotal Orden</span>
@@ -495,6 +495,7 @@ export default function POSDeliveryPage() {
                                     hasServiceFee={false}
                                     onRateUpdated={setExchangeRate}
                                     inline
+                                    startCollapsed
                                 />
                             </div>
                         </div>

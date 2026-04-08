@@ -15,6 +15,12 @@ interface CurrencyCalculatorProps {
      * Ideal para paneles de cobro en delivery, pickup y salón.
      */
     inline?: boolean;
+    /**
+     * Cuando startCollapsed=true (sólo en modo inline) el panel arranca
+     * plegado mostrando sólo la tasa y el total en Bs en una línea compacta.
+     * El usuario puede expandirlo pulsando el botón ▼.
+     */
+    startCollapsed?: boolean;
 }
 
 export function CurrencyCalculator({
@@ -24,8 +30,10 @@ export function CurrencyCalculator({
     deliveryFee,
     onRateUpdated,
     inline = false,
+    startCollapsed = false,
 }: CurrencyCalculatorProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(!startCollapsed);
     const [rate, setRate] = useState<number | null>(null);
     const [editableRate, setEditableRate] = useState('');
     const [usdInput, setUsdInput] = useState('');
@@ -137,14 +145,50 @@ export function CurrencyCalculator({
         </div>
     );
 
-    // ── Modo inline: panel siempre visible ───────────────────────────────────
+    // ── Modo inline con soporte para colapso ─────────────────────────────────
     if (inline) {
+        // Calcular el total en Bs para la línea compacta
+        const totalBs = effectiveRate > 0 && typeof totalUsd === 'number' && totalUsd > 0
+            ? usdToBs(
+                totalUsd + (hasServiceFee ? totalUsd * 0.1 : 0) + (deliveryFee || 0),
+                effectiveRate
+              )
+            : null;
+
         return (
-            <div className={`rounded-2xl border border-slate-600 bg-slate-900 p-4 ${className ?? ''}`}>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
-                    💱 Calculadora USD → Bs
-                </p>
-                {panel}
+            <div className={`rounded-2xl border border-slate-600 bg-slate-900 overflow-hidden ${className ?? ''}`}>
+                {/* Cabecera — siempre visible, con toggle si startCollapsed */}
+                <button
+                    type="button"
+                    onClick={() => setIsExpanded((v) => !v)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-slate-800/50 transition-colors"
+                >
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-bold text-slate-400 shrink-0">💱</span>
+                        {effectiveRate > 0 ? (
+                            <span className="text-sm font-black text-emerald-400 tabular-nums">
+                                1 USD = {effectiveRate.toLocaleString('es-VE')} Bs
+                            </span>
+                        ) : (
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                                Tasa no configurada
+                            </span>
+                        )}
+                        {totalBs !== null && (
+                            <span className="text-xs text-blue-300 font-bold truncate ml-1">
+                                · ${(totalUsd! + (hasServiceFee ? totalUsd! * 0.1 : 0) + (deliveryFee || 0)).toFixed(2)} = {totalBs.toLocaleString('es-VE', { maximumFractionDigits: 0 })} Bs
+                            </span>
+                        )}
+                    </div>
+                    <span className={`text-slate-400 text-xs ml-2 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+                </button>
+
+                {/* Contenido expandible */}
+                {isExpanded && (
+                    <div className="px-4 pb-4 pt-1 border-t border-slate-700">
+                        {panel}
+                    </div>
+                )}
             </div>
         );
     }
