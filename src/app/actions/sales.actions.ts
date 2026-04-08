@@ -415,9 +415,11 @@ export async function getDailyZReportAction(): Promise<{ success: boolean; data?
 
             const amountPaid = o.amountPaid || o.total;
             // Propina = excedente pagado sin vuelto (keepChangeAsTip)
+            // netReceived = lo que quedó en caja (excluye vuelto devuelto)
+            const netReceived = amountPaid - (o.change || 0);
             totalTips += (o.change === 0 && amountPaid > o.total)
                 ? Math.max(0, amountPaid - o.total) : 0;
-            addPayment(o.paymentMethod, amountPaid);
+            addPayment(o.paymentMethod, netReceived);
 
             if      (o.orderType === 'DELIVERY')   byType.delivery++;
             else if (o.orderType === 'PEDIDOSYA')  byType.pedidosya++;
