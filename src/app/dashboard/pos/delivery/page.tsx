@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
+import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem, type PaymentLine } from '@/app/actions/pos.actions';
+import MixedPaymentSelector from '@/components/pos/MixedPaymentSelector';
 import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
 import { getPOSConfig } from '@/lib/pos-settings';
@@ -14,13 +15,6 @@ import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
 const DELIVERY_FEE_NORMAL = 4.5;
 const DELIVERY_FEE_DIVISAS = 3;
 
-const PAYMENT_LABELS = {
-    CASH: 'Efectivo $',
-    ZELLE: 'Zelle',
-    CARD: 'Punto',
-    MOBILE_PAY: 'P.Móvil',
-    TRANSFER: 'Transf'
-};
 
 interface ModifierOption {
     id: string;
@@ -77,8 +71,8 @@ export default function POSDeliveryPage() {
     const [itemNotes, setItemNotes] = useState('');
 
     // PAYMENT STATE
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('TRANSFER');
-    const [amountReceived, setAmountReceived] = useState('');
+    const [mixedPayments, setMixedPayments] = useState<PaymentLine[]>([]);
+    const [mixedPaymentsComplete, setMixedPaymentsComplete] = useState(false);
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
     // DISCOUNT STATE
@@ -122,10 +116,12 @@ export default function POSDeliveryPage() {
     }, [selectedCategory, categories]);
 
     useEffect(() => {
-        if (paymentMethod !== 'CASH' && paymentMethod !== 'ZELLE' && discountType === 'DIVISAS_33') {
+        // Auto-clear Divisas discount if not all payment methods are cash/Zelle
+        const isPD = mixedPayments.length > 0 && mixedPayments.every(p => p.method === 'CASH' || p.method === 'ZELLE');
+        if (!isPD && discountType === 'DIVISAS_33') {
             setDiscountType('NONE');
         }
-    }, [paymentMethod, discountType]);
+    }, [mixedPayments, discountType]);
 
     const filteredMenuItems = productSearch.trim()
         ? categories.flatMap((c: any) => c.items as MenuItem[]).filter((i) =>
@@ -213,7 +209,7 @@ export default function POSDeliveryPage() {
     };
 
     const cartSubtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
-    const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
+    const isPagoDivisas = mixedPayments.length > 0 && mixedPayments.every(p => p.method === 'CASH' || p.method === 'ZELLE');
     const cortesiaPercentNum = Math.min(100, Math.max(0, parseFloat(cortesiaPercent) || 0));
     const deliveryFee = discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL;
     const itemsAfterDiscount = discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal * (2 / 3)
@@ -223,17 +219,22 @@ export default function POSDeliveryPage() {
     const finalTotal = (discountType === 'CORTESIA_100') ? 0
         : discountType === 'CORTESIA_PERCENT' ? itemsAfterDiscount + (cortesiaPercentNum >= 100 ? 0 : deliveryFee)
         : itemsAfterDiscount + deliveryFee;
-    const paidAmount = parseFloat(amountReceived) || 0;
+    const totalMixedPaid = mixedPayments.reduce((s, p) => s + p.amountUSD, 0);
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
         setIsProcessing(true);
         try {
+            const effectivePayments = mixedPayments.length > 0
+                ? mixedPayments
+                : [{ method: 'TRANSFER', amountUSD: finalTotal }];
             const result = await createSalesOrderAction({
                 orderType: 'DELIVERY',
                 customerName: customerName || 'Delivery',
                 customerPhone, customerAddress: customerAddress || 'N/A',
-                items: cart, paymentMethod, amountPaid: paidAmount || finalTotal,
+                items: cart,
+                payments: effectivePayments,
+                amountPaid: totalMixedPaid || finalTotal,
                 discountType,
                 discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum : undefined,
                 authorizedById: authorizedManager?.id,
@@ -274,7 +275,8 @@ export default function POSDeliveryPage() {
                 if (cfg.printReceiptOnDelivery) {
                     printReceipt(receiptData);
                 }
-                setCart([]); setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); setPaymentMethod('TRANSFER'); setAmountReceived('');
+                setCart([]); setCustomerName(''); setCustomerPhone(''); setCustomerAddress('');
+                setMixedPayments([]); setMixedPaymentsComplete(false);
                 setDiscountType('NONE'); setAuthorizedManager(null);
             } else toast.error(result.message ?? 'Error al procesar el pedido');
         } catch (e) { console.error(e); toast.error('Error al procesar el pedido'); } finally { setIsProcessing(false); }
@@ -486,24 +488,15 @@ export default function POSDeliveryPage() {
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2">
-                                {(['TRANSFER', 'MOBILE_PAY', 'CASH', 'ZELLE', 'CARD'] as const).map(m => (
-                                    <button key={m} onClick={() => setPaymentMethod(m)} className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 ${paymentMethod === m ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-background border border-border text-muted-foreground'}`}>
-                                        {PAYMENT_LABELS[m]}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
-                                <input
-                                    type="number"
-                                    value={amountReceived}
-                                    onChange={(e) => setAmountReceived(e.target.value)}
-                                    placeholder={`Recibido...`}
-                                    className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30"
-                                />
-                                <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
-                            </div>
+                            <MixedPaymentSelector
+                                totalAmount={finalTotal}
+                                exchangeRate={exchangeRate}
+                                onChange={(lines, _paid, complete) => {
+                                    setMixedPayments(lines);
+                                    setMixedPaymentsComplete(complete);
+                                }}
+                                disabled={isProcessing}
+                            />
 
                             <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-2xl shadow-primary/30">
                                 {isProcessing ? 'PROCESANDO...' : `CONFIRMAR ORDEN`}
