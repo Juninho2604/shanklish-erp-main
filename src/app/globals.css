@@ -175,3 +175,19 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-muted-foreground/30 rounded-full hover:bg-muted-foreground/50 transition-colors;
 }
+
+/* ============================================================================
+   KIOSCO / TABLET (Redmi Pad 2 — 800px–1280px)
+   Elimina scroll lateral y garantiza touch targets mínimos
+   ============================================================================ */
+@media (min-width: 800px) and (max-width: 1280px) {
+  body {
+    overflow-x: hidden;
+    touch-action: pan-y;
+  }
+  /* Touch targets mínimo 44px para dedos */
+  button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

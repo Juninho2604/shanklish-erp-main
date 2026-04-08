@@ -685,6 +685,8 @@ model MenuItem {
   // Precios
   price           Float    // Precio de venta en USD
   cost            Float?   // Costo calculado (si tiene receta)
+  pedidosYaPrice  Float?   // Precio publicado en PedidosYA (override manual)
+  pedidosYaEnabled Boolean @default(false) // Disponible en PedidosYA
   
   // VinculaciÃ³n con inventario/receta (opcional)
   recipeId        String?  // Si el producto tiene receta para descontar insumos
@@ -876,6 +878,7 @@ model SalesOrder {
   inventoryMovements InventoryMovement[] @relation("SaleMovements")
   openTabLinks       OpenTabOrder[]
   paymentSplits      PaymentSplit[]
+  orderPayments      SalesOrderPayment[]
   gameSessions       GameSession[]       @relation("GameSessions")
 
   // Soft Delete
@@ -1616,6 +1619,21 @@ model PaymentSplit {
   notes          String?
 
   @@index([openTabId, status])
+  @@index([salesOrderId])
+}
+
+// Líneas de pago de una orden (pagos mixtos: efectivo + zelle + punto, etc.)
+model SalesOrderPayment {
+  id           String     @id @default(cuid())
+  salesOrderId String
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  method       String     // CASH | ZELLE | CARD | MOBILE_PAY | TRANSFER | CORTESIA
+  amountUSD    Float
+  amountBS     Float?     // Monto en Bs si el pago fue en Bs
+  exchangeRate Float?     // Tasa usada para esta línea
+  reference    String?    // Número de referencia (transferencia, confirmación Zelle, etc.)
+  createdAt    DateTime   @default(now())
+
   @@index([salesOrderId])
 }
 

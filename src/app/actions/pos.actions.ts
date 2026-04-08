@@ -35,7 +35,15 @@ export interface CartItem {
 }
 
 export type POSOrderType = 'RESTAURANT' | 'DELIVERY' | 'PICKUP';
-export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE';
+export type POSPaymentMethod = 'CASH' | 'CASH_BS' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE' | 'CORTESIA';
+
+export interface PaymentLine {
+    method: string;          // CASH | ZELLE | CARD | MOBILE_PAY | TRANSFER | CORTESIA
+    amountUSD: number;
+    amountBS?: number;
+    exchangeRate?: number;
+    reference?: string;
+}
 
 export interface CreateOrderData {
     orderType: POSOrderType;
@@ -43,13 +51,16 @@ export interface CreateOrderData {
     customerPhone?: string;
     customerAddress?: string;
     items: CartItem[];
+    // Legacy single-method fields (kept for backwards compat)
     paymentMethod?: POSPaymentMethod;
     amountPaid?: number;
-    keepChangeAsTip?: boolean; // Si el cliente deja el excedente como propina (no dar vuelto)
+    keepChangeAsTip?: boolean;
+    // New: multi-method payments
+    payments?: PaymentLine[];
     notes?: string;
     discountType?: string; // 'DIVISAS_33', 'CORTESIA_100', 'CORTESIA_PERCENT', 'NONE'
-    discountPercent?: number; // Para CORTESIA_PERCENT (ej: 20 = 20%)
-    authorizedById?: string; // ID del gerente que autorizó
+    discountPercent?: number;
+    authorizedById?: string;
 }
 
 export interface OpenTabInput {
@@ -651,14 +662,18 @@ export async function createSalesOrderAction(
                         serviceFlow: 'DIRECT_SALE',
                         sourceChannel: data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_RESTAURANT',
                         paymentStatus: 'PAID',
-                        paymentMethod: data.paymentMethod || 'CASH',
+                        paymentMethod: data.payments && data.payments.length > 0
+                            ? (data.payments.length === 1 ? data.payments[0].method : 'MULTIPLE')
+                            : (data.paymentMethod || 'CASH'),
                         kitchenStatus: 'SENT',
                         sentToKitchenAt: new Date(),
 
                         subtotal,
                         discount,
                         total,
-                        amountPaid: data.amountPaid || total,
+                        amountPaid: data.payments && data.payments.length > 0
+                            ? data.payments.reduce((s, p) => s + p.amountUSD, 0)
+                            : (data.amountPaid || total),
                         change: data.keepChangeAsTip ? 0 : (change > 0 ? change : 0),
 
                         discountType: data.discountType,
@@ -698,6 +713,22 @@ export async function createSalesOrderAction(
         }
 
         if (!newOrder) throw new Error('No se pudo crear la orden tras reintentos');
+
+        // ====================================================================
+        // REGISTRAR LÍNEAS DE PAGO MIXTO
+        // ====================================================================
+        if (data.payments && data.payments.length > 0) {
+            await prisma.salesOrderPayment.createMany({
+                data: data.payments.map(p => ({
+                    salesOrderId: newOrder!.id,
+                    method: p.method,
+                    amountUSD: p.amountUSD,
+                    amountBS: p.amountBS,
+                    exchangeRate: p.exchangeRate,
+                    reference: p.reference,
+                })),
+            });
+        }
 
         // ====================================================================
         // GESTIÓN DE INVENTARIO (Descargo de Recetas — atómico)

@@ -9,6 +9,10 @@ const config: Config = {
     ],
     theme: {
         extend: {
+            screens: {
+                'tablet': '800px',        // Redmi Pad 2 portrait
+                'tablet-land': '1200px',  // Redmi Pad 2 landscape ← target principal
+            },
             colors: {
                 border: 'hsl(var(--border))',
                 input: 'hsl(var(--input))',

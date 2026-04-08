@@ -11,6 +11,7 @@ import {
     getCategoriesAction,
     createRecipeStubForMenuItemAction
 } from '@/app/actions/menu.actions';
+import { calcPedidosYaPrice } from '@/lib/pedidosya-price';
 
 export default function MenuManagementPage() {
     const [categories, setCategories] = useState<any[]>([]);
@@ -271,14 +272,20 @@ export default function MenuManagementPage() {
                                         })()}
 
                                         {/* Precio Editable */}
-                                        <div className="flex items-center bg-gray-900 rounded-lg border border-gray-600 px-3 py-1">
-                                            <span className="text-amber-500 font-bold mr-1">$</span>
-                                            <input
-                                                type="number"
-                                                defaultValue={item.price}
-                                                onBlur={(e) => handlePriceChange(item.id, e.target.value)}
-                                                className="bg-transparent w-20 text-white font-mono font-bold focus:outline-none"
-                                            />
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center bg-gray-900 rounded-lg border border-gray-600 px-3 py-1">
+                                                <span className="text-amber-500 font-bold mr-1">$</span>
+                                                <input
+                                                    type="number"
+                                                    defaultValue={item.price}
+                                                    onBlur={(e) => handlePriceChange(item.id, e.target.value)}
+                                                    className="bg-transparent w-20 text-white font-mono font-bold focus:outline-none"
+                                                />
+                                            </div>
+                                            <div className="flex items-center bg-orange-500/10 rounded-lg border border-orange-500/30 px-2 py-1 gap-1" title="Precio PedidosYA (~-33%)">
+                                                <span className="text-orange-400 text-xs">PYA</span>
+                                                <span className="text-orange-500 font-mono font-bold text-xs">${(item.pedidosYaPrice ?? calcPedidosYaPrice(item.price)).toFixed(2)}</span>
+                                            </div>
                                         </div>
 
                                         {/* Switch Activo/Inactivo */}

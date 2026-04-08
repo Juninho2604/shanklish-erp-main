@@ -13,7 +13,9 @@ import {
   removeItemFromOpenTabAction,
   validateManagerPinAction,
   type CartItem,
+  type PaymentLine,
 } from "@/app/actions/pos.actions";
+import MixedPaymentSelector from "@/components/pos/MixedPaymentSelector";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
 import { printKitchenCommand, printReceipt } from "@/lib/print-command";
 import { getPOSConfig } from "@/lib/pos-settings";
@@ -196,12 +198,15 @@ export default function POSSportBarPage() {
   // ── Cart ──────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // ── Payment ───────────────────────────────────────────────────────────────
+  // ── Payment (table mode) ─────────────────────────────────────────────────
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "MOBILE_PAY" | "ZELLE">("CASH");
   const [amountReceived, setAmountReceived] = useState("");
   const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
   const [paymentPin, setPaymentPin] = useState("");
   const [paymentPinError, setPaymentPinError] = useState("");
+
+  // ── Payment (pickup mode — mixed payments) ───────────────────────────────
+  const [mixedPaymentsPickup, setMixedPaymentsPickup] = useState<PaymentLine[]>([]);
 
   // ── Descuento ─────────────────────────────────────────────────────────────
   const [discountType, setDiscountType] = useState<"NONE" | "DIVISAS_33" | "CORTESIA_100" | "CORTESIA_PERCENT">("NONE");
@@ -358,7 +363,12 @@ export default function POSSportBarPage() {
 
   const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
   const paidAmount = parseFloat(amountReceived) || 0;
+  // isPagoDivisas: used by TABLE mode (registerOpenTabPaymentAction)
   const isPagoDivisas = paymentMethod === "CASH" || paymentMethod === "ZELLE";
+  // isPagoDivisasPickup: used by PICKUP mode (mixed payments)
+  const isPagoDivisasPickup = mixedPaymentsPickup.length > 0
+    && mixedPaymentsPickup.every(p => p.method === "CASH" || p.method === "ZELLE");
+  const totalMixedPickupPaid = mixedPaymentsPickup.reduce((s, p) => s + p.amountUSD, 0);
 
   const cortesiaPercentNum = Math.min(100, Math.max(0, parseFloat(cortesiaPercent) || 0));
 
@@ -695,12 +705,15 @@ export default function POSSportBarPage() {
         : 0;
       const finalTotal = Math.max(0, cartTotal - pickupDiscount);
 
+      const effectivePickupPayments = mixedPaymentsPickup.length > 0
+        ? mixedPaymentsPickup
+        : [{ method: "CASH", amountUSD: finalTotal }];
       const result = await createSalesOrderAction({
         orderType: "RESTAURANT",
         customerName: pickupCustomerName || "Cliente en Caja",
         items: cart,
-        paymentMethod,
-        amountPaid: paidAmount || finalTotal,
+        payments: effectivePickupPayments,
+        amountPaid: totalMixedPickupPaid || finalTotal,
         keepChangeAsTip,
         notes: "Venta Directa Pickup",
         discountType,
@@ -760,8 +773,7 @@ export default function POSSportBarPage() {
         });
 
         setCart([]);
-        setPaymentMethod("CASH");
-        setAmountReceived("");
+        setMixedPaymentsPickup([]);
         setKeepChangeAsTip(false);
         clearDiscount();
         setPickupCustomerName("");
@@ -1238,10 +1250,10 @@ export default function POSSportBarPage() {
                     Normal
                   </button>
                   <button
-                    onClick={() => isPagoDivisas ? setDiscountType("DIVISAS_33") : undefined}
-                    disabled={!isPagoDivisas}
-                    title={!isPagoDivisas ? "Solo con Efectivo o Zelle" : ""}
-                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-indigo-600 text-white" : isPagoDivisas ? "bg-secondary text-foreground/70 hover:bg-muted" : "bg-secondary text-foreground/50 cursor-not-allowed opacity-50"}`}
+                    onClick={() => isPagoDivisasPickup ? setDiscountType("DIVISAS_33") : undefined}
+                    disabled={!isPagoDivisasPickup}
+                    title={!isPagoDivisasPickup ? "Solo con Efectivo o Zelle" : ""}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-indigo-600 text-white" : isPagoDivisasPickup ? "bg-secondary text-foreground/70 hover:bg-muted" : "bg-secondary text-foreground/50 cursor-not-allowed opacity-50"}`}
                   >
                     Divisas -33%
                   </button>
@@ -1254,19 +1266,6 @@ export default function POSSportBarPage() {
                       : "🎁 Cortesía (PIN)"}
                   </button>
                 </div>
-                {/* Métodos de pago */}
-                <div className="grid grid-cols-2 gap-2">
-                  {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setPaymentMethod(m)}
-                      className={`py-3 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all active:scale-95 ${paymentMethod === m ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-card border border-border text-foreground/50"}`}
-                    >
-                      {PAYMENT_LABELS[m]}
-                    </button>
-                  ))}
-                </div>
-
                 {/* Total calculado pickup */}
                 {(() => {
                   const pickupDiscount = discountType === "DIVISAS_33" ? cartTotal / 3
@@ -1274,25 +1273,23 @@ export default function POSSportBarPage() {
                     : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
                     : 0;
                   const pickupTotal = Math.max(0, cartTotal - pickupDiscount);
+                  const pickupChange = Math.max(0, totalMixedPickupPaid - pickupTotal);
                   return (
-                    <div className="space-y-4 pt-2">
-                       <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
-                        <input
-                          type="number"
-                          value={amountReceived}
-                          onChange={(e) => { setAmountReceived(e.target.value); setKeepChangeAsTip(false); }}
-                          placeholder={`Recibido...`}
-                          className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30 text-foreground"
-                        />
-                        <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
-                      </div>
+                    <div className="space-y-3 pt-2">
+                      {/* Pagos mixtos */}
+                      <MixedPaymentSelector
+                        totalAmount={pickupTotal}
+                        exchangeRate={exchangeRate}
+                        onChange={(lines, _paid, _complete) => setMixedPaymentsPickup(lines)}
+                        disabled={isProcessing}
+                      />
 
                       {/* Vuelto / Propina */}
-                      {paidAmount > pickupTotal && (
+                      {pickupChange > 0.001 && (
                         <div className="rounded-2xl border border-border bg-card p-3 space-y-2">
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Vuelto:</span>
-                            <span className="font-black text-lg text-amber-400">${(paidAmount - pickupTotal).toFixed(2)}</span>
+                            <span className="font-black text-lg text-amber-400">${pickupChange.toFixed(2)}</span>
                           </div>
                           <button
                             type="button"

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { getMenuForPOSAction, type CartItem } from '@/app/actions/pos.actions';
 import { createPedidosYAOrderAction } from '@/app/actions/pedidosya.actions';
+import { calcPedidosYaPrice } from '@/lib/pedidosya-price';
 import { printKitchenCommand } from '@/lib/print-command';
 import { getPOSConfig } from '@/lib/pos-settings';
 import toast from 'react-hot-toast';
@@ -30,6 +31,8 @@ interface MenuItem {
     sku: string;
     name: string;
     price: number;
+    pedidosYaPrice?: number | null;
+    pedidosYaEnabled?: boolean;
     modifierGroups: { modifierGroup: ModifierGroup }[];
 }
 
@@ -133,15 +136,19 @@ export default function POSPedidosYAPage() {
         return currentModifiers.filter(m => m.groupId === group.id).reduce((s, m) => s + m.quantity, 0) >= group.minSelections;
     };
 
+    const getPYAPrice = (item: MenuItem) =>
+        item.pedidosYaPrice ?? calcPedidosYaPrice(item.price);
+
     const confirmAddToCart = () => {
         if (!selectedItemForModifier) return;
         if (!selectedItemForModifier.modifierGroups.every(g => isGroupValid(g.modifierGroup))) return;
         const modTotal = currentModifiers.reduce((s, m) => s + m.priceAdjustment * m.quantity, 0);
-        const lineTotal = (selectedItemForModifier.price + modTotal) * itemQuantity;
+        const pyaBase = getPYAPrice(selectedItemForModifier);
+        const lineTotal = (pyaBase + modTotal) * itemQuantity;
         const exploded = currentModifiers.flatMap(m => Array(m.quantity).fill({ modifierId: m.id, name: m.name, priceAdjustment: m.priceAdjustment }));
         setCart([...cart, {
             menuItemId: selectedItemForModifier.id, name: selectedItemForModifier.name, quantity: itemQuantity,
-            unitPrice: selectedItemForModifier.price, modifiers: exploded, notes: itemNotes || undefined, lineTotal
+            unitPrice: pyaBase, modifiers: exploded, notes: itemNotes || undefined, lineTotal
         }]);
         setShowModifierModal(false);
     };
@@ -271,7 +278,10 @@ export default function POSPedidosYAPage() {
                                     className="capsula-card group p-4 text-left h-32 flex flex-col justify-between border-primary/5 hover:border-orange-400/40 active:scale-[0.98] transition-transform"
                                 >
                                     <div className="font-black text-sm uppercase leading-tight tracking-tight group-hover:text-orange-500 transition-colors">{item.name}</div>
-                                    <div className="text-2xl font-black text-orange-500 italic">${item.price.toFixed(2)}</div>
+                                    <div>
+                                        <div className="text-2xl font-black text-orange-500 italic">${getPYAPrice(item).toFixed(2)}</div>
+                                        <div className="text-xs text-muted-foreground line-through">${item.price.toFixed(2)}</div>
+                                    </div>
                                 </button>
                             ))}
                         </div>
@@ -350,7 +360,10 @@ export default function POSPedidosYAPage() {
                         <div className="p-5 border-b border-border flex justify-between">
                             <div>
                                 <h3 className="text-2xl font-bold text-foreground">{selectedItemForModifier.name}</h3>
-                                <p className="text-orange-500 font-bold text-xl">${selectedItemForModifier.price.toFixed(2)}</p>
+                                <p className="text-orange-500 font-bold text-xl">
+                                    ${getPYAPrice(selectedItemForModifier).toFixed(2)}
+                                    <span className="text-sm text-muted-foreground line-through ml-2">${selectedItemForModifier.price.toFixed(2)}</span>
+                                </p>
                             </div>
                             <button onClick={() => setShowModifierModal(false)} className="text-4xl leading-none text-muted-foreground hover:text-destructive transition-colors">&times;</button>
                         </div>
