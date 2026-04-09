@@ -741,7 +741,7 @@ export default function POSSportBarPage() {
       discount: discountAmt > 0 ? discountAmt : undefined,
       discountReason,
       serviceFee: svcFee > 0 ? svcFee : undefined,
-      total: precuentaTotal,
+      total: afterDiscount,  // printReceipt suma serviceFee internamente para el total final
       isPrecuenta: true,
     });
   };
