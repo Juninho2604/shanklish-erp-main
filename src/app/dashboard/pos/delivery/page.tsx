@@ -281,8 +281,26 @@ export default function POSDeliveryPage() {
                         modifiers: i.modifiers.map(m => m.name)
                     })),
                     subtotal: cartSubtotal,
-                    discount: discountType === 'DIVISAS_33' && isPagoDivisas ? cartSubtotal / 3 + DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS : (discountType === 'CORTESIA_100' ? cartSubtotal + DELIVERY_FEE_NORMAL : 0),
-                    discountReason: (discountType === 'DIVISAS_33' && isPagoDivisas) || discountType === 'CORTESIA_100' ? 'Descuento aplicado' : undefined,
+                    discount: (() => {
+                        if (discountType === 'DIVISAS_33' && isPagoDivisas) {
+                            const base = isMixedMode ? (divisasUsdAmount ?? cartSubtotal) : cartSubtotal;
+                            return base / 3 + (DELIVERY_FEE_NORMAL - DELIVERY_FEE_DIVISAS);
+                        }
+                        if (discountType === 'CORTESIA_100') return cartSubtotal + DELIVERY_FEE_NORMAL;
+                        if (discountType === 'CORTESIA_PERCENT') return (cartSubtotal * cortesiaPercentNum / 100);
+                        return 0;
+                    })(),
+                    discountReason: (() => {
+                        if (discountType === 'DIVISAS_33' && isPagoDivisas) {
+                            const base = isMixedMode ? (divisasUsdAmount ?? cartSubtotal) : cartSubtotal;
+                            return base < cartSubtotal - 0.01
+                                ? `Pago Mixto Divisas (33.33% sobre $${base.toFixed(2)}) - Delivery $3`
+                                : 'Pago en Divisas (33.33%) - Delivery $3';
+                        }
+                        if (discountType === 'CORTESIA_100') return 'Cortesía Autorizada (100%)';
+                        if (discountType === 'CORTESIA_PERCENT') return `Cortesía Autorizada (${cortesiaPercentNum}%)`;
+                        return undefined;
+                    })(),
                     deliveryFee: discountType === 'CORTESIA_100' ? 0 : deliveryFee,
                     total: finalTotal
                 };
