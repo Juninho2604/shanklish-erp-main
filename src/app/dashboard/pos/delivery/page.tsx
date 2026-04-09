@@ -821,9 +821,13 @@ export default function POSDeliveryPage() {
                         />
                         <div className="grid grid-cols-3 gap-2">
                             {[
-                                { id: 'CASH_USD', label: '💵 Cash $' },
-                                { id: 'ZELLE',    label: '⚡ Zelle' },
-                                { id: 'CASH_BS',  label: '💴 Bs' },
+                                { id: 'CASH_USD',       label: '💵 Cash $' },
+                                { id: 'CASH_EUR',       label: '€ Cash €' },
+                                { id: 'ZELLE',          label: '⚡ Zelle' },
+                                { id: 'PDV_SHANKLISH',  label: '💳 PDV Shan.' },
+                                { id: 'PDV_SUPERFERRO', label: '💳 PDV Super.' },
+                                { id: 'MOVIL_NG',       label: '📱 Móvil NG' },
+                                { id: 'CASH_BS',        label: '💴 Efectivo Bs' },
                             ].map(m => (
                                 <button key={m.id} type="button" onClick={() => setTipMethod(m.id)}
                                     className={`py-2 rounded-xl text-xs font-black uppercase transition-all ${tipMethod === m.id ? 'bg-amber-500 text-white' : 'bg-background border border-border text-muted-foreground hover:border-amber-500/50'}`}>
@@ -833,7 +837,7 @@ export default function POSDeliveryPage() {
                         </div>
                         <div className="flex items-center bg-background border border-border rounded-2xl p-1">
                             <span className="pl-4 text-muted-foreground text-sm font-black">
-                                {tipMethod === 'CASH_BS' ? 'Bs' : '$'}
+                                {['CASH_BS','PDV_SHANKLISH','PDV_SUPERFERRO','MOVIL_NG'].includes(tipMethod) ? 'Bs' : '$'}
                             </span>
                             <input
                                 type="number" min="0" step="0.01"
@@ -844,7 +848,7 @@ export default function POSDeliveryPage() {
                                 autoFocus
                             />
                         </div>
-                        {tipMethod === 'CASH_BS' && exchangeRate && (parseFloat(tipAmount) || 0) > 0 && (
+                        {['CASH_BS','PDV_SHANKLISH','PDV_SUPERFERRO','MOVIL_NG'].includes(tipMethod) && exchangeRate && (parseFloat(tipAmount) || 0) > 0 && (
                             <div className="flex justify-between text-xs px-1">
                                 <span className="text-muted-foreground">Equivalente USD</span>
                                 <span className="font-bold text-emerald-400">${((parseFloat(tipAmount) || 0) / exchangeRate).toFixed(2)}</span>
