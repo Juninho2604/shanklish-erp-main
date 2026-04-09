@@ -72,7 +72,7 @@ export function exportZReportToExcel(zReport: ZReportData) {
     ws['!cols'] = [{ wch: 35 }, { wch: 16 }];
 
     // Negrita en filas de totales / títulos
-    const boldRows = [0, 3, 9, 12, 14, 21, 23, 29];
+    const boldRows = [0, 3, 9, 12, 14, 22, 24, rows.length - 1];
     for (const r of boldRows) {
         const cellA = XLSX.utils.encode_cell({ r, c: 0 });
         const cellB = XLSX.utils.encode_cell({ r, c: 1 });
