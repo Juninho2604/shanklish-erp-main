@@ -826,7 +826,13 @@ export default function POSSportBarPage() {
         }
         const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
         const discount = pickupDiscount;
-        const discountReason = discount > 0 ? "Descuento aplicado" : undefined;
+        const discountReason = discountType === "DIVISAS_33"
+            ? (isPagoDivisasPickup && (divisasUsdAmountPickup ?? 0) < cartTotal - 0.01
+                ? `Pago Mixto Divisas (33.33% sobre $${(divisasUsdAmountPickup ?? 0).toFixed(2)})`
+                : 'Pago en Divisas (33.33%)')
+            : discountType === "CORTESIA_100" ? 'Cortesía Autorizada (100%)'
+            : discountType === "CORTESIA_PERCENT" ? `Cortesía Autorizada (${cortesiaPercentNum}%)`
+            : undefined;
         const pickupReceiptItems = cart.map((i) => ({
           name: i.name,
           quantity: i.quantity,
