@@ -27,8 +27,7 @@ const METHODS = [
   { id: 'CASH_BS',        label: '💴 Efectivo Bs' },
   { id: 'PDV_SHANKLISH',  label: '💳 PDV Shanklish' },
   { id: 'PDV_SUPERFERRO', label: '💳 PDV Superferro' },
-  { id: 'MOVIL_NG',       label: '📱 Móvil NG' },
-  { id: 'MOBILE_PAY',     label: '📱 P.Móvil' },
+  { id: 'MOVIL_NG',       label: '📱 Pago Móvil NG' },
   { id: 'CORTESIA',       label: '🎁 Cortesía' },
 ] as const;
 

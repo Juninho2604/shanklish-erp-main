@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   getCashRegistersAction, openCashRegisterAction, closeCashRegisterAction,
+  updateRegisterOperatorsAction,
   type CashRegisterData,
 } from '@/app/actions/cash-register.actions';
 import { BillDenominationInput } from '@/components/pos/BillDenominationInput';
@@ -75,6 +76,31 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
   const [showOpenDenom, setShowOpenDenom] = useState(false);
   const [showCloseDenom, setShowCloseDenom] = useState(false);
   const [denomModal, setDenomModal] = useState<CashRegisterData | null>(null);
+
+  // Gestión de operadoras por turno
+  const [operatorModal, setOperatorModal] = useState<CashRegisterData | null>(null);
+  const [operatorInput, setOperatorInput] = useState('');
+  const [operatorMode, setOperatorMode] = useState<'add' | 'replace'>('add');
+
+  const parseOperators = (json: string | null): string[] => {
+    if (!json) return [];
+    try { return JSON.parse(json); } catch { return []; }
+  };
+
+  const handleOperatorUpdate = async (mode: 'add' | 'replace') => {
+    if (!operatorModal || !operatorInput.trim()) return;
+    startTransition(async () => {
+      const result = await updateRegisterOperatorsAction(operatorModal.id, operatorInput.trim(), mode);
+      if (result.success) {
+        toast.success(mode === 'add' ? 'Cajera agregada' : 'Turno actualizado');
+        setOperatorInput('');
+        setOperatorModal(null);
+        loadPeriod(selectedMonth, selectedYear);
+      } else {
+        toast.error(result.error ?? 'Error');
+      }
+    });
+  };
 
   const loadPeriod = (month: number, year: number) => {
     startTransition(async () => {
@@ -191,19 +217,43 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
                     </div>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Abierta por</span>
-                    <span className="text-foreground">{r.openedByName}</span>
-                  </div>
-                  <div className="flex justify-between text-muted-foreground">
                     <span>Hora apertura</span>
                     <span className="text-foreground">{new Date(r.openedAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
+                  {/* Cajeras activas en el turno */}
+                  <div className="pt-2 border-t border-emerald-500/20 mt-2">
+                    <p className="text-xs font-black uppercase tracking-wider text-emerald-400 mb-1.5">Responsables del turno</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseOperators(r.operatorsJson).map((op, i) => (
+                        <span key={i} className="bg-emerald-500/15 text-emerald-300 text-xs font-semibold px-2 py-0.5 rounded-full">
+                          {op}
+                        </span>
+                      ))}
+                      {parseOperators(r.operatorsJson).length === 0 && (
+                        <span className="text-muted-foreground text-xs">{r.openedByName}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 {canManage && (
-                  <button onClick={() => { setCloseTarget(r); setCloseForm({ closingCashUsd: '', closingCashBs: '', notes: '' }); }}
-                    className="mt-4 w-full rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-sm font-bold py-2 hover:bg-red-500/20 transition-colors">
-                    Cerrar Caja
-                  </button>
+                  <div className="mt-4 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => { setOperatorModal(r); setOperatorInput(''); setOperatorMode('add'); }}
+                        className="rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold py-2 hover:bg-blue-500/20 transition-colors">
+                        + Cajera
+                      </button>
+                      <button
+                        onClick={() => { setOperatorModal(r); setOperatorInput(''); setOperatorMode('replace'); }}
+                        className="rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold py-2 hover:bg-amber-500/20 transition-colors">
+                        Cambio Turno
+                      </button>
+                    </div>
+                    <button onClick={() => { setCloseTarget(r); setCloseForm({ closingCashUsd: '', closingCashBs: '', notes: '' }); }}
+                      className="w-full rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-sm font-bold py-2 hover:bg-red-500/20 transition-colors">
+                      Cerrar Caja
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -251,7 +301,16 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
                   const diffColor = Math.abs(diff) < 1 ? 'text-emerald-500' : diff > 0 ? 'text-blue-500' : 'text-red-500';
                   return (
                     <tr key={r.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-5 py-3 font-medium text-foreground">{r.registerName}</td>
+                      <td className="px-5 py-3">
+                        <div className="font-medium text-foreground">{r.registerName}</div>
+                        {parseOperators(r.operatorsJson).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {parseOperators(r.operatorsJson).map((op, i) => (
+                              <span key={i} className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">{op}</span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-muted-foreground">
                         <div>{new Date(r.shiftDate).toLocaleDateString('es-VE')}</div>
                         <div className="text-xs">{SHIFT_TYPES.find(s => s.value === r.shiftType)?.label}</div>
@@ -398,6 +457,52 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
             {!denomModal.openingDenominationsJson && !denomModal.closingDenominationsJson && (
               <p className="text-sm text-muted-foreground text-center py-4">Sin desglose de billetes registrado</p>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Agregar cajera / Cambio de turno */}
+      {operatorModal && (
+        <Modal
+          title={operatorMode === 'add' ? `Agregar cajera — ${operatorModal.registerName}` : `Cambio de turno — ${operatorModal.registerName}`}
+          onClose={() => { setOperatorModal(null); setOperatorInput(''); }}
+        >
+          <div className="space-y-4">
+            {operatorMode === 'replace' && (
+              <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                El cambio de turno reemplaza todas las cajeras actuales por la nueva responsable.
+              </p>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">
+                {operatorMode === 'add' ? 'Nombre de la cajera' : 'Nueva responsable del turno'}
+              </p>
+              <input
+                type="text"
+                value={operatorInput}
+                onChange={e => setOperatorInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleOperatorUpdate(operatorMode); }}
+                placeholder="Nombre completo..."
+                autoFocus
+                className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            {operatorMode === 'add' && parseOperators(operatorModal.operatorsJson).length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5 font-semibold uppercase tracking-wider">Actualmente en turno</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {parseOperators(operatorModal.operatorsJson).map((op, i) => (
+                    <span key={i} className="bg-emerald-500/15 text-emerald-300 text-xs font-semibold px-2 py-0.5 rounded-full">{op}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => handleOperatorUpdate(operatorMode)}
+              disabled={!operatorInput.trim() || isPending}
+              className="w-full rounded-xl bg-primary text-white font-bold py-3 text-sm hover:bg-primary/90 disabled:opacity-40 transition-colors">
+              {operatorMode === 'add' ? 'Agregar' : 'Confirmar cambio de turno'}
+            </button>
           </div>
         </Modal>
       )}

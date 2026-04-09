@@ -26,6 +26,8 @@ export interface CashRegisterData {
   notes: string | null;
   openingDenominationsJson: string | null;
   closingDenominationsJson: string | null;
+  /** Nombres de las cajeras activas en este turno (JSON array) */
+  operatorsJson: string | null;
 }
 
 export async function getCashRegistersAction(filters?: {
@@ -35,7 +37,7 @@ export async function getCashRegistersAction(filters?: {
 }): Promise<{ success: boolean; data?: CashRegisterData[]; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'].includes(session.role)) {
+  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
     return { success: false, error: 'Sin permisos' };
   }
 
@@ -81,6 +83,7 @@ export async function getCashRegistersAction(filters?: {
       notes: r.notes,
       openingDenominationsJson: (r as any).openingDenominationsJson ?? null,
       closingDenominationsJson: (r as any).closingDenominationsJson ?? null,
+      operatorsJson: (r as any).operatorsJson ?? null,
     }));
 
     return { success: true, data };
@@ -111,7 +114,10 @@ export async function openCashRegisterAction(input: {
   const shiftDate = new Date(now.toLocaleDateString('en-CA', { timeZone: 'America/Caracas' }) + 'T00:00:00.000Z');
 
   try {
-    // Verificar que no haya una caja abierta con el mismo nombre hoy
+    // Nombre de la cajera que abre (primer operador por defecto)
+  const openerName = `${session.firstName} ${session.lastName}`;
+
+  // Verificar que no haya una caja abierta con el mismo nombre hoy
     const existing = await prisma.cashRegister.findFirst({
       where: {
         registerName: input.registerName.trim(),
@@ -131,6 +137,7 @@ export async function openCashRegisterAction(input: {
         openedById: session.id,
         notes: input.notes?.trim() || null,
         status: 'OPEN',
+        operatorsJson: JSON.stringify([openerName]),
         ...(input.openingDenominationsJson && { openingDenominationsJson: input.openingDenominationsJson }),
       },
     });
@@ -228,5 +235,48 @@ export async function closeCashRegisterAction(
   } catch (e) {
     console.error('[closeCashRegisterAction]', e);
     return { success: false, error: 'Error al cerrar caja' };
+  }
+}
+
+/**
+ * Agrega o reemplaza las cajeras activas en una caja abierta.
+ * mode='add'     → agrega el nombre si no está ya listado
+ * mode='replace' → reemplaza toda la lista (cambio de turno)
+ */
+export async function updateRegisterOperatorsAction(
+  registerId: string,
+  operatorName: string,
+  mode: 'add' | 'replace' = 'add'
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'No autorizado' };
+  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
+    return { success: false, error: 'Sin permisos' };
+  }
+  const name = operatorName.trim();
+  if (!name) return { success: false, error: 'Nombre requerido' };
+
+  try {
+    const register = await prisma.cashRegister.findUnique({ where: { id: registerId } });
+    if (!register) return { success: false, error: 'Caja no encontrada' };
+    if (register.status === 'CLOSED') return { success: false, error: 'La caja ya está cerrada' };
+
+    let operators: string[] = [];
+    if (mode === 'add') {
+      try { operators = JSON.parse((register as any).operatorsJson ?? '[]'); } catch { operators = []; }
+      if (!operators.includes(name)) operators.push(name);
+    } else {
+      operators = [name];
+    }
+
+    await prisma.cashRegister.update({
+      where: { id: registerId },
+      data: { operatorsJson: JSON.stringify(operators) } as any,
+    });
+
+    revalidatePath('/dashboard/caja');
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: 'Error actualizando operadoras' };
   }
 }

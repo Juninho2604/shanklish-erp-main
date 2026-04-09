@@ -73,7 +73,7 @@ export default function POSDeliveryPage() {
     // PAYMENT STATE
     const [isMixedMode, setIsMixedMode] = useState(false);
     // Single-payment mode
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CASH_USD' | 'CASH_EUR' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MOVIL_NG' | 'PDV_SHANKLISH' | 'PDV_SUPERFERRO' | 'ZELLE'>('PDV_SHANKLISH');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CASH_USD' | 'CASH_EUR' | 'CARD' | 'TRANSFER' | 'MOVIL_NG' | 'PDV_SHANKLISH' | 'PDV_SUPERFERRO' | 'ZELLE'>('PDV_SHANKLISH');
     const [amountReceived, setAmountReceived] = useState('');
     // Mixed-payment mode
     const [mixedPayments, setMixedPayments] = useState<PaymentLine[]>([]);
@@ -560,8 +560,7 @@ export default function POSDeliveryPage() {
                                             { id: 'ZELLE',          label: '⚡ Zelle' },
                                             { id: 'PDV_SHANKLISH',  label: '💳 PDV Shan.' },
                                             { id: 'PDV_SUPERFERRO', label: '💳 PDV Super.' },
-                                            { id: 'MOVIL_NG',       label: '📱 Móvil NG' },
-                                            { id: 'MOBILE_PAY',     label: '📱 P.Móvil' },
+                                            { id: 'MOVIL_NG',       label: '📱 Pago Móvil NG' },
                                         ] as const).map(m => (
                                             <button key={m.id} type="button" onClick={() => setPaymentMethod(m.id)}
                                                 className={`py-3.5 rounded-xl text-sm font-black uppercase transition-all active:scale-95 ${paymentMethod === m.id ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-background border border-border text-muted-foreground'}`}>

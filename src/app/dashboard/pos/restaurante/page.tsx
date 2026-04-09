@@ -135,13 +135,13 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD:         "💳 PDV",
   PDV_SHANKLISH:"💳 PDV Shan.",
   PDV_SUPERFERRO:"💳 PDV Super.",
-  MOBILE_PAY:   "📱 P.Móvil",
-  MOVIL_NG:     "📱 Móvil NG",
+  MOBILE_PAY:   "📱 Pago Móvil",
+  MOVIL_NG:     "📱 Pago Móvil NG",
   TRANSFER:     "🏦 Transf.",
   ZELLE:        "⚡ Zelle",
 };
 
-const SINGLE_PAY_METHODS = ["CASH_USD", "CASH_EUR", "ZELLE", "PDV_SHANKLISH", "PDV_SUPERFERRO", "MOVIL_NG", "MOBILE_PAY"] as const;
+const SINGLE_PAY_METHODS = ["CASH_USD", "CASH_EUR", "ZELLE", "PDV_SHANKLISH", "PDV_SUPERFERRO", "MOVIL_NG"] as const;
 type SinglePayMethod = typeof SINGLE_PAY_METHODS[number];
 const CASHIER_ROLES = ["OWNER", "ADMIN_MANAGER", "OPS_MANAGER", "AREA_LEAD"];
 
@@ -1258,7 +1258,7 @@ export default function POSSportBarPage() {
               })}
 
               {/* ── Single items (no posGroup) or search results ── */}
-              {(productSearch ? filteredMenuItems : subcatFilteredItems.filter((i) => !i.posGroup)).map((item) => (
+              {(productSearch || !selectedGroup) && (productSearch ? filteredMenuItems : subcatFilteredItems.filter((i) => !i.posGroup)).map((item) => (
                 <button
                   key={item.id}
                   onClick={() => handleAddToCart(item)}

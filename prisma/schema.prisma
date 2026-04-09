@@ -1381,6 +1381,10 @@ model CashRegister {
   openingDenominationsJson  String?
   closingDenominationsJson  String?
 
+  // Operadoras activas en este turno (JSON array de nombres, nullable)
+  // Ejemplo: ["Ana García", "María López"]
+  operatorsJson   String?
+
   notes           String?
 
   createdAt       DateTime @default(now())
