@@ -330,13 +330,8 @@ export default function POSDeliveryPage() {
                         if (discountType === 'CORTESIA_PERCENT') return (cartSubtotal * cortesiaPercentNum / 100);
                         return 0;
                     })(),
+                    hideDiscount: discountType === 'DIVISAS_33',
                     discountReason: (() => {
-                        if (discountType === 'DIVISAS_33' && isPagoDivisas) {
-                            const base = isMixedMode ? (divisasUsdAmount ?? cartSubtotal) : cartSubtotal;
-                            return base < cartSubtotal - 0.01
-                                ? `Pago Mixto Divisas (33.33% sobre $${base.toFixed(2)}) - Delivery $3`
-                                : 'Pago en Divisas (33.33%) - Delivery $3';
-                        }
                         if (discountType === 'CORTESIA_100') return 'Cortesía Autorizada (100%)';
                         if (discountType === 'CORTESIA_PERCENT') return `Cortesía Autorizada (${cortesiaPercentNum}%)`;
                         return undefined;

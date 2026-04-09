@@ -55,6 +55,7 @@ export interface CreateOrderData {
     paymentMethod?: POSPaymentMethod;
     amountPaid?: number;
     keepChangeAsTip?: boolean;
+    tipAtCheckout?: number; // explicit tip amount — reduces stored change accordingly
     // New: multi-method payments
     payments?: PaymentLine[];
     // USD amount eligible for the -33% divisas discount (only used in pago mixto)
@@ -727,7 +728,10 @@ export async function createSalesOrderAction(
                         amountPaid: data.payments && data.payments.length > 0
                             ? data.payments.reduce((s, p) => s + p.amountUSD, 0)
                             : (data.amountPaid || total),
-                        change: data.keepChangeAsTip ? 0 : (change > 0 ? change : 0),
+                        change: data.keepChangeAsTip ? 0
+                            : (data.tipAtCheckout && data.tipAtCheckout > 0)
+                                ? Math.max(0, change - data.tipAtCheckout)
+                                : (change > 0 ? change : 0),
 
                         discountType: data.discountType,
                         discountReason: discountReason,
