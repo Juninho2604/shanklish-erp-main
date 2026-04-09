@@ -26,7 +26,7 @@ export default function SalesHistoryPage() {
     const [voidLoading, setVoidLoading] = useState(false);
 
     // --- FILTROS ---
-    const [showCancelled, setShowCancelled] = useState(false);
+    const [cancelledFilter, setCancelledFilter] = useState<'active' | 'all' | 'only'>('active');
     const [filterDate, setFilterDate] = useState(() => {
         // Default: today en Caracas
         return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
@@ -190,6 +190,7 @@ export default function SalesHistoryPage() {
             case 'MOVIL_NG': return <span className="bg-violet-900 text-violet-300 px-2 py-0.5 rounded text-xs font-bold">MÓVIL NG</span>;
             case 'TRANSFER': return <span className="bg-cyan-900 text-cyan-300 px-2 py-0.5 rounded text-xs font-bold">TRANSFER</span>;
             case 'CASH_BS': return <span className="bg-yellow-900 text-yellow-300 px-2 py-0.5 rounded text-xs font-bold">Bs</span>;
+            case 'CORTESIA': return <span className="bg-purple-900 text-purple-200 px-2 py-0.5 rounded text-xs font-bold">CORTESÍA</span>;
             default: return <span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-xs font-bold">{method || '-'}</span>;
         }
     };
@@ -202,13 +203,17 @@ export default function SalesHistoryPage() {
         setFilterPaymentMethod('ALL');
         setFilterOrderType('ALL');
         setFilterHasDiscount(false);
-        setShowCancelled(false);
+        setCancelledFilter('active');
     };
 
-    const hasActiveFilters = filterSearch !== '' || filterPaymentMethod !== 'ALL' || filterOrderType !== 'ALL' || filterHasDiscount || showCancelled;
+    const hasActiveFilters = filterSearch !== '' || filterPaymentMethod !== 'ALL' || filterOrderType !== 'ALL' || filterHasDiscount || cancelledFilter !== 'active';
 
     // La fecha ya se filtra en el servidor (getSalesHistoryAction). Aquí solo filtros adicionales.
-    const allFilteredSales = sales.filter(s => showCancelled || s.status !== 'CANCELLED');
+    const allFilteredSales = sales.filter(s => {
+        if (cancelledFilter === 'only') return s.status === 'CANCELLED';
+        if (cancelledFilter === 'all') return true;
+        return s.status !== 'CANCELLED'; // 'active' = hide cancelled
+    });
     const filteredSales = allFilteredSales.filter(s => {
         // Búsqueda libre
         if (filterSearch.trim()) {
@@ -341,6 +346,7 @@ export default function SalesHistoryPage() {
                         <option value="MOVIL_NG">📱 Móvil NG</option>
                         <option value="TRANSFER">🏦 Transferencia</option>
                         <option value="CASH_BS">🇻🇪 Efectivo Bs</option>
+                        <option value="CORTESIA">🎁 Cortesía</option>
                         <option value="MIXED">🔀 Pago Mixto</option>
                     </select>
                 </div>
@@ -368,16 +374,28 @@ export default function SalesHistoryPage() {
                     />
                     <span className="font-medium">Con descuento</span>
                 </label>
-                {/* Anuladas */}
-                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 hover:border-red-500 transition-colors">
-                    <input
-                        type="checkbox"
-                        checked={showCancelled}
-                        onChange={e => setShowCancelled(e.target.checked)}
-                        className="rounded accent-red-500"
-                    />
-                    <span className="font-medium">Anuladas</span>
-                </label>
+                {/* Estado / Anuladas */}
+                <div className="flex rounded-lg border border-gray-700 overflow-hidden text-sm font-medium">
+                    {([
+                        { value: 'active', label: 'Activas' },
+                        { value: 'all',    label: 'Todas' },
+                        { value: 'only',   label: '✕ Anuladas' },
+                    ] as const).map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => setCancelledFilter(opt.value)}
+                            className={`px-3 py-2 transition-colors ${
+                                cancelledFilter === opt.value
+                                    ? opt.value === 'only'
+                                        ? 'bg-red-700 text-white'
+                                        : 'bg-blue-700 text-white'
+                                    : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
                 {/* Clear all */}
                 {hasActiveFilters && (
                     <button
