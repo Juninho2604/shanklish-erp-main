@@ -19,6 +19,9 @@ export interface ZReportData {
         delivery: number;
         pickup: number;
         pedidosya: number;
+        wink: number;
+        evento: number;
+        tablePong: number;
     };
 
     // Ventas
@@ -69,7 +72,7 @@ export async function getSalesHistoryAction(date?: string) {
                 createdBy: { select: { firstName: true, lastName: true } },
                 voidedBy: { select: { firstName: true, lastName: true } },
                 openTab: { select: { tabCode: true, customerLabel: true, customerPhone: true, runningSubtotal: true, runningDiscount: true, runningTotal: true, paymentSplits: { select: { splitLabel: true, paymentMethod: true, paidAmount: true } } } },
-                orderPayments: { select: { method: true, amountUSD: true } },
+                orderPayments: { select: { method: true, amountUSD: true, amountBS: true, exchangeRate: true } },
                 items: {
                     include: {
                         modifiers: { select: { name: true, priceAdjustment: true } }
@@ -170,7 +173,7 @@ export async function getSalesHistoryAction(date?: string) {
                 // Desglose de pagos: usar SalesOrderPayment para pagos mixtos
                 const mixedLines = o.orderPayments || [];
                 const paymentBreakdown = mixedLines.length > 0
-                    ? mixedLines.map(p => ({ method: p.method, amount: p.amountUSD }))
+                    ? mixedLines.map(p => ({ method: p.method, amount: p.amountUSD, amountBS: p.amountBS ?? undefined, exchangeRate: p.exchangeRate ?? undefined }))
                     : [{ method: o.paymentMethod || 'CASH', amount: netReceived }];
                 result.push({
                     ...o,
@@ -407,7 +410,7 @@ export async function getDailyZReportAction(date?: string): Promise<{ success: b
         let totalDiscounts  = 0;
         let totalServiceFee = 0;
         let totalTips       = 0;
-        const byType = { restaurant: 0, delivery: 0, pickup: 0, pedidosya: 0 };
+        const byType = { restaurant: 0, delivery: 0, pickup: 0, pedidosya: 0, wink: 0, evento: 0, tablePong: 0 };
 
         // ── process tab groups (mesas) ────────────────────────────────────────
         for (const group of Array.from(tabGroups.values())) {
@@ -458,10 +461,15 @@ export async function getDailyZReportAction(date?: string): Promise<{ success: b
                 addPayment(o.paymentMethod, netReceived);
             }
 
-            if      (o.orderType === 'DELIVERY')   byType.delivery++;
-            else if (o.orderType === 'PEDIDOSYA')  byType.pedidosya++;
-            else if (o.orderType === 'PICKUP')     byType.pickup++;
-            else                                   byType.restaurant++; // standalone RESTAURANT (mostrador)
+            const ot = (o.orderType || '').toUpperCase();
+            const sc = (o.sourceChannel || '').toUpperCase();
+            if      (ot === 'DELIVERY')                          byType.delivery++;
+            else if (ot === 'PEDIDOSYA' || sc === 'POS_PEDIDOSYA') byType.pedidosya++;
+            else if (ot === 'PICKUP')                            byType.pickup++;
+            else if (ot === 'WINK' || sc === 'WINK')             byType.wink++;
+            else if (ot === 'EVENTO' || sc === 'EVENTO')         byType.evento++;
+            else if (ot === 'TABLE_PONG' || sc === 'TABLE_PONG') byType.tablePong++;
+            else                                                 byType.restaurant++;
         }
 
         const netTotal       = grossTotal - totalDiscounts;

@@ -654,11 +654,17 @@ export default function SalesHistoryPage() {
                                                 {(sale.paymentBreakdown || []).length > 0 && (
                                                     <div className="mt-2 text-xs text-gray-500">
                                                         <span className="font-bold uppercase text-gray-600">Desglose de pagos: </span>
-                                                        {(sale.paymentBreakdown || []).map((p: { method: string; amount: number; label?: string }, i: number) => (
-                                                            <span key={i} className="mr-3">
+                                                        {(sale.paymentBreakdown || []).map((p: { method: string; amount: number; amountBS?: number; exchangeRate?: number; label?: string }, i: number) => (
+                                                            <span key={i} className="mr-3 inline-flex items-center gap-1">
                                                                 {getPaymentBadge(p.method)}
                                                                 {p.label && <span className="ml-1 text-gray-500">{p.label}</span>}
-                                                                <span className="ml-1 text-white font-bold font-mono">{formatMoney(p.amount)}</span>
+                                                                <span className="text-white font-bold font-mono">{formatMoney(p.amount)}</span>
+                                                                {p.amountBS != null && p.amountBS > 0 && (
+                                                                    <span className="text-yellow-400 font-mono text-[10px]">
+                                                                        · Bs{p.amountBS.toLocaleString('es-VE', { maximumFractionDigits: 0 })}
+                                                                        {p.exchangeRate ? ` @${p.exchangeRate.toFixed(0)}` : ''}
+                                                                    </span>
+                                                                )}
                                                             </span>
                                                         ))}
                                                     </div>
@@ -758,6 +764,9 @@ export default function SalesHistoryPage() {
                                 {zReport.ordersByType.pickup > 0 && <div className="flex justify-between"><span>Pickup / Mostrador</span><span>{zReport.ordersByType.pickup}</span></div>}
                                 {zReport.ordersByType.delivery > 0 && <div className="flex justify-between"><span>Delivery</span><span>{zReport.ordersByType.delivery}</span></div>}
                                 {zReport.ordersByType.pedidosya > 0 && <div className="flex justify-between"><span>PedidosYA</span><span>{zReport.ordersByType.pedidosya}</span></div>}
+                                {zReport.ordersByType.wink > 0 && <div className="flex justify-between"><span>Wink</span><span>{zReport.ordersByType.wink}</span></div>}
+                                {zReport.ordersByType.evento > 0 && <div className="flex justify-between"><span>Evento</span><span>{zReport.ordersByType.evento}</span></div>}
+                                {zReport.ordersByType.tablePong > 0 && <div className="flex justify-between"><span>Table Pong</span><span>{zReport.ordersByType.tablePong}</span></div>}
                             </div>
                         </div>
 
