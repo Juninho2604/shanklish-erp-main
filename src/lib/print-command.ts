@@ -439,3 +439,110 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
         }, 2000);
     }, 300);
 }
+
+/**
+ * IMPRESIÓN RESUMEN DE CIERRE DEL DÍA
+ */
+export interface EndOfDaySummaryPrintData {
+    date: string;
+    byChannel: { restaurant: number; delivery: number; pickup: number; pedidosya: number; wink: number; evento: number; tablePong: number };
+    countByChannel: { restaurant: number; delivery: number; pickup: number; pedidosya: number; wink: number; evento: number; tablePong: number };
+    totalUSD: number;
+    totalDiscounts: number;
+    totalServiceFee: number;
+    propinas: number;
+    receivedInDivisas: number;
+    receivedInBs: number;
+    pctDivisas: number;
+    pctBs: number;
+    totalInvoices: number;
+    invoicesCancelled: number;
+}
+
+export function printEndOfDaySummary(data: EndOfDaySummaryPrintData) {
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+        alert('Habilite popups para imprimir');
+        return;
+    }
+
+    const fmt = (n: number) => `$${(n || 0).toFixed(2)}`;
+    const pct = (n: number) => `${(n || 0).toFixed(1)}%`;
+
+    type ChannelKey = keyof EndOfDaySummaryPrintData['byChannel'];
+    const allChannelRows: { label: string; key: ChannelKey }[] = [
+        { label: 'Restaurante / Mesas', key: 'restaurant' as ChannelKey },
+        { label: 'Delivery',            key: 'delivery' as ChannelKey },
+        { label: 'Pickup / Mostrador',  key: 'pickup' as ChannelKey },
+        { label: 'PedidosYA',           key: 'pedidosya' as ChannelKey },
+        { label: 'Wink',                key: 'wink' as ChannelKey },
+        { label: 'Evento',              key: 'evento' as ChannelKey },
+        { label: 'Table Pong',          key: 'tablePong' as ChannelKey },
+    ];
+    const channelRows = allChannelRows.filter(r => data.byChannel[r.key] > 0 || data.countByChannel[r.key] > 0);
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Cierre del Día ${data.date}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier New', monospace; font-size: 12px; max-width: 80mm; margin: 0 auto; padding: 6px; color: #000; }
+        .center { text-align: center; }
+        .row { display: flex; justify-content: space-between; padding: 2px 0; }
+        .sep { border-top: 1px dashed #000; margin: 6px 0; }
+        .sep2 { border-top: 2px solid #000; margin: 8px 0; }
+        .bold { font-weight: 900; }
+        .title { font-size: 16px; font-weight: 900; letter-spacing: 2px; }
+        .section { font-weight: 900; text-decoration: underline; margin: 4px 0 2px; font-size: 11px; }
+        .total-final { font-size: 15px; font-weight: 900; }
+        @media print { @page { margin: 4mm; size: auto; } body { padding: 0; } }
+    </style>
+</head>
+<body>
+    <div class="center" style="margin-bottom: 8px;">
+        <div class="title">SHANKLISH CARACAS</div>
+        <div>RESUMEN CIERRE DEL DÍA</div>
+        <div>${data.date}</div>
+    </div>
+    <div class="sep2"></div>
+
+    <div class="section">VENTAS POR CANAL</div>
+    ${channelRows.map(r => `
+    <div class="row">
+        <span>${r.label} (${data.countByChannel[r.key]})</span>
+        <span class="bold">${fmt(data.byChannel[r.key])}</span>
+    </div>`).join('')}
+    <div class="sep"></div>
+
+    <div class="section">TOTALES</div>
+    <div class="row"><span>Descuentos:</span><span>-${fmt(data.totalDiscounts)}</span></div>
+    ${data.totalServiceFee > 0 ? `<div class="row"><span>10% Servicio:</span><span>+${fmt(data.totalServiceFee)}</span></div>` : ''}
+    ${data.propinas > 0 ? `<div class="row"><span>Propinas:</span><span>+${fmt(data.propinas)}</span></div>` : ''}
+    <div class="sep2"></div>
+    <div class="row total-final"><span>TOTAL COBRADO</span><span>${fmt(data.totalUSD)}</span></div>
+    <div class="sep2"></div>
+
+    <div class="section">DESGLOSE POR MONEDA</div>
+    <div class="row"><span>Divisas (Cash/Zelle)</span><span>${fmt(data.receivedInDivisas)} · ${pct(data.pctDivisas)}</span></div>
+    <div class="row"><span>Bolívares (PDV/Móvil)</span><span>${fmt(data.receivedInBs)} · ${pct(data.pctBs)}</span></div>
+    <div class="sep"></div>
+
+    <div class="section">FACTURAS</div>
+    <div class="row"><span>Procesadas:</span><span>${data.totalInvoices}</span></div>
+    ${data.invoicesCancelled > 0 ? `<div class="row"><span>Anuladas:</span><span>${data.invoicesCancelled}</span></div>` : ''}
+
+    <div style="text-align:center; margin-top: 16px; font-size: 10px;">
+        Impreso: ${new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+    </div>
+    <br><br><br><br>
+    <script>
+        window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); }
+    </script>
+</body>
+</html>`;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+}

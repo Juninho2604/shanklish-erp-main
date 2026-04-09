@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSalesHistoryAction, getDailyZReportAction, voidSalesOrderAction, type ZReportData } from '@/app/actions/sales.actions';
+import { getSalesHistoryAction, getDailyZReportAction, getEndOfDaySummaryAction, voidSalesOrderAction, type ZReportData, type EndOfDaySummary } from '@/app/actions/sales.actions';
 import { validateManagerPinAction } from '@/app/actions/pos.actions';
-import { printReceipt } from '@/lib/print-command';
+import { printReceipt, printEndOfDaySummary } from '@/lib/print-command';
 import { exportZReportToExcel } from '@/lib/export-z-report';
 
 export default function SalesHistoryPage() {
@@ -11,6 +11,8 @@ export default function SalesHistoryPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [zReport, setZReport] = useState<ZReportData | null>(null);
     const [showZReport, setShowZReport] = useState(false);
+    const [daySummary, setDaySummary] = useState<EndOfDaySummary | null>(null);
+    const [showDaySummary, setShowDaySummary] = useState(false);
 
     // --- EXPANSIÓN DE FILAS ---
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -57,6 +59,12 @@ export default function SalesHistoryPage() {
         const result = await getDailyZReportAction(filterDate || undefined);
         if (result.success && result.data) { setZReport(result.data); setShowZReport(true); }
         else alert('Error generando reporte Z');
+    };
+
+    const handleDaySummary = async () => {
+        const result = await getEndOfDaySummaryAction(filterDate || undefined);
+        if (result.success && result.data) { setDaySummary(result.data); setShowDaySummary(true); }
+        else alert('Error generando resumen de cierre');
     };
 
     const handleExportArqueo = async () => {
@@ -286,6 +294,13 @@ export default function SalesHistoryPage() {
                         className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-5 py-2 rounded-lg font-bold shadow-lg flex items-center gap-2 text-sm"
                     >
                         🖨️ REPORTE &quot;Z&quot; {displayDate ? `· ${displayDate}` : '(HOY)'}
+                    </button>
+                    <button
+                        onClick={handleDaySummary}
+                        title={`Resumen de cierre del día para ${displayDate || 'hoy'}`}
+                        className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-5 py-2 rounded-lg font-bold shadow-lg flex items-center gap-2 text-sm"
+                    >
+                        📊 CIERRE DEL DÍA {displayDate ? `· ${displayDate}` : '(HOY)'}
                     </button>
                 </div>
             </div>
@@ -730,6 +745,114 @@ export default function SalesHistoryPage() {
                                 🖨️ Imprimir
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ================================================================ */}
+            {/* MODAL CIERRE DEL DÍA                                               */}
+            {/* ================================================================ */}
+            {showDaySummary && daySummary && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-gray-900 border border-amber-700/60 rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-amber-400">Resumen de Cierre del Día</h2>
+                                <p className="text-sm text-gray-400 font-mono mt-0.5">{daySummary.date}</p>
+                            </div>
+                            <button onClick={() => setShowDaySummary(false)} className="text-gray-500 hover:text-white text-2xl font-bold">×</button>
+                        </div>
+
+                        {/* Ventas por canal */}
+                        <div className="bg-gray-800 rounded-xl p-4 mb-4">
+                            <h3 className="text-xs font-bold uppercase text-gray-400 tracking-widest mb-3">Ventas por Canal</h3>
+                            <div className="space-y-1.5">
+                                {([
+                                    { key: 'restaurant', label: 'Restaurante / Mesas' },
+                                    { key: 'delivery',   label: 'Delivery' },
+                                    { key: 'pickup',     label: 'Pickup / Mostrador' },
+                                    { key: 'pedidosya',  label: 'PedidosYA' },
+                                    { key: 'wink',       label: 'Wink' },
+                                    { key: 'evento',     label: 'Evento' },
+                                    { key: 'tablePong',  label: 'Table Pong' },
+                                ] as { key: keyof typeof daySummary.byChannel; label: string }[])
+                                    .filter(r => daySummary.byChannel[r.key] > 0 || daySummary.countByChannel[r.key] > 0)
+                                    .map(r => (
+                                        <div key={r.key} className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-300">{r.label} <span className="text-gray-500 text-xs">({daySummary.countByChannel[r.key]})</span></span>
+                                            <span className="font-bold font-mono text-white">${daySummary.byChannel[r.key].toFixed(2)}</span>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        </div>
+
+                        {/* Totales */}
+                        <div className="bg-gray-800 rounded-xl p-4 mb-4">
+                            <h3 className="text-xs font-bold uppercase text-gray-400 tracking-widest mb-3">Totales</h3>
+                            <div className="space-y-1.5 text-sm">
+                                {daySummary.totalDiscounts > 0 && (
+                                    <div className="flex justify-between"><span className="text-gray-400">Descuentos:</span><span className="text-red-400 font-mono">-${daySummary.totalDiscounts.toFixed(2)}</span></div>
+                                )}
+                                {daySummary.totalServiceFee > 0 && (
+                                    <div className="flex justify-between"><span className="text-gray-400">10% Servicio:</span><span className="text-emerald-400 font-mono">+${daySummary.totalServiceFee.toFixed(2)}</span></div>
+                                )}
+                                {daySummary.propinas > 0 && (
+                                    <div className="flex justify-between"><span className="text-gray-400">Propinas:</span><span className="text-amber-400 font-mono">+${daySummary.propinas.toFixed(2)}</span></div>
+                                )}
+                                <div className="flex justify-between pt-2 border-t border-gray-700">
+                                    <span className="font-bold text-white">Total Cobrado:</span>
+                                    <span className="font-black text-xl text-white font-mono">${daySummary.totalUSD.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Divisas vs Bs */}
+                        <div className="bg-gray-800 rounded-xl p-4 mb-4">
+                            <h3 className="text-xs font-bold uppercase text-gray-400 tracking-widest mb-3">Desglose por Moneda</h3>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-300">Divisas (Cash / Zelle)</span>
+                                    <div className="text-right">
+                                        <span className="font-bold font-mono text-blue-300">${daySummary.receivedInDivisas.toFixed(2)}</span>
+                                        <span className="text-gray-500 text-xs ml-2">{daySummary.pctDivisas.toFixed(1)}%</span>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-300">Bolívares (PDV / Móvil)</span>
+                                    <div className="text-right">
+                                        <span className="font-bold font-mono text-purple-300">${daySummary.receivedInBs.toFixed(2)}</span>
+                                        <span className="text-gray-500 text-xs ml-2">{daySummary.pctBs.toFixed(1)}%</span>
+                                    </div>
+                                </div>
+                                {/* Progress bar */}
+                                <div className="h-2 bg-gray-700 rounded-full overflow-hidden mt-1">
+                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${daySummary.pctDivisas}%` }} />
+                                </div>
+                                <div className="flex justify-between text-[10px] text-gray-500">
+                                    <span>Divisas {daySummary.pctDivisas.toFixed(0)}%</span>
+                                    <span>Bs {daySummary.pctBs.toFixed(0)}%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Facturas */}
+                        <div className="bg-gray-800 rounded-xl p-4 mb-4">
+                            <h3 className="text-xs font-bold uppercase text-gray-400 tracking-widest mb-2">Facturas</h3>
+                            <div className="flex gap-6 text-sm">
+                                <div><span className="text-gray-400">Procesadas: </span><span className="font-bold text-white">{daySummary.totalInvoices}</span></div>
+                                {daySummary.invoicesCancelled > 0 && (
+                                    <div><span className="text-gray-400">Anuladas: </span><span className="font-bold text-red-400">{daySummary.invoicesCancelled}</span></div>
+                                )}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => printEndOfDaySummary(daySummary)}
+                            className="w-full bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2"
+                        >
+                            🖨️ Imprimir Resumen
+                        </button>
                     </div>
                 </div>
             )}
