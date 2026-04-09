@@ -694,7 +694,13 @@ export default function POSSportBarPage() {
         items: allItems,
         subtotal,
         discount,
-        discountReason: discountType === "DIVISAS_33" ? "Descuento aplicado" : undefined,
+        discountReason: discountType === "DIVISAS_33"
+            ? (isTableMixedMode && divisasUsdAmountTable > 0 && divisasUsdAmountTable < activeTab.balanceDue - 0.01
+                ? `Pago Mixto Divisas (33.33% sobre $${divisasUsdAmountTable.toFixed(2)})`
+                : 'Pago en Divisas (33.33%)')
+            : discountType === "CORTESIA_100" ? 'Cortesía Autorizada (100%)'
+            : discountType === "CORTESIA_PERCENT" ? `Cortesía Autorizada (${cortesiaPercentNum}%)`
+            : undefined,
         total: totalAntesServicio,
         serviceFee,
       });
