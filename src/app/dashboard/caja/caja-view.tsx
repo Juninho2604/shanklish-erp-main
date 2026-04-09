@@ -6,6 +6,7 @@ import {
   getCashRegistersAction, openCashRegisterAction, closeCashRegisterAction,
   type CashRegisterData,
 } from '@/app/actions/cash-register.actions';
+import { BillDenominationInput } from '@/components/pos/BillDenominationInput';
 
 const SHIFT_TYPES = [
   { value: 'MORNING', label: 'Mañana' },
@@ -38,6 +39,10 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
 
   const [openForm, setOpenForm] = useState({ registerName: 'Caja Restaurante', shiftType: 'DAY', openingCashUsd: '', openingCashBs: '', notes: '' });
   const [closeForm, setCloseForm] = useState({ closingCashUsd: '', closingCashBs: '', notes: '' });
+  const [openDenom, setOpenDenom] = useState<{ json: string; total: number } | null>(null);
+  const [closeDenom, setCloseDenom] = useState<{ json: string; total: number } | null>(null);
+  const [showOpenDenom, setShowOpenDenom] = useState(false);
+  const [showCloseDenom, setShowCloseDenom] = useState(false);
 
   const loadPeriod = (month: number, year: number) => {
     startTransition(async () => {
@@ -59,16 +64,22 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
     e.preventDefault();
     if (!openForm.registerName.trim()) { toast.error('Nombre de caja requerido'); return; }
     startTransition(async () => {
+      const cashUsd = showOpenDenom && openDenom && openDenom.total > 0
+        ? openDenom.total
+        : parseFloat(openForm.openingCashUsd) || 0;
       const result = await openCashRegisterAction({
         registerName: openForm.registerName,
         shiftType: openForm.shiftType,
-        openingCashUsd: parseFloat(openForm.openingCashUsd) || 0,
+        openingCashUsd: cashUsd,
         openingCashBs: parseFloat(openForm.openingCashBs) || 0,
         notes: openForm.notes,
+        openingDenominationsJson: showOpenDenom && openDenom?.json ? openDenom.json : undefined,
       });
       if (result.success) {
         toast.success('Caja abierta');
         setShowOpenForm(false);
+        setShowOpenDenom(false);
+        setOpenDenom(null);
         setOpenForm({ registerName: 'Caja Restaurante', shiftType: 'DAY', openingCashUsd: '', openingCashBs: '', notes: '' });
         loadPeriod(selectedMonth, selectedYear);
       } else {
@@ -81,14 +92,20 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
     e.preventDefault();
     if (!closeTarget) return;
     startTransition(async () => {
+      const cashUsd = showCloseDenom && closeDenom && closeDenom.total > 0
+        ? closeDenom.total
+        : parseFloat(closeForm.closingCashUsd) || 0;
       const result = await closeCashRegisterAction(closeTarget.id, {
-        closingCashUsd: parseFloat(closeForm.closingCashUsd) || 0,
+        closingCashUsd: cashUsd,
         closingCashBs: parseFloat(closeForm.closingCashBs) || 0,
         notes: closeForm.notes,
+        closingDenominationsJson: showCloseDenom && closeDenom?.json ? closeDenom.json : undefined,
       });
       if (result.success) {
         toast.success('Caja cerrada');
         setCloseTarget(null);
+        setShowCloseDenom(false);
+        setCloseDenom(null);
         setCloseForm({ closingCashUsd: '', closingCashBs: '', notes: '' });
         loadPeriod(selectedMonth, selectedYear);
       } else {
@@ -232,19 +249,30 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
                 {SHIFT_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Fondo Inicial USD</label>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-muted-foreground">Fondo Inicial USD</label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input type="checkbox" checked={showOpenDenom} onChange={e => setShowOpenDenom(e.target.checked)} className="rounded accent-primary" />
+                  Desglosar billetes
+                </label>
+              </div>
+              {showOpenDenom ? (
+                <BillDenominationInput
+                  label="Billetes apertura"
+                  onChange={(json, total) => setOpenDenom({ json, total })}
+                />
+              ) : (
                 <input type="number" step="0.01" min="0" value={openForm.openingCashUsd}
                   onChange={e => setOpenForm(f => ({ ...f, openingCashUsd: e.target.value }))}
                   className="input-field w-full" placeholder="0.00" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Fondo Inicial Bs</label>
-                <input type="number" step="0.01" min="0" value={openForm.openingCashBs}
-                  onChange={e => setOpenForm(f => ({ ...f, openingCashBs: e.target.value }))}
-                  className="input-field w-full" placeholder="0.00" />
-              </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Fondo Inicial Bs</label>
+              <input type="number" step="0.01" min="0" value={openForm.openingCashBs}
+                onChange={e => setOpenForm(f => ({ ...f, openingCashBs: e.target.value }))}
+                className="input-field w-full" placeholder="0.00" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Notas</label>
@@ -271,19 +299,30 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
               <div className="flex justify-between"><span className="text-muted-foreground">Fondo apertura</span><span className="font-semibold text-foreground">${fmt(closeTarget.openingCashUsd)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Apertura</span><span className="text-foreground">{new Date(closeTarget.openedAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Efectivo Contado USD *</label>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-muted-foreground">Efectivo Contado USD</label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input type="checkbox" checked={showCloseDenom} onChange={e => setShowCloseDenom(e.target.checked)} className="rounded accent-primary" />
+                  Desglosar billetes
+                </label>
+              </div>
+              {showCloseDenom ? (
+                <BillDenominationInput
+                  label="Billetes cierre"
+                  onChange={(json, total) => setCloseDenom({ json, total })}
+                />
+              ) : (
                 <input type="number" step="0.01" min="0" value={closeForm.closingCashUsd}
                   onChange={e => setCloseForm(f => ({ ...f, closingCashUsd: e.target.value }))}
                   className="input-field w-full" placeholder="0.00" required />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Efectivo Contado Bs</label>
-                <input type="number" step="0.01" min="0" value={closeForm.closingCashBs}
-                  onChange={e => setCloseForm(f => ({ ...f, closingCashBs: e.target.value }))}
-                  className="input-field w-full" placeholder="0.00" />
-              </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Efectivo Contado Bs</label>
+              <input type="number" step="0.01" min="0" value={closeForm.closingCashBs}
+                onChange={e => setCloseForm(f => ({ ...f, closingCashBs: e.target.value }))}
+                className="input-field w-full" placeholder="0.00" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Observaciones</label>

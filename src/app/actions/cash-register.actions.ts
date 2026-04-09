@@ -24,6 +24,8 @@ export interface CashRegisterData {
   expectedCash: number | null;
   difference: number | null;
   notes: string | null;
+  openingDenominationsJson: string | null;
+  closingDenominationsJson: string | null;
 }
 
 export async function getCashRegistersAction(filters?: {
@@ -77,6 +79,8 @@ export async function getCashRegistersAction(filters?: {
       expectedCash: r.expectedCash,
       difference: r.difference,
       notes: r.notes,
+      openingDenominationsJson: (r as any).openingDenominationsJson ?? null,
+      closingDenominationsJson: (r as any).closingDenominationsJson ?? null,
     }));
 
     return { success: true, data };
@@ -91,6 +95,7 @@ export async function openCashRegisterAction(input: {
   openingCashUsd: number;
   openingCashBs?: number;
   notes?: string;
+  openingDenominationsJson?: string;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'No autorizado' };
@@ -126,6 +131,7 @@ export async function openCashRegisterAction(input: {
         openedById: session.id,
         notes: input.notes?.trim() || null,
         status: 'OPEN',
+        ...(input.openingDenominationsJson && { openingDenominationsJson: input.openingDenominationsJson }),
       },
     });
 
@@ -150,6 +156,7 @@ export async function closeCashRegisterAction(
     closingCashUsd: number;
     closingCashBs?: number;
     notes?: string;
+    closingDenominationsJson?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const session = await getSession();
@@ -203,6 +210,7 @@ export async function closeCashRegisterAction(
         expectedCash,
         difference,
         ...(input.notes && { notes: input.notes.trim() }),
+        ...(input.closingDenominationsJson && { closingDenominationsJson: input.closingDenominationsJson }),
       },
     });
 

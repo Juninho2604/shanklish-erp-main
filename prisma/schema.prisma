@@ -1376,6 +1376,11 @@ model CashRegister {
   expectedCash    Float?   // Efectivo esperado (apertura + ventas efectivo - gastos)
   difference      Float?   // Diferencia (cierre contado - esperado)
 
+  // Desglose de billetes (JSON nullable — no rompe registros existentes)
+  // Formato: {"100":6,"50":2,"20":29,"10":10,"5":6,"1":21,"total":1431.00}
+  openingDenominationsJson  String?
+  closingDenominationsJson  String?
+
   notes           String?
 
   createdAt       DateTime @default(now())
