@@ -270,20 +270,16 @@ export function HelpPanel() {
         <span className="text-xl">❓</span>
       </button>
 
-      {/* Overlay */}
+      {/* Modal centrado con backdrop oscuro */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4"
           onClick={() => setIsOpen(false)}
-        />
-      )}
-
-      {/* Panel lateral */}
-      <div
-        className={`fixed top-0 right-0 h-full w-full max-w-sm bg-card border-l border-border z-50 flex flex-col shadow-2xl transition-transform duration-300 ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
+        >
+          <div
+            className="bg-card w-full max-w-sm rounded-2xl flex flex-col max-h-[90vh] shadow-2xl border border-border overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
         {/* Header */}
         <div className="p-5 border-b border-border flex items-center justify-between bg-primary/5">
           <div className="flex items-center gap-3">
@@ -398,7 +394,9 @@ export function HelpPanel() {
             Para soporte contacta al administrador del sistema
           </p>
         </div>
-      </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -311,14 +311,14 @@ export default function POSPedidosYAPage() {
                             </div>
                         )}
                         {cart.map((item, i) => (
-                            <div key={i} className="bg-secondary/30 p-3 rounded-xl border border-border flex justify-between group">
+                            <div key={i} className="bg-card/50 p-4 rounded-2xl border border-border flex justify-between group">
                                 <div>
-                                    <div className="font-bold text-sm flex gap-2"><span className="text-orange-500">x{item.quantity}</span> {item.name}</div>
+                                    <div className="font-black text-sm flex gap-2"><span className="text-orange-500">x{item.quantity}</span> {item.name}</div>
                                     {item.modifiers.length > 0 && <div className="text-xs text-muted-foreground pl-6">{item.modifiers.map(m => m.name).join(', ')}</div>}
                                     {item.notes && <div className="text-xs text-orange-400 pl-6 italic">"{item.notes}"</div>}
                                 </div>
                                 <div className="text-right">
-                                    <div className="font-bold text-sm">${item.lineTotal.toFixed(2)}</div>
+                                    <div className="font-black text-sm">${item.lineTotal.toFixed(2)}</div>
                                     <button onClick={() => removeFromCart(i)} className="text-destructive text-xs hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Borrar</button>
                                 </div>
                             </div>
@@ -337,7 +337,7 @@ export default function POSPedidosYAPage() {
                         <button
                             onClick={handleSubmit}
                             disabled={cart.length === 0 || isProcessing}
-                            className="w-full py-4 bg-orange-500 hover:bg-orange-400 text-white rounded-xl font-bold text-lg shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+                            className="w-full py-4 bg-orange-500 hover:bg-orange-400 text-white rounded-2xl font-black text-lg shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
                         >
                             {isProcessing ? '⏳ REGISTRANDO...' : 'REGISTRAR PEDIDO'}
                         </button>
@@ -359,8 +359,8 @@ export default function POSPedidosYAPage() {
                     <div className="bg-card w-full max-w-lg rounded-2xl flex flex-col max-h-[90vh] shadow-2xl border border-border">
                         <div className="p-5 border-b border-border flex justify-between">
                             <div>
-                                <h3 className="text-2xl font-bold text-foreground">{selectedItemForModifier.name}</h3>
-                                <p className="text-orange-500 font-bold text-xl">
+                                <h3 className="text-2xl font-black text-foreground">{selectedItemForModifier.name}</h3>
+                                <p className="text-orange-500 font-black text-xl">
                                     ${getPYAPrice(selectedItemForModifier).toFixed(2)}
                                     <span className="text-sm text-muted-foreground line-through ml-2">${selectedItemForModifier.price.toFixed(2)}</span>
                                 </p>
