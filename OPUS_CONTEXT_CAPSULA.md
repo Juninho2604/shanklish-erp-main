@@ -1321,6 +1321,251 @@ Todos estos módulos están **deshabilitados por default** (`enabledByDefault: f
 
 ---
 
-*Continúa en Secciones 11-16: Panel Admin, Hardcoded Values, Restricciones, Roadmap, Gap Analysis...*
+## 11. PANEL ADMIN — Sistema de Configuración Cápsula (Propuesta)
 
-*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Partes 1-5*
+### 11.1 Decisión de Diseño: Enfoque Híbrido
+
+**Administración** = Gestión del negocio (usuarios, finanzas, gastos, caja, metas)
+**Panel Admin** = Configuración del sistema/SaaS (módulos, roles, métodos de pago, fees, plantillas)
+
+Propuesta: mover las páginas de `/dashboard/config/*` a `/dashboard/admin/*` y crear las nuevas funcionalidades ahí. Un solo namespace para toda la configuración del sistema.
+
+### 11.2 Migración de Rutas Existentes
+
+| Ruta Actual | Ruta Propuesta | Actions |
+|-------------|---------------|---------|
+| `/dashboard/config/modules` | `/dashboard/admin/modules` | system-config.actions.ts |
+| `/dashboard/config/roles` | `/dashboard/admin/roles` | user.actions.ts |
+| `/dashboard/config/modulos-usuario` | `/dashboard/admin/modulos-usuario` | user.actions.ts |
+| `/dashboard/config/tasa-cambio` | `/dashboard/admin/tasa-cambio` | exchange.actions.ts |
+| `/dashboard/config/pos` | `/dashboard/admin/pos` | system-config.actions.ts |
+
+**Impacto de migración**: Actualizar `modules-registry.ts` (hrefs), `middleware.ts` (RBAC rules para `/dashboard/admin/*`), Sidebar links.
+
+### 11.3 Nuevas Páginas (Cápsula SaaS)
+
+| Funcionalidad | Estado | Ruta Propuesta |
+|--------------|--------|---------------|
+| Métodos de Pago CRUD | **NO EXISTE** | `/dashboard/admin/payment-methods` |
+| Fees y Porcentajes | **NO EXISTE** | `/dashboard/admin/fees` |
+| Tipos de Descuento | **NO EXISTE** | `/dashboard/admin/discounts` |
+| Canales de Orden | **NO EXISTE** | `/dashboard/admin/channels` |
+| Datos del Negocio | **NO EXISTE** | `/dashboard/admin/business` |
+| Plantilla de Configuración | **NO EXISTE** | `/dashboard/admin/template` |
+
+### 11.4 Prioridad 1 — Métodos de Pago (CRUD completo)
+
+**¿Por qué CRUD y no toggle?** Cada cliente puede necesitar métodos distintos. Venezuela: Zelle, Pago Móvil. Colombia: Nequi, Daviplata. México: OXXO Pay.
+
+**Modelo propuesto**:
+```prisma
+model PaymentMethod {
+  id              String   @id @default(cuid())
+  key             String   // "ZELLE", "BINANCE", "NEQUI" — único por tenant
+  label           String   // "⚡ Zelle"
+  emoji           String?
+  isBsMethod      Boolean  @default(false)   // true = ingresa Bs, convierte a USD
+  isDivisasMethod Boolean  @default(false)   // true = aplica descuento divisas
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  showInSinglePay Boolean  @default(true)    // botones de pago único
+  showInMixedPay  Boolean  @default(true)    // MixedPaymentSelector
+  tenantId        String?                    // NULL ahora, para SaaS futuro
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+```
+
+**Archivos a refactorizar**:
+1. `MixedPaymentSelector.tsx` — cargar métodos desde prop (no array fijo)
+2. `restaurante/page.tsx` — cargar métodos desde BD al montar
+3. `delivery/page.tsx` — ídem
+4. `pos.actions.ts` — leer `isBsMethod`/`isDivisasMethod` desde BD
+5. `sales.actions.ts` — Reporte Z con métodos dinámicos
+6. `sales/page.tsx` — labels dinámicos en historial
+
+**Compatibilidad histórica**: Keys legacy (`CASH`, `MOBILE_PAY`, `CARD`, `TRANSFER`) existen en `SalesOrderPayment.method`. Fallback: `methods.find(m => m.key === key)?.label ?? key`.
+
+### 11.5 Prioridad 2 — Fees y Porcentajes
+
+Almacenar en `SystemConfig`:
+
+| Key | Default | Descripción |
+|-----|---------|-------------|
+| `delivery_fee_normal` | 4.50 | Tarifa delivery pago en Bs |
+| `delivery_fee_divisas` | 3.00 | Tarifa delivery pago en divisas |
+| `service_charge_pct` | 10 | % servicio mesas (0 = desactivado) |
+| `divisas_discount_pct` | 33.33 | % descuento pago en divisas |
+
+### 11.6 Prioridad 3 — Tipos de Descuento
+
+Toggle + nombre personalizable:
+- `DIVISAS_33` → habilitado/no, nombre configurable, % vinculado a `divisas_discount_pct`
+- `CORTESIA_100` → habilitado/no, nombre configurable
+- `CORTESIA_PERCENT` → habilitado/no, nombre configurable
+
+### 11.7 Prioridad 4 — Canales de Orden Activos
+
+Toggle por `orderType`:
+- RESTAURANT ✅ siempre
+- DELIVERY ✅/❌ configurable
+- PICKUP ✅/❌ configurable
+- PEDIDOSYA ✅/❌ configurable
+- WINK ✅/❌ configurable
+- EVENTO ✅/❌ configurable
+
+---
+
+## 12. Mapa de Conexiones Inter-módulo
+
+```
+┌─────────────────────── OPERACIONES ───────────────────────┐
+│                                                            │
+│  InventoryItem ←──── RecipeIngredient ────→ Recipe         │
+│       ↓                                      ↓             │
+│  InventoryLocation                    MenuItem (recipeId)  │
+│       ↑↓                                     ↓             │
+│  InventoryMovement ←──────────── SalesOrderItem            │
+│    ↑    ↑    ↑    ↑                          ↓             │
+│    │    │    │    │              ┌── SalesOrder ──┐         │
+│    │    │    │    │              │                │         │
+│    │    │    │    └── Audit      │   ┌──────────┐│         │
+│    │    │    └─── Transfer       │   │ OpenTab  ││         │
+│    │    └──── Production         │   │ PaySplit ││         │
+│    └───── Purchase               │   └──────────┘│         │
+│              ↓                   │                │         │
+│         CostHistory              └────────┬───────┘         │
+│              ↓                            │                 │
+│         MenuItem.cost                     │                 │
+└───────────────────────────────────────────┼─────────────────┘
+                                            │
+┌─────────── VENTAS/POS ────────────────────┼─────────────────┐
+│                                           │                  │
+│  POS Restaurante ── openTab ── cocina ────┤                  │
+│  POS Delivery ───── directSale ───────────┤                  │
+│  POS Mesero ─────── openTab (sin cobro) ──┤                  │
+│  PedidosYA ──────── directSale ───────────┤                  │
+│  Cargar Ventas ──── manual entry ─────────┤                  │
+│                                           │                  │
+│  SalesOrderPayment[]                      │                  │
+│       ↓                                   │                  │
+│  MixedPaymentSelector / SinglePay         │                  │
+└───────────────────────────────────────────┼──────────────────┘
+                                            │
+┌─────────── ADMINISTRACIÓN ────────────────┼──────────────────┐
+│                                           │                  │
+│  Finanzas (P&L) ← ventas ────────────────┘                  │
+│       ↑              ↑                                       │
+│  Expense        PurchaseOrder.totalAmount                    │
+│       ↑              ↑                                       │
+│  Gastos         Compras (COGS)                               │
+│                      ↓                                       │
+│                 AccountPayable ← deuda → AccountPayment      │
+│                                                              │
+│  CashRegister ← ventas_turno + gastos → cuadre de caja      │
+│  Metas ← ventas_actuales vs targets (SystemConfig)           │
+│  ExchangeRate → POS (conversión Bs) → SalesOrder (snapshot)  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 13. Restricciones Técnicas Inamovibles
+
+1. **BD solo aditiva**: Solo `ALTER TABLE ADD COLUMN` con DEFAULT o nullable. Nunca `DROP COLUMN`, `DROP TABLE`, `ALTER TYPE` destructivo.
+
+2. **Sin romper historial**: Keys legacy de métodos de pago (`CASH`, `MOBILE_PAY`, `CARD`, `TRANSFER`) deben seguir mostrándose en historial aunque no existan en tabla nueva.
+
+3. **Server Actions**: Toda lógica de negocio en `src/app/actions/*.actions.ts`. Los componentes client-side llaman Server Actions, no APIs REST directas (excepto cocina que usa polling).
+
+4. **Caching**: Métodos de pago y menú se usan en cada render del POS. Usar `unstable_cache` o pasar como prop desde Server Component.
+
+5. **Sin librerías nuevas** salvo estrictamente necesarias y justificadas.
+
+6. **TypeScript estricto**: Sin `any` salvo casos justificados.
+
+7. **Soft Delete**: Todos los modelos con `deletedAt` usan soft delete. Nunca `DELETE FROM` en datos de negocio.
+
+8. **AuditLog inmutable**: La tabla AuditLog NUNCA se borra. Solo archivar a cold storage.
+
+9. **Correlativos nunca se resetean**: InvoiceCounter es global y monotónico por canal.
+
+---
+
+## 14. Visión Multi-Tenant (diseñar para ello, NO implementar ahora)
+
+### Estado actual
+- 1 BD por cliente (instancias separadas)
+- Sin `tenantId` en ningún modelo
+
+### Objetivo: SaaS "Cápsula"
+- Múltiples clientes en una sola BD
+- Aislamiento total de datos por tenant
+- Admin de cada tenant solo ve/modifica sus datos
+
+### Restricción de diseño
+Agregar `tenantId String?` (nullable) a todo modelo de configuración nuevo (`PaymentMethod`, etc.). Migración futura:
+```sql
+UPDATE "PaymentMethod" SET "tenantId" = 'tenant_shanklish' WHERE "tenantId" IS NULL;
+ALTER TABLE "PaymentMethod" ALTER COLUMN "tenantId" SET NOT NULL;
+```
+
+---
+
+## 15. Roadmap de Implementación
+
+| Prioridad | Tarea | Complejidad | Impacto |
+|-----------|-------|-------------|---------|
+| **P1** | Panel Admin — Métodos de Pago CRUD | Alta (6 archivos refactor) | Elimina hardcoding en 3+ archivos |
+| **P2** | Panel Admin — Fees y Porcentajes | Media (SystemConfig + 4 archivos) | Delivery fee, service charge configurables |
+| **P3** | Panel Admin — Tipos de Descuento | Media (toggle + POS refactor) | Descuentos configurables por instalación |
+| **P4** | Panel Admin — Canales de Orden | Baja (toggle de orderType) | Canales activables por cliente |
+| **P5** | Middleware RBAC completo | Media (middleware.ts) | Cerrar gap de acceso directo por URL |
+| **P6** | Unificar sistemas de permisos | Baja (refactor permissions.ts + roles.ts) | Un solo sistema numérico coherente |
+| **P7** | Service charge como dato (no string matching) | Media (schema + POS + sales) | Elimina detección frágil por splitLabel |
+
+---
+
+## 16. Gap Analysis — Qué falta para 100%
+
+### Gaps Críticos (afectan producción)
+
+| # | Gap | Archivos afectados | Impacto |
+|---|-----|-------------------|---------|
+| 1 | **Métodos de pago hardcodeados** en 3+ archivos | `MixedPaymentSelector.tsx`, `restaurante/page.tsx`, `delivery/page.tsx` | No se pueden agregar/quitar métodos sin deploy |
+| 2 | **Delivery fees hardcodeados** duplicados front+back | `pos.actions.ts:263-264`, `delivery/page.tsx:15-16` | Cambiar tarifa requiere editar 2 archivos |
+| 3 | **Service charge 10% hardcodeado** | `restaurante/page.tsx:696,769`, `sales.actions.ts` | No configurable por instalación |
+| 4 | **Service charge detectado por string** (`'| +10% serv'`) | `sales.actions.ts:120,264,428,737` | Detección frágil, se rompe si cambia el texto |
+| 5 | **BAR_CATEGORIES hardcodeado** `['Bebidas']` | `api/kitchen/orders/route.ts:7` | No configurable qué va a barra vs cocina |
+
+### Gaps de Seguridad
+
+| # | Gap | Archivo | Impacto |
+|---|-----|---------|---------|
+| 6 | **JWT secret con fallback hardcodeado** | `src/lib/auth.ts:5` | Si no se configura env var, todos los JWT usan la misma key |
+| 7 | **Middleware RBAC incompleto** — solo 3 rutas protegidas | `middleware.ts` | Acceso directo por URL a módulos no autorizados |
+| 8 | **Dos sistemas de niveles numéricos** no unificados | `permissions.ts` vs `roles.ts` | KITCHEN_CHEF, WAITER, CASHIER_DELIVERY no en permissions.ts |
+
+### Gaps Funcionales
+
+| # | Gap | Detalle |
+|---|-----|---------|
+| 9 | **Descuentos no configurables** por instalación | DIVISAS_33, CORTESIA fijos en código |
+| 10 | **Canales de orden no configurables** | DELIVERY, PICKUP, PEDIDOSYA siempre disponibles si el módulo está activo |
+| 11 | **kitchenRouting no se usa** en comandera | MenuItem tiene campo `kitchenRouting` (BAR/KITCHEN/GRILL) pero la API filtra por categoría name |
+| 12 | **Inventario diario no sincroniza** producción ni transferencias automáticamente | Solo sincroniza ventas POS, no registra entradas/producción del día |
+| 13 | **CostHistory no se actualiza** automáticamente al recibir compra en todos los flujos | `receivePurchaseOrderItemsAction` lo hace, pero `registrarEntradaMercancia` podría no |
+| 14 | **Intercompany desconectado** de descargo automático | Items intercompany no generan InventoryMovement en el negocio proveedor |
+
+### Gaps de UX
+
+| # | Gap | Detalle |
+|---|-----|---------|
+| 15 | **POSConfig mixto** BD + localStorage | `stockValidationEnabled` en BD, el resto en localStorage — difícil administrar centralizadamente |
+| 16 | **Páginas legacy** bajo `/dashboard/inventario/` sin registro en module-registry | `historial`, `importar`, `compras` existen como páginas pero no como módulos independientes |
+
+---
+
+*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Documento Completo*
+*42 modelos Prisma · 47 módulos · 40 actions · 4 API routes · 3 services · 23 componentes*
+*Total: ~1600 líneas*
