@@ -574,38 +574,102 @@ export async function getMenuForPOSAction() {
 }
 
 // ============================================================================
+// HELPERS DE HASHING DE PIN
+// Usa Web Crypto API (globalThis.crypto.subtle) — disponible en Node 18+
+// (requerido por Next.js 14) y en el browser. Sin imports de Node ni
+// dependencias nuevas. Tipado por la lib "dom" ya configurada en tsconfig.
+//
+// Formato almacenado: "saltHex:hashHex"  (PBKDF2-SHA256, 100k iteraciones)
+// Transición: si el valor almacenado no contiene ':', se trata como PIN
+// legado en texto plano para no romper PINs existentes durante la migración.
+// Usar hashPin() al crear/actualizar PINs para migrar gradualmente.
+// ============================================================================
+
+function hexToUint8Array(hex: string): Uint8Array {
+    const pairs = hex.match(/.{2}/g) ?? [];
+    return new Uint8Array(pairs.map((b) => parseInt(b, 16)));
+}
+
+function uint8ArrayToHex(bytes: Uint8Array): string {
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+async function pbkdf2Hex(pin: string, saltHex: string): Promise<string> {
+    const salt = hexToUint8Array(saltHex);
+    const keyMaterial = await globalThis.crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(pin),
+        'PBKDF2',
+        false,
+        ['deriveBits'],
+    );
+    const hashBuf = await globalThis.crypto.subtle.deriveBits(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { name: 'PBKDF2', salt: salt as any, iterations: 100_000, hash: 'SHA-256' },
+        keyMaterial,
+        256,
+    );
+    return uint8ArrayToHex(new Uint8Array(hashBuf));
+}
+
+export async function hashPin(pin: string): Promise<string> {
+    const saltBytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    const saltHex = uint8ArrayToHex(saltBytes);
+    const hashHex = await pbkdf2Hex(pin, saltHex);
+    return `${saltHex}:${hashHex}`;
+}
+
+async function verifyPin(pin: string, stored: string): Promise<boolean> {
+    try {
+        if (stored.includes(':')) {
+            // Formato hasheado: "saltHex:hashHex"
+            const colonIdx = stored.indexOf(':');
+            const saltHex = stored.slice(0, colonIdx);
+            const storedHash = stored.slice(colonIdx + 1);
+            if (!saltHex || !storedHash) return false;
+            const derived = await pbkdf2Hex(pin, saltHex);
+            return derived === storedHash;
+        }
+        // Legado: PIN en texto plano (período de transición)
+        return pin === stored;
+    } catch {
+        return false;
+    }
+}
+
+// ============================================================================
 // VALIDACIÓN DE PIN DE GERENTE
 // ============================================================================
 
 export async function validateManagerPinAction(pin: string): Promise<ActionResult> {
     try {
-        const manager = await prisma.user.findFirst({
-            where: {
-                pin: pin,
-                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
-                isActive: true
-            },
-            select: { id: true, firstName: true, lastName: true, role: true }
-        });
-
-        if (manager) {
-            return {
-                success: true,
-                message: 'Autorización exitosa',
-                data: {
-                    managerId: manager.id,
-                    managerName: `${manager.firstName} ${manager.lastName}`,
-                    role: manager.role
-                }
-            };
+        if (!pin || pin.length < 4) {
+            return { success: false, message: 'PIN debe tener al menos 4 dígitos' };
         }
 
-        if (pin === '1234') {
-            return {
-                success: true,
-                message: 'Autorización Demo (Master)',
-                data: { managerId: 'demo-master-id', managerName: 'MASTER USER', role: 'OWNER' }
-            };
+        const candidates = await prisma.user.findMany({
+            where: {
+                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
+                isActive: true,
+                pin: { not: null },
+            },
+            select: { id: true, firstName: true, lastName: true, role: true, pin: true },
+        });
+
+        for (const candidate of candidates) {
+            if (candidate.pin && await verifyPin(pin, candidate.pin)) {
+                return {
+                    success: true,
+                    message: 'Autorización exitosa',
+                    data: {
+                        managerId: candidate.id,
+                        managerName: `${candidate.firstName} ${candidate.lastName}`,
+                        role: candidate.role,
+                    },
+                };
+            }
         }
 
         return { success: false, message: 'PIN inválido o permisos insuficientes' };
@@ -623,33 +687,31 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 
 export async function validateCashierPinAction(pin: string): Promise<ActionResult> {
     try {
-        const user = await prisma.user.findFirst({
-            where: {
-                pin: pin,
-                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'] },
-                isActive: true
-            },
-            select: { id: true, firstName: true, lastName: true, role: true }
-        });
-
-        if (user) {
-            return {
-                success: true,
-                message: 'Autorización exitosa',
-                data: {
-                    managerId: user.id,
-                    managerName: `${user.firstName} ${user.lastName}`,
-                    role: user.role
-                }
-            };
+        if (!pin || pin.length < 4) {
+            return { success: false, message: 'PIN debe tener al menos 4 dígitos' };
         }
 
-        if (pin === '1234') {
-            return {
-                success: true,
-                message: 'Autorización Demo (Master)',
-                data: { managerId: 'demo-master-id', managerName: 'MASTER USER', role: 'OWNER' }
-            };
+        const candidates = await prisma.user.findMany({
+            where: {
+                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'] },
+                isActive: true,
+                pin: { not: null },
+            },
+            select: { id: true, firstName: true, lastName: true, role: true, pin: true },
+        });
+
+        for (const candidate of candidates) {
+            if (candidate.pin && await verifyPin(pin, candidate.pin)) {
+                return {
+                    success: true,
+                    message: 'Autorización exitosa',
+                    data: {
+                        managerId: candidate.id,
+                        managerName: `${candidate.firstName} ${candidate.lastName}`,
+                        role: candidate.role,
+                    },
+                };
+            }
         }
 
         return { success: false, message: 'PIN inválido o sin permisos para esta operación' };
@@ -1379,14 +1441,27 @@ export async function removeItemFromOpenTabAction({
         }
 
         // Validar PIN contra cualquier usuario con rol autorizado
-        const authorizer = await prisma.user.findFirst({
+        if (!cashierPin || cashierPin.length < 4) {
+            return { success: false, message: 'PIN debe tener al menos 4 dígitos' };
+        }
+
+        const authCandidates = await prisma.user.findMany({
             where: {
-                pin: cashierPin,
                 role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'] },
-                isActive: true
+                isActive: true,
+                pin: { not: null },
             },
-            select: { id: true, firstName: true, lastName: true, role: true }
+            select: { id: true, firstName: true, lastName: true, role: true, pin: true },
         });
+
+        let authorizer: { id: string; firstName: string; lastName: string; role: string } | null = null;
+        for (const candidate of authCandidates) {
+            if (candidate.pin && await verifyPin(cashierPin, candidate.pin)) {
+                authorizer = candidate;
+                break;
+            }
+        }
+
         if (!authorizer) {
             return { success: false, message: 'PIN incorrecto o sin permisos de cajera' };
         }
