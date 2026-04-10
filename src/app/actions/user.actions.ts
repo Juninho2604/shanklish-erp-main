@@ -4,6 +4,48 @@ import { prisma } from '@/server/db'; // Correct path from previous files
 import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 
+// ============================================================================
+// HELPERS DE HASHING DE PIN  (movidos desde pos.actions.ts)
+// Usa Web Crypto API — disponible en Node 18+ y en el browser.
+// Formato almacenado: "saltHex:hashHex"  (PBKDF2-SHA256, 100 000 iteraciones)
+// ============================================================================
+
+function hexToUint8Array(hex: string): Uint8Array {
+    const pairs = hex.match(/.{2}/g) ?? [];
+    return new Uint8Array(pairs.map((b) => parseInt(b, 16)));
+}
+
+function uint8ArrayToHex(bytes: Uint8Array): string {
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+export async function pbkdf2Hex(pin: string, saltHex: string): Promise<string> {
+    const salt = hexToUint8Array(saltHex);
+    const keyMaterial = await globalThis.crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(pin),
+        'PBKDF2',
+        false,
+        ['deriveBits'],
+    );
+    const hashBuf = await globalThis.crypto.subtle.deriveBits(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { name: 'PBKDF2', salt: salt as any, iterations: 100_000, hash: 'SHA-256' },
+        keyMaterial,
+        256,
+    );
+    return uint8ArrayToHex(new Uint8Array(hashBuf));
+}
+
+export async function hashPin(pin: string): Promise<string> {
+    const saltBytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    const saltHex = uint8ArrayToHex(saltBytes);
+    const hashHex = await pbkdf2Hex(pin, saltHex);
+    return `${saltHex}:${hashHex}`;
+}
+
 /**
  * Obtiene la lista de todos los usuarios
  */
@@ -170,5 +212,44 @@ export async function updateUserModules(userId: string, allowedModules: string[]
     } catch (error) {
         console.error('Error updating user modules:', error);
         return { success: false, message: 'Error al actualizar módulos' };
+    }
+}
+
+/**
+ * Asigna o cambia el PIN de un usuario (solo Admin/Dueño/roles con MANAGE_USERS).
+ * El PIN se hashea automáticamente con PBKDF2-SHA256 antes de guardarse.
+ */
+export async function updateUserPin(userId: string, rawPin: string) {
+    const session = await getSession();
+
+    if (!session) {
+        return { success: false, message: 'No autenticado' };
+    }
+
+    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
+        return { success: false, message: 'No tienes permisos para asignar PINs' };
+    }
+
+    if (session.id === userId) {
+        return { success: false, message: 'No puedes modificar tu propio PIN desde aquí' };
+    }
+
+    const trimmed = rawPin.trim();
+    if (!/^\d{4,6}$/.test(trimmed)) {
+        return { success: false, message: 'El PIN debe ser numérico y tener entre 4 y 6 dígitos' };
+    }
+
+    try {
+        const hashed = await hashPin(trimmed);
+        await prisma.user.update({
+            where: { id: userId },
+            data: { pin: hashed },
+        });
+
+        revalidatePath('/dashboard/usuarios');
+        return { success: true, message: 'PIN actualizado correctamente' };
+    } catch (error) {
+        console.error('Error updating user PIN:', error);
+        return { success: false, message: 'Error al actualizar el PIN' };
     }
 }

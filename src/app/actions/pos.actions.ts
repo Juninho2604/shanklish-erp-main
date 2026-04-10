@@ -14,6 +14,7 @@ import { getCaracasDateStamp, getCaracasDayRange } from '@/lib/datetime';
 import { getNextCorrelativo } from '@/lib/invoice-counter';
 import { getStockValidationEnabled } from '@/app/actions/system-config.actions';
 import { createReorderBroadcastsAction } from '@/app/actions/purchase.actions';
+import { pbkdf2Hex, hashPin } from '@/app/actions/user.actions';
 
 // ============================================================================
 // TIPOS
@@ -574,52 +575,9 @@ export async function getMenuForPOSAction() {
 }
 
 // ============================================================================
-// HELPERS DE HASHING DE PIN
-// Usa Web Crypto API (globalThis.crypto.subtle) — disponible en Node 18+
-// (requerido por Next.js 14) y en el browser. Sin imports de Node ni
-// dependencias nuevas. Tipado por la lib "dom" ya configurada en tsconfig.
-//
-// Formato almacenado: "saltHex:hashHex"  (PBKDF2-SHA256, 100k iteraciones)
-// Transición: si el valor almacenado no contiene ':', se trata como PIN
-// legado en texto plano para no romper PINs existentes durante la migración.
-// Usar hashPin() al crear/actualizar PINs para migrar gradualmente.
+// HELPERS DE HASHING DE PIN  (implementación en user.actions.ts)
+// pbkdf2Hex y hashPin se importan desde user.actions.ts
 // ============================================================================
-
-function hexToUint8Array(hex: string): Uint8Array {
-    const pairs = hex.match(/.{2}/g) ?? [];
-    return new Uint8Array(pairs.map((b) => parseInt(b, 16)));
-}
-
-function uint8ArrayToHex(bytes: Uint8Array): string {
-    return Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-async function pbkdf2Hex(pin: string, saltHex: string): Promise<string> {
-    const salt = hexToUint8Array(saltHex);
-    const keyMaterial = await globalThis.crypto.subtle.importKey(
-        'raw',
-        new TextEncoder().encode(pin),
-        'PBKDF2',
-        false,
-        ['deriveBits'],
-    );
-    const hashBuf = await globalThis.crypto.subtle.deriveBits(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { name: 'PBKDF2', salt: salt as any, iterations: 100_000, hash: 'SHA-256' },
-        keyMaterial,
-        256,
-    );
-    return uint8ArrayToHex(new Uint8Array(hashBuf));
-}
-
-export async function hashPin(pin: string): Promise<string> {
-    const saltBytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
-    const saltHex = uint8ArrayToHex(saltBytes);
-    const hashHex = await pbkdf2Hex(pin, saltHex);
-    return `${saltHex}:${hashHex}`;
-}
 
 async function verifyPin(pin: string, stored: string): Promise<boolean> {
     try {

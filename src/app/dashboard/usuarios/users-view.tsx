@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { UserRole } from '@/types';
 import { ROLE_INFO } from '@/lib/constants/roles';
-import { updateUserRole, toggleUserStatus, updateUserModules } from '@/app/actions/user.actions';
+import { updateUserRole, toggleUserStatus, updateUserModules, updateUserPin } from '@/app/actions/user.actions';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '@/stores/auth.store';
 import { PERMISSIONS, hasPermission } from '@/lib/permissions';
@@ -202,6 +202,52 @@ const SECTIONS = [
     { key: 'admin',      label: 'Administración',  icon: '🔐' },
 ] as const;
 
+function PinSection({ userId, canManage }: { userId: string; canManage: boolean }) {
+    const [pin, setPin] = useState('');
+    const [isPending, startTransition] = useTransition();
+
+    if (!canManage) return null;
+
+    function handleSavePin() {
+        if (!pin.trim()) return;
+        startTransition(async () => {
+            const res = await updateUserPin(userId, pin.trim());
+            if (res.success) {
+                toast.success(res.message);
+                setPin('');
+            } else {
+                toast.error(res.message);
+            }
+        });
+    }
+
+    return (
+        <div className="border-t border-border px-5 py-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">PIN de acceso (POS)</p>
+            <div className="flex items-center gap-2">
+                <input
+                    type="password"
+                    value={pin}
+                    onChange={e => setPin(e.target.value)}
+                    placeholder="4–6 dígitos"
+                    maxLength={6}
+                    inputMode="numeric"
+                    pattern="\d*"
+                    disabled={isPending}
+                    className="w-36 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                />
+                <button
+                    onClick={handleSavePin}
+                    disabled={isPending || pin.trim().length < 4}
+                    className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 active:scale-95 disabled:opacity-50 transition"
+                >
+                    {isPending ? 'Guardando…' : 'Guardar PIN'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function ModulesPanel({ user, enabledModuleIds, canManage, isOwner, onRoleChange, onStatusToggle, onModulesSaved }: ModulesPanelProps) {
     const [isPending, startTransition] = useTransition();
     const roleInfo = ROLE_INFO[user.role as UserRole] || { labelEs: user.role, color: '#6b7280' };
@@ -356,6 +402,9 @@ function ModulesPanel({ user, enabledModuleIds, canManage, isOwner, onRoleChange
                     </p>
                 )}
             </div>
+
+            {/* PIN section */}
+            <PinSection userId={user.id} canManage={canManage} />
 
             {/* Footer actions */}
             {canManage && (
