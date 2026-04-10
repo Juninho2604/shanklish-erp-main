@@ -978,6 +978,349 @@ const SINGLE_PAY_METHODS = ["CASH_USD","CASH_EUR","ZELLE","PDV_SHANKLISH","PDV_S
 
 ---
 
-*Continúa en Sección 7: Módulos de Administración...*
+## 7. Módulos de ADMINISTRACIÓN (14 módulos)
 
-*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Partes 1-4*
+### 7.1 Usuarios
+
+- **Ruta**: `/dashboard/usuarios`
+- **Página**: Server Component — importa `getUsers()` + `getEnabledModulesFromDB()`
+- **Actions**: `user.actions.ts` → 5 funciones:
+  - `getUsers()` — lista con roles y allowedModules
+  - `updateUserRole(userId, newRole)` — cambia rol (jerarquía: solo superiores)
+  - `toggleUserStatus(userId, isActive)` — activar/desactivar
+  - `changePasswordAction(currentPassword, newPassword)` — cambio propio
+  - `updateUserModules(userId, allowedModules)` — asigna módulos individuales
+- **Modelos**: User
+- **Componentes**: `ChangePasswordDialog`
+- **Middleware**: Ruta protegida — solo OWNER, ADMIN_MANAGER
+- **Estado**: Funcional
+
+### 7.2 Módulos por Usuario
+
+- **Ruta**: `/dashboard/config/modulos-usuario`
+- **Página**: Server Component — importa `getUsers()` + `getEnabledModulesFromDB()`
+- **Actions**: `user.actions.ts` → `updateUserModules(userId, allowedModules | null)`
+- **Modelos**: User (campo `allowedModules` JSON array)
+- **Lógica**: Seleccionar usuario → ver/editar checkboxes de módulos permitidos. `null` = acceso por rol completo, array = solo esos módulos.
+- **Estado**: Funcional
+
+### 7.3 Roles y Permisos
+
+- **Ruta**: `/dashboard/config/roles`
+- **Página**: Server Component — importa `getUsers()`
+- **Actions**: `user.actions.ts` → `updateUserRole(userId, newRole)`
+- **Lógica**: Vista de usuarios agrupados por rol. Permite reasignar roles respetando jerarquía (`canManageRole()`).
+- **Estado**: Funcional
+
+### 7.4 Módulos (toggle por instalación)
+
+- **Ruta**: `/dashboard/config/modules`
+- **Página**: Server Component — importa `getEnabledModulesFromDB()`
+- **Actions**: `system-config.actions.ts` → 4 funciones:
+  - `getEnabledModulesFromDB()` — lee `SystemConfig['enabled_modules']`
+  - `saveEnabledModules(moduleIds[])` — guarda módulos activos
+  - `getStockValidationEnabled()` / `setStockValidationEnabled(enabled)`
+- **Modelos**: SystemConfig
+- **Lógica**: OWNER activa/desactiva módulos para toda la instalación. Lee `MODULE_REGISTRY` como catálogo, guarda selección en BD.
+- **Acceso**: Solo OWNER
+- **Estado**: Funcional
+
+### 7.5 Almacenes
+
+- **Ruta**: `/dashboard/almacenes`
+- **Página**: Server Component — importa `getAreasAction()`
+- **Actions**: `areas.actions.ts` → 4 funciones:
+  - `getAreasAction()` — lista de áreas con branchId
+  - `createAreaAction(data)` — crear área nueva
+  - `toggleAreaStatusAction(id, isActive)` — activar/desactivar
+  - `findDuplicateAreasAction()` — detecta nombres duplicados
+- **Modelos**: Area, Branch
+- **Estado**: Funcional
+
+### 7.6 Tasa de Cambio
+
+- **Ruta**: `/dashboard/config/tasa-cambio`
+- **Página**: Server Component — importa `getExchangeRateHistory()`
+- **Actions**: `exchange.actions.ts` → 5 funciones:
+  - `getCurrentExchangeRate()` — última tasa activa
+  - `getExchangeRateForDisplay()` — formateada para UI
+  - `getExchangeRateValue()` — solo número (usado por POS)
+  - `setExchangeRateAction(rate, effectiveDate)` — registra nueva tasa
+  - `getExchangeRateHistory(limit)` — historial
+- **Modelos**: ExchangeRate
+- **Conexiones**: → POS (conversión Bs/USD en pagos), → SalesOrder.exchangeRateValue (snapshot)
+- **Estado**: Funcional
+
+### 7.7 Anuncios a Gerencia
+
+- **Ruta**: `/dashboard/anuncios`
+- **Página**: Server Component — importa `getAllBroadcastsAdminAction()`
+- **Actions**: `notifications.actions.ts` → 4 funciones:
+  - `getNotificationsAction()` — anuncios activos para el usuario (filtro por rol + fecha)
+  - `createBroadcastAction(input)` — crea anuncio con targetRoles, fecha inicio/expiración
+  - `getAllBroadcastsAdminAction()` — todos los anuncios (admin view)
+  - `dismissBroadcastAction(id)` — marcar como leído (localStorage)
+- **Modelos**: BroadcastMessage
+- **Componentes**: `NotificationBell` en Navbar — muestra campana con contador de no leídos
+- **Lógica**: Los anuncios se filtran por: `isActive`, `targetRoles` incluye rol del usuario, `startsAt <= now`, `expiresAt > now || null`
+- **Estado**: Funcional
+
+### 7.8 Objetivos y Metas
+
+- **Ruta**: `/dashboard/metas`
+- **Página**: Server Component — importa `getMetasAction()`
+- **Actions**: `metas.actions.ts` → 2 funciones:
+  - `getMetasAction()` — lee metas actuales + progreso vs ventas reales
+  - `saveMetasAction(input)` — guarda targets en SystemConfig (keys: `meta_diaria`, `meta_semanal`, `meta_mensual`, `merma_aceptable_pct`)
+- **Modelos**: SystemConfig (lectura/escritura), SalesOrder (lectura para progreso)
+- **Lógica**: Fijar metas de venta (diaria, semanal, mensual) y % de merma aceptable. Muestra progreso en tiempo real comparando ventas actuales vs targets.
+- **Conexiones**: ← SalesOrder (ventas actuales) vs SystemConfig (targets)
+- **Estado**: Funcional
+
+### 7.9 Dashboard Financiero
+
+- **Ruta**: `/dashboard/finanzas`
+- **Página**: Server Component — importa `getFinancialSummaryAction()` + `getMonthlyTrendAction()`
+- **Actions**: `finance.actions.ts` → 2 funciones:
+  - `getFinancialSummaryAction(month?, year?)` — P&L mensual: ingresos (ventas), COGS (compras recibidas), gastos operativos, cuentas por pagar, utilidad neta
+  - `getMonthlyTrendAction(months)` — tendencia de últimos N meses
+- **Modelos**: SalesOrder (ingresos), PurchaseOrder (COGS), Expense (gastos), AccountPayable (deudas)
+- **Conexiones**: ← SalesOrder.total (ingresos), ← PurchaseOrder.totalAmount con status RECEIVED (COGS), ← Expense.amountUsd (gastos), ← AccountPayable.remainingUsd (deudas pendientes)
+- **Estado**: Funcional
+
+### 7.10 Gastos
+
+- **Ruta**: `/dashboard/gastos`
+- **Página**: Server Component — importa `getExpensesAction()` + `getExpenseCategoriesAction()`
+- **Actions**: `expense.actions.ts` → 6 funciones:
+  - `getExpenseCategoriesAction()` / `createExpenseCategoryAction(input)` / `updateExpenseCategoryAction(id, data)`
+  - `getExpensesAction(filters)` — filtro por categoría, fecha, status
+  - `createExpenseAction(input)` — registro con categoría, monto USD/Bs, método de pago, período
+  - `voidExpenseAction(id, reason)` — anula gasto
+- **Modelos**: Expense, ExpenseCategory
+- **Conexiones**: → Finanzas (P&L como gasto operativo), → Caja (gastos del turno)
+- **Estado**: Funcional
+
+### 7.11 Control de Caja
+
+- **Ruta**: `/dashboard/caja`
+- **Página**: Server Component — importa `getCashRegistersAction()`
+- **Actions**: `cash-register.actions.ts` → 4 funciones:
+  - `getCashRegistersAction(filters)` — lista de cajas por fecha/status
+  - `openCashRegisterAction(input)` — apertura con fondo inicial USD/Bs + desglose billetes
+  - `closeCashRegisterAction(input)` — cierre: conteo final, calcula diferencia vs esperado
+  - `updateRegisterOperatorsAction(id, operators[])` — asigna operadoras al turno
+- **Modelos**: CashRegister
+- **Componentes**: `BillDenominationInput` — entrada de billetes por denominación
+- **Conexiones**: ← SalesOrder (ventas del turno para calcular esperado), ← Expense (gastos del turno)
+- **Lógica**: Apertura → ventas del día → cierre con conteo → `expectedCash = apertura + ventas_efectivo - gastos` → `difference = cierre_contado - esperado`
+- **Estado**: Funcional
+
+### 7.12 Cuentas por Pagar
+
+- **Ruta**: `/dashboard/cuentas-pagar`
+- **Página**: Server Component — importa `getAccountsPayableAction()` + `getSuppliersAction()`
+- **Actions**: `account-payable.actions.ts` → 3 funciones:
+  - `getAccountsPayableAction(filters)` — filtro por status, proveedor, fecha
+  - `createAccountPayableAction(input)` — nueva deuda (manual o desde PurchaseOrder)
+  - `registerPaymentAction(input)` — pago parcial/total → actualiza `paidAmountUsd`, `remainingUsd`, `status`
+- **Modelos**: AccountPayable, AccountPayment, Supplier, PurchaseOrder
+- **Conexiones**: ← PurchaseOrder (puede crear deuda al recibir), ← Supplier (acreedor), → Finanzas (deudas pendientes en P&L)
+- **Estado**: Funcional
+
+### 7.13 Intercompany
+
+- **Ruta**: `/dashboard/intercompany`
+- **Página**: Server Component — importa `getSettlements()`
+- **Actions**: `intercompany.actions.ts` → 4 funciones:
+  - `getSettlements(filters)` — lista por status, período
+  - `getSettlementById(id)` — detalle con líneas
+  - `createSettlement(data)` — nueva liquidación entre negocios
+  - `approveSettlement(id)` — aprobación
+- **Modelos**: IntercompanySettlement, IntercompanySettlementLine, IntercompanyItemMapping
+- **Lógica**: Liquidación periódica entre Shanklish y Table Pong. Registra items vendidos por un negocio que pertenecen al otro (ej: comida de Shanklish vendida en Table Pong).
+- **enabledByDefault**: false
+- **Estado**: Funcional
+
+### 7.14 Entrada de Mercancía
+
+- **Ruta**: `/dashboard/inventario/entrada`
+- **Página**: Server Component — importa de `entrada.actions.ts`
+- **Actions**: `entrada.actions.ts` → 4 funciones:
+  - `registrarEntradaMercancia(data)` — registra entrada vía `inventory.service.registerPurchase()` → genera InventoryMovement(PURCHASE) + CostHistory
+  - `getInventoryItemsForSelect()` — items disponibles
+  - `getAreasForSelect()` — áreas destino
+  - `getRecentMovements(limit)` — últimas entradas
+- **Modelos**: InventoryMovement, InventoryLocation, CostHistory, InventoryItem, Area
+- **Servicios**: `inventory.service.ts` → `registerPurchase()`
+- **Conexiones**: → InventoryMovement(PURCHASE) → InventoryLocation (suma stock) → CostHistory (actualiza precio)
+- **Nota**: Este módulo está registrado como sub-ruta de `inventory` en el registry, no como módulo independiente
+- **Estado**: Funcional
+
+### Conexiones Críticas entre Módulos de Administración
+
+```
+Finanzas ← SalesOrder (ingresos) + PurchaseOrder (COGS) + Expense (gastos) + AccountPayable (deudas)
+   ↓
+P&L = Ingresos - COGS - Gastos Operativos
+
+Caja ← SalesOrder (ventas del turno) + Expense (gastos del turno)
+   ↓
+Cuadre = Apertura + Ventas_Efectivo - Gastos - Cierre_Contado
+
+Metas ← SalesOrder (ventas actuales) vs SystemConfig (targets guardados)
+
+Cuentas por Pagar ← PurchaseOrder (deuda al recibir) → pagos parciales → AccountPayment
+
+Intercompany: Shanklish ←→ Table Pong (items vendidos entre negocios)
+```
+
+---
+
+## 8. Módulos de ENTRETENIMIENTO — Table Pong (4 módulos)
+
+Todos estos módulos están **deshabilitados por default** (`enabledByDefault: false`). Se activan solo en la instancia Table Pong.
+
+### 8.1 Juegos
+
+- **Ruta**: `/dashboard/games`
+- **Página**: Server Component — importa `getGameStations()`, `getActiveSessions()`, `getGamesDashboardStats()`
+- **Actions**: `games.actions.ts` → 16+ funciones organizadas en bloques:
+  - **GameType CRUD**: `getGameTypes()`, `createGameType(data)`, `updateGameType(id, data)`
+  - **GameStation CRUD**: `getGameStations(filters)`, `createGameStation(data)`, `updateStationStatus(id, status)`
+  - **Sesiones**: `getActiveSessions()`, `getSessionHistory(filters)`, `startSession(data)`, `endSession(id, notes?)`, `pauseSession(id)`, `resumeSession(id)`
+  - **Stats**: `getGamesDashboardStats()` — resumen del día
+- **Modelos**: GameType, GameStation, GameSession, SalesOrder
+- **Lógica**: Dashboard de juegos con estaciones activas, sesiones en curso, facturación por hora o pulsera. `endSession()` calcula tiempo + monto y opcionalmente crea SalesOrder.
+- **Conexiones**: → SalesOrder (facturación de sesión) → InvoiceCounter (correlativo GSN-xxxx)
+- **Estado**: Funcional
+
+### 8.2 Reservaciones
+
+- **Ruta**: `/dashboard/reservations`
+- **Página**: Server Component
+- **Actions**: `games.actions.ts` (mismo archivo) → funciones de reservas implícitas
+- **Modelos**: Reservation, GameStation, WristbandPlan
+- **Lógica**: Reservar estación para cliente con fecha/hora, opcionalmente vincular plan de pulsera. Estados: PENDING → CONFIRMED → CHECKED_IN / NO_SHOW / CANCELLED.
+- **Estado**: Funcional
+
+### 8.3 Pulseras
+
+- **Ruta**: `/dashboard/wristbands`
+- **Página**: Server Component
+- **Actions**: `games.actions.ts` → `getWristbandPlans()`, `createWristbandPlan(data)`, `updateWristbandPlan(id, data)`
+- **Modelos**: WristbandPlan
+- **Lógica**: CRUD de planes de pulsera con duración, precio, color, máximo de sesiones simultáneas. Se vinculan a Reservations y GameSessions.
+- **Estado**: Funcional
+
+### 8.4 Cola de Espera
+
+- **Ruta**: `/dashboard/queue`
+- **Página**: Server Component
+- **Actions**: `games.actions.ts` → funciones de cola (QueueTicket)
+- **Modelos**: QueueTicket, GameStation
+- **Lógica**: Gestión de turnos. Ticket con número correlativo (reset diario), estado WAITING → CALLED → SEATED / EXPIRED / CANCELLED. Estimación de tiempo de espera.
+- **Estado**: Funcional
+
+---
+
+## 9. API Routes y Servicios
+
+### 9.1 API Routes (4 rutas)
+
+| Método | Ruta | Archivo | Propósito |
+|--------|------|---------|-----------|
+| GET | `/api/kitchen/orders?station=kitchen\|bar` | `src/app/api/kitchen/orders/route.ts` | Órdenes pendientes para comandera (filtra por categoría food/beverage) |
+| PATCH | `/api/kitchen/orders` | (mismo archivo) | Actualizar kitchenStatus de una orden |
+| GET | `/api/arqueo?date=YYYY-MM-DD` | `src/app/api/arqueo/route.ts` | Datos de arqueo para exportar |
+| GET | `/api/auth/session` | `src/app/api/auth/session/route.ts` | Verificar sesión activa (devuelve payload JWT) |
+| POST | `/api/upload` | `src/app/api/upload/route.ts` | Upload de archivos (comprobantes, imágenes OCR) |
+
+**Nota**: Las API routes se usan solo donde Server Actions no son prácticas (polling de cocina, verificación de sesión client-side). Todo lo demás usa Server Actions.
+
+### 9.2 Server Services (3 servicios)
+
+| Servicio | Archivo | Funciones principales |
+|----------|---------|----------------------|
+| **Inventory** | `src/server/services/inventory.service.ts` | `registerPurchase(input)` — entrada de mercancía + actualiza stock + CostHistory |
+| | | `registerSale(input)` — descuento por venta (receta → ingredientes) |
+| | | `registerAdjustment(...)` — ajuste de inventario |
+| **Production** | `src/server/services/production.service.ts` | `createProductionOrder(input)` — crear orden |
+| | | `completeProduction(input)` — finalizar (resta ingredientes, suma output) |
+| | | `calculateRequirements(recipeId, qty)` — verifica disponibilidad |
+| **Cost** | `src/server/services/cost.service.ts` | `calculateGrossQuantity(net, waste%)` — cantidad bruta con merma |
+| | | Cálculo recursivo de COGS para recetas con sub-recetas |
+
+### 9.3 Lib Utilities (20 archivos)
+
+| Archivo | Propósito |
+|---------|-----------|
+| `auth.ts` | JWT encrypt/decrypt, session CRUD |
+| `prisma.ts` | Singleton PrismaClient |
+| `permissions.ts` | `hasPermission()` por nivel numérico |
+| `audit-log.ts` | `writeAuditLog()` — registro forense inmutable |
+| `invoice-counter.ts` | `getNextCorrelativo(channel)` — correlativos atómicos |
+| `pos-settings.ts` | `POSConfig` en localStorage por terminal |
+| `print-command.ts` | Impresión térmica 80mm (comanda cocina + factura) |
+| `export-z-report.ts` | Generación Reporte Z a Excel |
+| `export-arqueo-excel.ts` | Exportación arqueo de caja a Excel |
+| `arqueo-excel-utils.ts` | Utilidades para formato de arqueo |
+| `currency.ts` | Formateo USD/Bs |
+| `datetime.ts` | Utilidades fecha/hora timezone Caracas |
+| `soft-delete.ts` | Helpers para soft delete en queries |
+| `inventory-excel-parse.ts` | Parser de Excel para conteo físico |
+| `pedidosya-price.ts` | Lógica de precio PedidosYA |
+| `mock-data.ts` | Datos de ejemplo para desarrollo |
+| `utils.ts` | Utilidades generales (cn, etc.) |
+| `constants/modules-registry.ts` | Registro maestro de módulos (682 líneas) |
+| `constants/roles.ts` | Roles, jerarquía, permisos RBAC (298 líneas) |
+| `constants/units.ts` | Unidades de medida con conversión |
+
+---
+
+## 10. Componentes UI Compartidos (23 componentes)
+
+### Layout (5)
+| Componente | Archivo | Propósito |
+|-----------|---------|-----------|
+| Navbar | `components/layout/Navbar.tsx` | Barra superior con usuario, rol, tema |
+| Sidebar | `components/layout/Sidebar.tsx` | Menú lateral con módulos agrupados por sección |
+| ThemeToggle | `components/layout/ThemeToggle.tsx` | Dark/light mode |
+| NotificationBell | `components/layout/NotificationBell.tsx` | Campana con anuncios no leídos |
+| HelpPanel | `components/layout/HelpPanel.tsx` | Panel de ayuda contextual |
+
+### POS (6)
+| Componente | Archivo | Propósito |
+|-----------|---------|-----------|
+| MixedPaymentSelector | `components/pos/MixedPaymentSelector.tsx` | Selector de pago mixto (N métodos, conversión Bs) |
+| PrintTicket | `components/pos/PrintTicket.tsx` | Template de factura imprimible |
+| PriceDisplay | `components/pos/PriceDisplay.tsx` | Muestra precio USD + equivalente Bs |
+| CashierShiftModal | `components/pos/CashierShiftModal.tsx` | Modal para cambio de cajera (PIN) |
+| BillDenominationInput | `components/pos/BillDenominationInput.tsx` | Entrada de billetes por denominación |
+| CurrencyCalculator | `components/pos/CurrencyCalculator.tsx` | Calculadora de conversión USD↔Bs |
+
+### UI Base (7)
+| Componente | Archivo | Propósito |
+|-----------|---------|-----------|
+| Card | `components/ui/Card.tsx` | Tarjeta contenedora |
+| button | `components/ui/button.tsx` | Botón con variantes (CVA) |
+| combobox | `components/ui/combobox.tsx` | Selector con búsqueda (Radix + cmdk) |
+| dialog | `components/ui/dialog.tsx` | Modal (Radix Dialog) |
+| command | `components/ui/command.tsx` | Command palette (cmdk) |
+| scroll-area | `components/ui/scroll-area.tsx` | Scroll personalizado (Radix) |
+| popover | `components/ui/popover.tsx` | Popover (Radix) |
+| quick-create-item-dialog | `components/ui/quick-create-item-dialog.tsx` | Diálogo rápido para crear insumo |
+
+### Otros (3)
+| Componente | Archivo | Propósito |
+|-----------|---------|-----------|
+| ChangePasswordDialog | `components/users/ChangePasswordDialog.tsx` | Cambio de contraseña |
+| whatsapp-purchase-order-parser | `components/whatsapp-purchase-order-parser.tsx` | Parser de OC desde mensaje WhatsApp |
+| whatsapp-order-parser | `components/whatsapp-order-parser.tsx` | Parser de órdenes desde WhatsApp |
+| theme-provider | `components/theme-provider.tsx` | Provider de next-themes |
+
+---
+
+*Continúa en Secciones 11-16: Panel Admin, Hardcoded Values, Restricciones, Roadmap, Gap Analysis...*
+
+*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Partes 1-5*
