@@ -425,6 +425,325 @@ getModulesBySection(userRole, enabledIds?, userAllowed?)  → { operations, sale
 
 ---
 
-*Continúa en Sección 5: Módulos de Operaciones...*
+## 5. Módulos de OPERACIONES (20 módulos)
 
-*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Partes 1-2*
+### 5.1 Dashboard
+
+- **Ruta**: `/dashboard`
+- **Página**: `src/app/dashboard/page.tsx` — Server Component
+- **Actions**: `dashboard.actions.ts` → `getDashboardStatsAction()`
+- **Modelos**: SalesOrder, InventoryItem, OpenTab (lectura agregada)
+- **Lógica**: Métricas resumen: ventas del día, tabs abiertos, items bajo stock, última actividad
+- **Conexiones**: ← SalesOrder (ventas hoy), ← InventoryLocation (alertas stock), ← OpenTab (mesas activas)
+- **Estado**: Funcional
+
+### 5.2 Estadísticas
+
+- **Ruta**: `/dashboard/estadisticas`
+- **Página**: `src/app/dashboard/estadisticas/page.tsx` — Server Component
+- **Actions**: `estadisticas.actions.ts` → `getEstadisticasAction()`
+- **Modelos**: SalesOrder, SalesOrderItem, OpenTab, ProductionOrder, DailyInventory
+- **Lógica**: Análisis en tiempo real personalizado por rol — ventas, cocina, inventario, auditoría. Datos del día y tendencias.
+- **Conexiones**: ← SalesOrder (ventas), ← ProductionOrder (producción), ← DailyInventory (conteos)
+- **Estado**: Funcional
+- **Roles con acceso**: Todos los roles (cada uno ve datos relevantes a su función)
+
+### 5.3 Inventario Diario
+
+- **Ruta**: `/dashboard/inventario/diario`
+- **Página**: `src/app/dashboard/inventario/diario/page.tsx` — Server Component (carga áreas), Client Component interior
+- **Actions**: `inventory-daily.actions.ts` → 14 funciones:
+  - `getDailyInventoryAction(dateStr, areaId)` — carga/crea inventario del día
+  - `saveDailyInventoryCountsAction(dailyId, items[])` — guarda conteos
+  - `syncSalesFromOrdersAction(dailyId)` — sincroniza ventas POS al diario
+  - `processManualSalesAction(dailyId, salesData[])` — ingreso manual de ventas
+  - `processWhatsAppSalesForDailyAction(...)` — parser WhatsApp para ventas
+  - `closeDailyInventoryAction(dailyId)` / `reopenDailyInventoryAction(dailyId)`
+  - `getInventorySummaryByRangeAction(...)` / `getWeeklyInventorySummaryAction(...)`
+  - `getDaysStatusAction(areaId, start, end)` — calendario de días abiertos/cerrados
+  - `searchItemsForCriticalListAction(query, areaId)` — buscar items para lista crítica
+  - `toggleItemCriticalStatusAction(itemId, isCritical, areaId)` — marcar/desmarcar crítico
+  - `getCriticalProteinItemsAction(areaId)` — items proteína críticos
+  - `getMenuItemsWithRecipesAction()` — para ingreso manual
+- **Modelos**: DailyInventory, DailyInventoryItem, SalesOrder, Recipe, InventoryItem, AreaCriticalItem
+- **Conexiones**: ← SalesOrder (sincroniza ventas del POS), ← Recipe (calcula consumo teórico), ← InventoryLocation (stock actual) → genera varianzas (teórico vs real)
+- **Lógica clave**: Flujo diario: abrir → contar items → sincronizar ventas POS → calcular teórico → registrar varianza → cerrar
+- **Estado**: Funcional
+
+### 5.4 Inventario
+
+- **Ruta**: `/dashboard/inventario`
+- **Página**: `src/app/dashboard/inventario/page.tsx` — Server Component
+- **Actions**: `inventory.actions.ts` → 6 funciones:
+  - `createQuickItem(data)` — crear insumo rápido
+  - `getInventoryListAction()` — listado completo con stock por área
+  - `getAreasAction()` — áreas disponibles
+  - `updateInventoryItemAction(id, data)` — editar insumo
+  - `deleteInventoryItemAction(id)` — soft delete
+  - `getInventoryHistoryAction(filters)` — historial de movimientos
+- **Modelos**: InventoryItem, InventoryLocation, InventoryMovement, Area
+- **Conexiones**: ← InventoryMovement (historial), ← InventoryLocation (stock actual por área)
+- **Estado**: Funcional
+
+### 5.5 Conteo Físico (Excel)
+
+- **Ruta**: `/dashboard/inventario/conteo-semanal`
+- **Página**: `src/app/dashboard/inventario/conteo-semanal/page.tsx` — Server Component
+- **Actions**: `inventory-count.actions.ts` → 4 funciones:
+  - `resolveDefaultCountAreasAction()` — áreas para conteo
+  - `previewPhysicalCountFromExcelAction(formData)` — parsea Excel, muestra preview
+  - `applyPhysicalCountAction(input)` — aplica ajustes de stock
+  - `resetAllWarehouseStockAction(confirmPhrase)` — resetea stock (peligrosa, requiere confirmación)
+- **Modelos**: InventoryLocation, InventoryMovement (ADJUSTMENT_IN/OUT)
+- **Lógica**: Importar Excel con conteos → comparar vs sistema → generar InventoryMovement(ADJUSTMENT)
+- **Estado**: Funcional
+
+### 5.6 Auditorías
+
+- **Ruta**: `/dashboard/inventario/auditorias` (lista) + `/dashboard/inventario/auditorias/[id]` (detalle)
+- **Página**: Server Component (lista), Client interior (detalle)
+- **Actions**: `audit.actions.ts` → 8 funciones:
+  - `getAuditsAction()` / `getAuditAction(id)`
+  - `createAuditAction(input)` — snapshot de stock actual del sistema
+  - `updateAuditItemAction(input)` — actualizar conteo de un item
+  - `approveAuditAction(input)` — genera InventoryMovement(ADJUSTMENT) por cada diferencia
+  - `rejectAuditAction(id)` / `voidAuditAction(id)` / `deleteAuditAction(id)`
+- **Modelos**: InventoryAudit, InventoryAuditItem, InventoryMovement, InventoryLocation
+- **Conexiones**: → genera InventoryMovement(ADJUSTMENT_IN/OUT) al aprobar → actualiza InventoryLocation
+- **Estado**: Funcional
+
+### 5.7 Transferencias
+
+- **Ruta**: `/dashboard/transferencias`
+- **Página**: `src/app/dashboard/transferencias/page.tsx` — Server Component (importa de `entrada.actions` y `requisition.actions`)
+- **Actions**: `requisition.actions.ts` → 10 funciones:
+  - `getRequisitions(filter)` / `createRequisition(input)`
+  - `dispatchRequisition(input)` — Jefe de Producción despacha
+  - `approveRequisition(input)` — Gerente aprueba con cantidades recibidas
+  - `receiveRequisition(input)` — verificación de recepción
+  - `completeRequisition(id, completedById)` — cierra el flujo
+  - `rejectRequisition(id, userId)`
+  - `getCategoriesForTransferAction()` — categorías para filtrar
+  - `previewBulkTransferAction(...)` / `executeBulkTransferAction(...)` — transferencia masiva
+- **Modelos**: Requisition, RequisitionItem, InventoryMovement (TRANSFER), InventoryLocation
+- **Lógica**: Flujo escalonado: Solicitud → Despacho → Aprobación → Recepción → Completar. Genera InventoryMovement(TRANSFER) y actualiza stock en áreas origen/destino.
+- **Estado**: Funcional
+
+### 5.8 Historial Mensual
+
+- **Ruta**: `/dashboard/inventario/historial-mensual`
+- **Página**: `src/app/dashboard/inventario/historial-mensual/page.tsx` — Client Component
+- **Actions**: `movement-history.actions.ts` → 2 funciones:
+  - `getMonthlyMovementsAction(filters)` — movimientos filtrados por mes/área/tipo/item
+  - `getMovementTypesAction()` — lista de tipos de movimiento
+- **Modelos**: InventoryMovement (lectura)
+- **Estado**: Funcional
+
+### 5.9 Préstamos
+
+- **Ruta**: `/dashboard/prestamos` (lista) + `/dashboard/prestamos/nuevo` (crear)
+- **Página**: Server Component (lista)
+- **Actions**: `loan.actions.ts` → 4 funciones:
+  - `getLoansAction()` — lista con filtros
+  - `createLoanAction(input)` — genera InventoryMovement de salida
+  - `resolveLoanAction(input)` — cierra préstamo (reposición o pago)
+  - `getLoanableItemsAction()` — items con stock disponible
+- **Modelos**: InventoryLoan, InventoryMovement, InventoryLocation
+- **Conexiones**: → InventoryMovement (SALE/ADJUSTMENT al prestar, PURCHASE al reponer)
+- **Estado**: Funcional
+
+### 5.10 Mesoneros
+
+- **Ruta**: `/dashboard/mesoneros`
+- **Página**: `src/app/dashboard/mesoneros/page.tsx` — Client Component
+- **Actions**: `waiter.actions.ts` → 6 funciones:
+  - `getWaitersAction()` / `getActiveWaitersAction()`
+  - `createWaiterAction(data)` / `updateWaiterAction(id, data)`
+  - `toggleWaiterActiveAction(id, isActive)` / `deleteWaiterAction(id)`
+- **Modelos**: Waiter, Branch
+- **Conexiones**: → POS Restaurante (asignar mesonero a OpenTab vía `waiterLabel`)
+- **Estado**: Funcional
+
+### 5.11 Recetas
+
+- **Ruta**: `/dashboard/recetas` (lista) + `/dashboard/recetas/[id]` (detalle) + `/dashboard/recetas/[id]/editar` + `/dashboard/recetas/nueva`
+- **Página**: Server Component (lista y detalle)
+- **Actions**: `recipe.actions.ts` → 6 funciones:
+  - `getRecipesAction()` — lista con ingredientes, costo calculado
+  - `getRecipeByIdAction(id)` — detalle completo
+  - `getIngredientOptionsAction()` — items para ingredientes
+  - `createRecipeAction(input)` / `updateRecipeAction(input)`
+  - `updateRecipeCostAction(...)` — recalcula costo desde CostHistory
+- **Modelos**: Recipe, RecipeIngredient, InventoryItem, MenuItem, CostHistory
+- **Conexiones**: ← InventoryItem (ingredientes), → MenuItem (vía recipeId), ← CostHistory (cálculo de costo), → ProductionOrder (se produce la receta)
+- **Lógica clave**: El costo de receta se calcula recursivamente: si un ingrediente es SUB_RECIPE, se busca su propia receta y su costo (cost.service.ts)
+- **Estado**: Funcional
+
+### 5.12 Producción
+
+- **Ruta**: `/dashboard/produccion`
+- **Página**: `src/app/dashboard/produccion/page.tsx` — Client Component
+- **Actions**: `production.actions.ts` → 9 funciones:
+  - `getProductionRecipesAction()` — recetas disponibles para producir
+  - `calculateRequirementsAction(recipeId, qty, unit)` — verifica ingredientes disponibles
+  - `quickProductionAction(...)` — producción rápida (descuenta ingredientes, suma output)
+  - `manualProductionAction(...)` — producción manual sin receta formal
+  - `getProductionHistoryAction(filters)` — historial
+  - `getProductionAreasAction()` / `getProductionItemsAction()`
+  - `updateProductionOrderAction(...)` / `deleteProductionOrderAction(...)`
+- **Modelos**: ProductionOrder, Recipe, RecipeIngredient, InventoryMovement, InventoryLocation
+- **Servicios**: `production.service.ts` — `createProductionOrder()`, `completeProduction()`, `calculateRequirements()`
+- **Conexiones**: ← Recipe (qué producir), → InventoryMovement(PRODUCTION_OUT) por ingredientes, → InventoryMovement(PRODUCTION_IN) por output
+- **Estado**: Funcional
+
+### 5.13 Costos
+
+- **Ruta**: `/dashboard/costos`
+- **Página**: `src/app/dashboard/costos/page.tsx` — Server Component
+- **Actions**: `cost.actions.ts` → 5 funciones:
+  - `parseCostUploadAction(formData)` — parsea Excel de costos
+  - `processCostImportAction(rows)` — importa costos desde Excel
+  - `getCurrentCostsAction()` — último costo por item
+  - `updateItemCostAction(itemId, cost, reason)` — actualiza costo manual
+  - `getDishMarginsAction()` — margen por plato (usado en /costos/margen)
+- **Modelos**: CostHistory, InventoryItem, Recipe, MenuItem
+- **Servicios**: `cost.service.ts` — `calculateGrossQuantity()`, cálculo COGS recursivo
+- **Conexiones**: ← PurchaseOrder (unitCost), ← Recipe (costo calculado), → MenuItem.cost (se puede actualizar)
+- **Estado**: Funcional
+
+### 5.14 Margen por Plato
+
+- **Ruta**: `/dashboard/costos/margen`
+- **Página**: `src/app/dashboard/costos/margen/page.tsx` — Server Component
+- **Actions**: `cost.actions.ts` → `getDishMarginsAction()`
+- **Modelos**: Recipe, MenuItem, CostHistory
+- **Lógica**: Para cada MenuItem con receta: precio de venta - costo de receta = margen. Ordena por % margen.
+- **Conexiones**: ← Recipe + CostHistory (costo), ← MenuItem (precio venta)
+- **Estado**: Funcional
+
+### 5.15 Compras
+
+- **Ruta**: `/dashboard/compras`
+- **Página**: `src/app/dashboard/compras/page.tsx` — Client Component
+- **Actions**: `purchase.actions.ts` → 13 funciones:
+  - `updateStockLevelsAction(items)` — actualiza minimumStock/reorderPoint
+  - `getAllItemsWithStockConfigAction()` — items con config de stock
+  - `getLowStockItemsAction()` — alertas de bajo stock
+  - `getAllItemsForPurchaseAction()` — catálogo para crear OC
+  - `createPurchaseOrderAction(data)` — nueva orden de compra
+  - `getPurchaseOrdersAction(status?)` / `getPurchaseOrderByIdAction(id)`
+  - `sendPurchaseOrderAction(id)` — cambiar estado a SENT
+  - `receivePurchaseOrderItemsAction(...)` — recibir items, genera InventoryMovement(PURCHASE) + CostHistory
+  - `cancelPurchaseOrderAction(id)`
+  - `getSuppliersAction()` / `createSupplierAction(input)`
+  - `getAreasForReceivingAction()` — áreas destino de mercancía
+  - `createReorderBroadcastsAction()` — crea anuncios automáticos para items bajo stock
+  - `exportPurchaseOrderTextAction(id)` — texto para WhatsApp
+- **Modelos**: PurchaseOrder, PurchaseOrderItem, Supplier, SupplierItem, InventoryMovement, CostHistory, InventoryLocation, BroadcastMessage
+- **Componentes**: `whatsapp-purchase-order-parser.tsx` — parser de OC desde WhatsApp
+- **Conexiones**: → InventoryMovement(PURCHASE) al recibir, → CostHistory (actualiza precio), → InventoryLocation (suma stock), → AccountPayable (puede crear deuda), → BroadcastMessage (alertas reorder)
+- **Estado**: Funcional
+
+### 5.16 Proteínas
+
+- **Ruta**: `/dashboard/proteinas`
+- **Página**: `src/app/dashboard/proteinas/page.tsx` — Client Component
+- **Actions**: `protein-processing.actions.ts` → 13 funciones:
+  - `getProteinItemsAction()` / `getProcessingAreasAction()` / `getSuppliersAction()`
+  - `createProteinProcessingAction(...)` — inicia procesamiento
+  - `getProteinProcessingsAction(filters)` / `getProteinProcessingByIdAction(id)`
+  - `completeProteinProcessingAction(...)` — finaliza: genera InventoryMovement de salida (source) y entrada (subproductos), calcula rendimiento/desperdicio
+  - `cancelProteinProcessingAction(id)`
+  - `getProteinProcessingStatsAction(startDate, endDate)` — estadísticas
+  - `getProcessingTemplatesAction()` / `getTemplateBySourceItemAction(...)` / `getTemplateChainAction(...)`
+  - `createProcessingTemplateAction(...)` / `deleteProcessingTemplateAction(...)`
+  - `getCompletedProcessingsForChainAction()` — procesados para encadenar
+- **Modelos**: ProteinProcessing, ProteinSubProduct, ProcessingTemplate, ProcessingTemplateOutput, InventoryMovement, InventoryLocation, Supplier
+- **Lógica clave**: Procesamiento en cadena (LIMPIEZA → MASERADO → DISTRIBUCIÓN). Cada paso puede generar sub-productos que son input del siguiente paso. Calcula rendimiento (yieldPercentage) y desperdicio.
+- **Estado**: Funcional
+
+### 5.17 SKU Studio
+
+- **Ruta**: `/dashboard/sku-studio`
+- **Página**: `src/app/dashboard/sku-studio/page.tsx` — Server Component
+- **Actions**: `sku-studio.actions.ts` → 6 funciones:
+  - `getProductFamilies()` / `createProductFamily(data)`
+  - `getSkuTemplates(familyId?)` / `createSkuTemplate(data)`
+  - `createProductFromTemplate(...)` — crea InventoryItem + opcionalmente MenuItem desde plantilla
+  - `createSkuItemAction(input)` — creación directa con chips de tipo/unidad/rol
+- **Modelos**: ProductFamily, SkuCreationTemplate, InventoryItem, MenuItem
+- **Conexiones**: → InventoryItem (crea), → MenuItem (opcionalmente crea)
+- **Estado**: Funcional
+
+### 5.18 Asistente de Nomenclatura
+
+- **Ruta**: `/dashboard/asistente`
+- **Página**: `src/app/dashboard/asistente/page.tsx` — Client Component
+- **Actions**: `asistente.actions.ts` → 4 funciones:
+  - `createRawMaterialAction(data)` — crear insumo con nombres estandarizados
+  - `suggestSkuAction(prefix)` — sugerir SKU basado en prefijo
+  - `getMenuRecipeStatusAction()` — qué items del menú tienen/faltan receta
+  - `getRawMaterialsListAction()` — lista de materias primas
+- **Modelos**: InventoryItem, Recipe, MenuItem
+- **Conexiones**: → InventoryItem (crea), ← MenuItem + Recipe (diagnóstico de vinculación)
+- **Estado**: Funcional
+
+### 5.19 Menú
+
+- **Ruta**: `/dashboard/menu`
+- **Página**: `src/app/dashboard/menu/page.tsx` — Client Component
+- **Actions**: `menu.actions.ts` → 9 funciones:
+  - `getFullMenuAction()` — menú completo con categorías, modificadores
+  - `getCategoriesAction()` — categorías activas
+  - `createMenuItemAction(data)` — nuevo producto
+  - `updateMenuItemPriceAction(id, price)` / `updateMenuItemNameAction(id, name)`
+  - `toggleMenuItemStatusAction(id, isActive)`
+  - `getMenuItemsWithoutRecipeAction()` — productos sin receta vinculada
+  - `linkMenuItemToRecipeAction(menuItemId, recipeId)` — vincular receta existente
+  - `createRecipeStubForMenuItemAction(menuItemId)` — crear receta vacía y vincular
+  - `ensureBasicCategoriesAction()` — seed de categorías básicas
+- **Modelos**: MenuItem, MenuCategory, Recipe
+- **Conexiones**: ← Recipe (vía recipeId — para descargo automático), → SalesOrderItem (se vende en POS), ← MenuModifierGroup (modificadores aplicables)
+- **Estado**: Funcional
+
+### 5.20 Modificadores
+
+- **Ruta**: `/dashboard/menu/modificadores`
+- **Página**: `src/app/dashboard/menu/modificadores/page.tsx` — Server Component
+- **Actions**: `modifier.actions.ts` → 11 funciones:
+  - `getModifierGroupsWithItemsAction()` — grupos con sus modificadores y menú items vinculados
+  - `createModifierGroupAction(data)` / `updateModifierGroupAction(id, data)` / `deleteModifierGroupAction(id)`
+  - `addModifierAction(data)` / `updateModifierNamePriceAction(id, name, price)` / `deleteModifierAction(id)`
+  - `toggleModifierAvailabilityAction(id, isAvailable)`
+  - `linkGroupToMenuItemAction(groupId, menuItemId)` / `unlinkGroupFromMenuItemAction(groupId, menuItemId)`
+  - `linkModifierToMenuItemAction(modifierId, menuItemId)` — vincula modificador a MenuItem para descargo de inventario
+  - `getMenuItemsForModifierLinkAction()` — lista de MenuItems para vincular
+- **Modelos**: MenuModifierGroup, MenuModifier, MenuItemModifierGroup, MenuItem
+- **Lógica clave**: Un modificador puede tener `linkedMenuItemId` — cuando el cliente elige ese modificador, se descarga la receta del plato vinculado (ej: elegir "Tabulé" como acompañante descuenta ingredientes del tabulé)
+- **Estado**: Funcional
+
+### Conexiones Críticas entre Módulos de Operaciones
+
+```
+Receta ──── se vincula a ──→ MenuItem ──→ POS la usa para descargar inventario
+  ↓
+Producción ──→ InventoryMovement(PRODUCTION_IN/OUT) ──→ actualiza stock
+  
+Compras ──→ InventoryMovement(PURCHASE) ──→ actualiza stock + CostHistory
+  
+Auditorías ──→ InventoryMovement(ADJUSTMENT) ──→ corrige stock
+  
+Transferencias ──→ InventoryMovement(TRANSFER) ──→ mueve stock entre áreas
+  
+Inv. Diario ←── sincroniza ventas POS ──→ calcula consumo teórico vs real
+  
+Costos/Margen ←── CostHistory ←── Compras (unitCost) + Recetas (costo calculado)
+  
+Proteínas ──→ InventoryMovement (salida source, entrada subproductos) ──→ stock
+```
+
+---
+
+*Continúa en Sección 6: Módulos de Ventas...*
+
+*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Partes 1-3*
