@@ -230,6 +230,201 @@ Finanzas (P&L) ← Expense + AccountPayable          InventoryMovement(ADJUSTMEN
 
 ---
 
-*Continúa en Sección 3: Autenticación, Roles y Permisos...*
+## 3. Autenticación, Roles y Permisos
 
-*Generado el 2026-04-09 — Shanklish ERP / Cápsula SaaS — Parte 1 de N*
+### 3.1 Autenticación — JWT Custom
+
+**Archivo**: `src/lib/auth.ts`
+
+- JWT firmado con HS256 via `jose`
+- Cookie `session` httpOnly, secure en prod, sameSite lax, 24h TTL
+- Secret: `JWT_SECRET` env var (fallback hardcodeado — **gap de seguridad**)
+- Payload: `{ id, email, firstName, lastName, role }`
+- Funciones: `encrypt()`, `decrypt()`, `getSession()`, `createSession()`, `deleteSession()`
+
+**Server Actions de auth**: `src/app/actions/auth.actions.ts`
+- `loginAction(prevState, formData)` — valida email+password, crea sesión
+- `logoutAction()` — elimina cookie de sesión
+
+### 3.2 Los 10 Roles del Sistema
+
+**Archivo**: `src/lib/constants/roles.ts`
+
+| Rol | Nivel | Descripción |
+|-----|-------|-------------|
+| OWNER | 1 (100) | Acceso total. Único que activa/desactiva módulos |
+| AUDITOR | 2 (90) | Solo lectura en todo, acceso a auditoría y reportes |
+| ADMIN_MANAGER | 3 (80) | Gestión administrativa y financiera |
+| OPS_MANAGER | 4 (70) | Gestión de operaciones, inventario, producción |
+| HR_MANAGER | 5 (60) | Recursos humanos |
+| CHEF | 6 (50) | Recetas, producción, inventario (lectura) |
+| AREA_LEAD | 7 (40) | Gestión de área específica |
+| KITCHEN_CHEF | 7 (40) | Comandera de cocina (solo vista) |
+| CASHIER_RESTAURANT | 8 (10) | POS restaurante + historial propio |
+| CASHIER_DELIVERY | 8 (10) | POS delivery + historial propio |
+
+**Nota**: Existen dos sistemas de niveles numéricos paralelos:
+- `roles.ts:ROLE_HIERARCHY` — menor número = mayor rango (1-8)
+- `permissions.ts` — mayor número = mayor rango (10-100)
+- **Gap**: No están unificados. `permissions.ts` no incluye KITCHEN_CHEF, WAITER, ni CASHIER_DELIVERY con sus niveles correctos.
+
+### 3.3 Sistema de Permisos
+
+**Archivo**: `src/lib/permissions.ts` — Sistema numérico simple:
+
+```typescript
+// Nivel del rol → número. userLevel >= requiredLevel = acceso permitido
+const roleLevels = {
+  OWNER: 100, AUDITOR: 90, ADMIN_MANAGER: 80, OPS_MANAGER: 70,
+  HR_MANAGER: 60, CHEF: 50, AREA_LEAD: 40, STAFF: 10
+};
+
+export const PERMISSIONS = {
+  CONFIGURE_ROLES: 70,    // OPS_MANAGER+
+  APPROVE_TRANSFERS: 40,  // AREA_LEAD+
+  VIEW_COSTS: 80,         // ADMIN_MANAGER+
+  VIEW_USERS: 60,         // HR_MANAGER+
+  MANAGE_USERS: 70,       // OPS_MANAGER+
+};
+```
+
+**Archivo**: `src/lib/constants/roles.ts` — Matriz RBAC detallada:
+- `ROLE_PERMISSIONS` — por módulo y acción (view, create, edit, delete, approve, export)
+- `hasPermission(role, module, permission)` — verificación granular
+- `canManageRole(actorRole, targetRole)` — jerarquía (solo superiores modifican inferiores)
+- `getManageableRoles(actorRole)` — qué roles puede crear/editar
+
+### 3.4 Middleware RBAC
+
+**Archivo**: `src/middleware.ts` (56 líneas)
+
+Matcher: `/dashboard/:path*` y `/login`
+
+| Regla | Rutas | Roles permitidos |
+|-------|-------|-----------------|
+| Login requerido | `/dashboard/*` sin sesión | Redirect → `/login` |
+| Ya autenticado | `/login` con sesión | Redirect → `/dashboard` |
+| Gestión usuarios | `/dashboard/usuarios` | OWNER, ADMIN_MANAGER |
+| Auditorías | `/dashboard/inventario/auditorias`, `/dashboard/inventario/importar` | OWNER, ADMIN_MANAGER, OPS_MANAGER, AUDITOR |
+| Config global | `/dashboard/config/*` | Solo OWNER |
+
+**Gap**: El middleware solo cubre 3 rutas específicas. El control granular para el resto de módulos se hace client-side vía `MODULE_ROLE_ACCESS` en el Sidebar. Esto significa que un usuario podría acceder a `/dashboard/finanzas` directamente si conoce la URL, aunque no debería ver ese módulo.
+
+### 3.5 Acceso por Módulos — Doble Filtro
+
+El acceso real a un módulo requiere pasar **dos filtros**:
+
+1. **Módulo habilitado** en la instalación → `SystemConfig.enabled_modules` (BD) o `NEXT_PUBLIC_ENABLED_MODULES` (env var fallback)
+2. **Rol autorizado** → `MODULE_ROLE_ACCESS[moduleId].includes(userRole)` en `modules-registry.ts:549-600`
+3. *(Opcional)* **Módulos individuales** → `User.allowedModules` (JSON array, null = sin restricción extra)
+
+Función clave: `getVisibleModules(userRole, enabledIds, userAllowedModules)` en `modules-registry.ts:629`
+
+---
+
+## 4. Module Registry y Navegación
+
+### 4.1 Registro Maestro de Módulos
+
+**Archivo**: `src/lib/constants/modules-registry.ts` (682 líneas)
+
+Interfaz `ModuleDefinition`: id, label, description, icon, href, section, enabledByDefault, sortOrder, subRoutes?, tags?
+
+### 4.2 Las 4 Secciones del Sidebar
+
+#### Operaciones (20 módulos)
+
+| # | id | Label | Ruta | enabledByDefault | sortOrder |
+|---|-----|-------|------|-----------------|-----------|
+| 1 | dashboard | Dashboard | /dashboard | true | 0 |
+| 2 | estadisticas | Estadísticas | /dashboard/estadisticas | true | 5 |
+| 3 | inventory_daily | Inventario Diario | /dashboard/inventario/diario | true | 10 |
+| 4 | inventory | Inventario | /dashboard/inventario | true | 20 |
+| 5 | inventory_count | Conteo Físico (Excel) | /dashboard/inventario/conteo-semanal | true | 25 |
+| 6 | audits | Auditorías | /dashboard/inventario/auditorias | true | 30 |
+| 7 | transfers | Transferencias | /dashboard/transferencias | true | 40 |
+| 8 | inventory_history | Historial Mensual | /dashboard/inventario/historial-mensual | true | 45 |
+| 9 | loans | Préstamos | /dashboard/prestamos | true | 50 |
+| 10 | mesoneros | Mesoneros | /dashboard/mesoneros | true | 55 |
+| 11 | recipes | Recetas | /dashboard/recetas | true | 60 |
+| 12 | production | Producción | /dashboard/produccion | true | 70 |
+| 13 | costs | Costos | /dashboard/costos | true | 80 |
+| 14 | margen | Margen por Plato | /dashboard/costos/margen | true | 82 |
+| 15 | purchases | Compras | /dashboard/compras | true | 90 |
+| 16 | proteins | Proteínas | /dashboard/proteinas | true | 100 |
+| 17 | asistente | Asistente de Nomenclatura | /dashboard/asistente | true | 105 |
+| 18 | sku_studio | SKU Studio | /dashboard/sku-studio | true | 106 |
+| 19 | menu | Menú | /dashboard/menu | true | 110 |
+| 20 | modifiers | Modificadores | /dashboard/menu/modificadores | true | 115 |
+
+#### Ventas / POS (9 módulos)
+
+| # | id | Label | Ruta | enabledByDefault | sortOrder |
+|---|-----|-------|------|-----------------|-----------|
+| 1 | pos_restaurant | POS Restaurante | /dashboard/pos/restaurante | true | 200 |
+| 2 | pos_waiter | POS Mesero | /dashboard/pos/mesero | **false** | 205 |
+| 3 | pos_delivery | POS Delivery | /dashboard/pos/delivery | true | 210 |
+| 4 | pedidosya | PedidosYA | /dashboard/pos/pedidosya | **false** | 220 |
+| 5 | sales_entry | Cargar Ventas | /dashboard/ventas/cargar | true | 230 |
+| 6 | sales_history | Historial Ventas | /dashboard/sales | true | 240 |
+| 7 | kitchen_display | Comandera Cocina | /kitchen | true | 250 |
+| 8 | barra_display | Comandera Barra | /kitchen/barra | true | 251 |
+| 9 | pos_config | Configuración POS | /dashboard/config/pos | true | 260 |
+
+#### Entretenimiento / Games (4 módulos — todos off por default)
+
+| # | id | Label | Ruta | enabledByDefault | sortOrder |
+|---|-----|-------|------|-----------------|-----------|
+| 1 | games | Juegos | /dashboard/games | **false** | 300 |
+| 2 | reservations | Reservaciones | /dashboard/reservations | **false** | 310 |
+| 3 | wristbands | Pulseras | /dashboard/wristbands | **false** | 320 |
+| 4 | queue | Cola de Espera | /dashboard/queue | **false** | 330 |
+
+#### Administración (14 módulos)
+
+| # | id | Label | Ruta | enabledByDefault | sortOrder |
+|---|-----|-------|------|-----------------|-----------|
+| 1 | intercompany | Intercompany | /dashboard/intercompany | **false** | 400 |
+| 2 | users | Usuarios | /dashboard/usuarios | true | 500 |
+| 3 | modulos_usuario | Módulos por Usuario | /dashboard/config/modulos-usuario | true | 503 |
+| 4 | roles_config | Roles y Permisos | /dashboard/config/roles | true | 510 |
+| 5 | module_config | Módulos | /dashboard/config/modules | true | 520 |
+| 6 | almacenes | Almacenes | /dashboard/almacenes | true | 528 |
+| 7 | tasa_cambio | Tasa de Cambio | /dashboard/config/tasa-cambio | true | 530 |
+| 8 | metas | Objetivos y Metas | /dashboard/metas | true | 540 |
+| 9 | anuncios | Anuncios a Gerencia | /dashboard/anuncios | true | 542 |
+| 10 | finanzas | Dashboard Financiero | /dashboard/finanzas | true | 550 |
+| 11 | gastos | Gastos | /dashboard/gastos | true | 560 |
+| 12 | caja | Control de Caja | /dashboard/caja | true | 570 |
+| 13 | cuentas_pagar | Cuentas por Pagar | /dashboard/cuentas-pagar | true | 580 |
+
+### 4.3 MODULE_ROLE_ACCESS — Matriz Completa
+
+Roles con acceso a **todos** los módulos de operaciones:
+- OWNER, ADMIN_MANAGER, OPS_MANAGER (con variaciones en inventory_history, loans, costs, margen, menu, modifiers)
+
+Roles con acceso **restringido**:
+- CHEF → dashboard, estadísticas, inventario, conteo, auditorías, transferencias, recetas, producción, compras, proteínas, sku_studio, asistente
+- AREA_LEAD → dashboard, estadísticas, inventario diario/general, conteo, auditorías, transferencias, producción, compras, proteínas
+- CASHIER_RESTAURANT → estadísticas, pos_restaurant, sales_history, barra_display, pos_config, caja, reservations, queue
+- CASHIER_DELIVERY → estadísticas, pos_delivery, pedidosya, pos_config, caja, tasa_cambio
+- KITCHEN_CHEF → estadísticas, kitchen_display, barra_display
+- WAITER → estadísticas, pos_waiter
+- HR_MANAGER → dashboard, users
+- AUDITOR → dashboard, estadísticas, inventario (todo lectura), transfers, recipes, production, costs, margen, purchases, sales_history, intercompany, users, finanzas, gastos, caja, cuentas_pagar
+
+### 4.4 Funciones Clave del Registry
+
+```
+getEnabledModuleIds()                                    → string[]  // Lee env var o usa defaults
+getVisibleModules(userRole, enabledIds?, userAllowed?)    → ModuleDefinition[]  // Filtro triple
+getModulesBySection(userRole, enabledIds?, userAllowed?)  → { operations, sales, games, admin }
+```
+
+**Nota especial**: `module_config` siempre es visible para OWNER, independientemente de `enabled_modules`. Nunca se filtra por `allowedModules`.
+
+---
+
+*Continúa en Sección 5: Módulos de Operaciones...*
+
+*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Partes 1-2*
