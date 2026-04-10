@@ -660,6 +660,7 @@ getModulesBySection(userRole, enabledIds?, userAllowed?)  → { operations, sale
   - `getCompletedProcessingsForChainAction()` — procesados para encadenar
 - **Modelos**: ProteinProcessing, ProteinSubProduct, ProcessingTemplate, ProcessingTemplateOutput, InventoryMovement, InventoryLocation, Supplier
 - **Lógica clave**: Procesamiento en cadena (LIMPIEZA → MASERADO → DISTRIBUCIÓN). Cada paso puede generar sub-productos que son input del siguiente paso. Calcula rendimiento (yieldPercentage) y desperdicio.
+- **Costeo dinámico**: `completeProteinProcessingAction` debería calcular el costo proporcional de cada sub-producto: `costoRealPorKg = (costoUnitarioSource × pesoCongelado) / totalSubProducts`. El campo `estimatedCost` en ProteinSubProduct y `isCalculated`/`costBreakdown` en CostHistory ya existen para esto. **Verificar si está implementado o pendiente.**
 - **Estado**: Funcional
 
 ### 5.17 SKU Studio
@@ -1563,9 +1564,83 @@ ALTER TABLE "PaymentMethod" ALTER COLUMN "tenantId" SET NOT NULL;
 |---|-----|---------|
 | 15 | **POSConfig mixto** BD + localStorage | `stockValidationEnabled` en BD, el resto en localStorage — difícil administrar centralizadamente |
 | 16 | **Páginas legacy** bajo `/dashboard/inventario/` sin registro en module-registry | `historial`, `importar`, `compras` existen como páginas pero no como módulos independientes |
+| 17 | **Mobile UX**: combobox difícil de usar en móvil | Estrategia propuesta: drawer desde abajo en `<640px`, cards apiladas en vez de tablas, botones `min-h-[44px]`, `inputMode="decimal"` en inputs numéricos |
+
+---
+
+## 17. Deploy e Infraestructura
+
+### 17.1 Deploy Principal — Vercel (Producción actual)
+
+- **Trigger**: Push a GitHub → Vercel detecta cambios → build automático
+- **Build command**: `prisma generate && prisma migrate deploy && next build` (definido en `package.json:vercel-build`)
+- **Variables de entorno** (configuradas en Vercel dashboard):
+  - `DATABASE_URL` — conexión PostgreSQL (Google Cloud SQL)
+  - `JWT_SECRET` — secret para firmar tokens de sesión
+  - `GOOGLE_VISION_API_KEY` — para OCR de notas escritas a mano
+  - `NEXT_PUBLIC_ENABLED_MODULES` — fallback de módulos habilitados (opcional, se lee de BD)
+
+### 17.2 Base de Datos — Google Cloud SQL
+
+- **Motor**: PostgreSQL
+- **Instancias**: Una por cliente (shanklish-prod, table-pong-prod)
+- **Backups**: Automáticos diarios vía GCP (verificar en Consola GCP → SQL → Copias de seguridad)
+- **Backup manual**:
+  ```bash
+  pg_dump -h localhost -U postgres -d shanklish-prod > backup_fecha.sql
+  ```
+
+### 17.3 Entornos Dev / Prod
+
+Para evitar mezclar datos de prueba con operaciones reales:
+
+| Entorno | Base de datos | Uso |
+|---------|--------------|-----|
+| Producción | `shanklish-prod` (GCP) | Restaurante real, datos reales |
+| Desarrollo | `shanklish-dev` (GCP o local) | Pruebas y simulaciones |
+
+Cambiar entorno editando `DATABASE_URL` en `.env`.
+
+### 17.4 Script de Limpieza (Go-Live Reset)
+
+```bash
+npm run db:clean    # Ejecuta scripts/clean-transactions.ts
+```
+
+- **Borra**: Ventas, órdenes, movimientos de inventario, producciones, historial de costos, conteos
+- **Preserva**: Usuarios, insumos (catálogo), recetas, áreas, proveedores
+- Requiere confirmación interactiva ("BORRAR DATOS")
+
+### 17.5 Deploy Alternativo — AWS ECR + App Runner (documentado, no activo)
+
+Existe una guía para deploy vía Docker en AWS como alternativa a Vercel:
+
+1. **Prerrequisitos**: Docker Desktop + AWS CLI configurado
+2. **ECR (Elastic Container Registry)**: Crear repositorio privado `shanklish-erp`
+3. **Build & Push**:
+   ```powershell
+   .\deploy-aws.ps1 -AccountId "AWS_ACCOUNT_ID" -Region "us-east-1"
+   ```
+   El script: login Docker con AWS → build imagen → tag → push a ECR
+4. **App Runner**: Crear servicio desde la imagen ECR
+   - Config: 1 vCPU / 2 GB RAM
+   - Environment variables: `DATABASE_URL`, `JWT_SECRET`, `GOOGLE_VISION_API_KEY`
+   - Deploy automático al pushear nuevas imágenes
+
+**Nota**: Este flujo no está activo actualmente. La producción usa Vercel. Se documentó como opción para clientes que prefieran AWS.
+
+### 17.6 Comandos de BD Útiles
+
+```bash
+npm run db:generate        # prisma generate (regenerar cliente)
+npm run db:push            # prisma db push (sincronizar schema sin migración)
+npm run db:migrate         # prisma migrate dev (crear migración con nombre)
+npm run db:migrate:deploy  # prisma migrate deploy (aplicar migraciones pendientes)
+npm run db:studio          # prisma studio (explorar datos en navegador)
+npm run db:seed            # tsx prisma/seed.ts (datos iniciales)
+```
 
 ---
 
 *Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *42 modelos Prisma · 47 módulos · 40 actions · 4 API routes · 3 services · 23 componentes*
-*Total: ~1600 líneas*
