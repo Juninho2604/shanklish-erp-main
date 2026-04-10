@@ -1,4 +1,9 @@
 
+// ⚠️  OBSOLETO — NO EJECUTAR EN PRODUCCIÓN
+// Este script asigna PINs en texto plano (inseguro) y asigna el PIN demo
+// '1234' al OWNER. Fue reemplazado por scripts/migrate-pins.ts que hashea
+// los PINs con PBKDF2-SHA256 y no usa valores fijos.
+
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

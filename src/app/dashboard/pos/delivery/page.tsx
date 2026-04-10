@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem, type PaymentLine } from '@/app/actions/pos.actions';
+import { createSalesOrderAction, recordCollectiveTipAction, getMenuForPOSAction, validateManagerPinAction, type CartItem, type PaymentLine } from '@/app/actions/pos.actions';
 import MixedPaymentSelector from '@/components/pos/MixedPaymentSelector';
 import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
@@ -73,7 +73,7 @@ export default function POSDeliveryPage() {
     // PAYMENT STATE
     const [isMixedMode, setIsMixedMode] = useState(false);
     // Single-payment mode
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CASH_USD' | 'CASH_EUR' | 'CARD' | 'TRANSFER' | 'MOVIL_NG' | 'PDV_SHANKLISH' | 'PDV_SUPERFERRO' | 'ZELLE'>('PDV_SHANKLISH');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CASH_USD' | 'CASH_EUR' | 'CASH_BS' | 'CARD' | 'TRANSFER' | 'MOVIL_NG' | 'PDV_SHANKLISH' | 'PDV_SUPERFERRO' | 'ZELLE'>('PDV_SHANKLISH');
     const [amountReceived, setAmountReceived] = useState('');
     // Mixed-payment mode
     const [mixedPayments, setMixedPayments] = useState<PaymentLine[]>([]);
@@ -87,6 +87,13 @@ export default function POSDeliveryPage() {
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
     const [cortesiaPercent, setCortesiaPercent] = useState('100');
+
+    // PROPINA COLECTIVA
+    const [showTipModal, setShowTipModal] = useState(false);
+    const [tipAmount, setTipAmount] = useState('');
+    const [tipMethod, setTipMethod] = useState<string>('CASH_USD');
+    const [tipClientRef, setTipClientRef] = useState('');
+    const [isTipProcessing, setIsTipProcessing] = useState(false);
 
     // WHATSAPP PARSER
     const [showWhatsAppParser, setShowWhatsAppParser] = useState(false);
@@ -215,6 +222,9 @@ export default function POSDeliveryPage() {
     const cartSubtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
     // Divisas methods: CASH, CASH_USD, CASH_EUR, ZELLE get 33.33% discount
     const isDivisasMethod = (m: string) => m === 'CASH' || m === 'CASH_USD' || m === 'CASH_EUR' || m === 'ZELLE';
+    // Bs methods: user enters amount in Bs, needs conversion to USD
+    const BS_SINGLE_METHODS = new Set(['PDV_SHANKLISH', 'PDV_SUPERFERRO', 'MOVIL_NG', 'CASH_BS']);
+    const isBsPayMethod = BS_SINGLE_METHODS.has(paymentMethod);
     // isPagoDivisas: single mode → method must be CASH/CASH_USD/CASH_EUR/ZELLE; mixed → at least one divisas line
     const isPagoDivisas = isMixedMode
         ? mixedPayments.some(p => isDivisasMethod(p.method))
@@ -235,6 +245,29 @@ export default function POSDeliveryPage() {
         : itemsAfterDiscount + deliveryFee;
     const totalMixedPaid = mixedPayments.reduce((s, p) => s + p.amountUSD, 0);
 
+    const handleRecordTip = async () => {
+        const amount = parseFloat(tipAmount);
+        if (!amount || amount <= 0) return;
+        setIsTipProcessing(true);
+        try {
+            const note = tipClientRef.trim()
+                ? `Propina colectiva — Cliente: ${tipClientRef.trim()}`
+                : 'Propina colectiva';
+            const result = await recordCollectiveTipAction({ tipAmount: amount, paymentMethod: tipMethod, note });
+            if (result.success) {
+                toast.success(`Propina de $${amount.toFixed(2)} registrada`);
+                setShowTipModal(false);
+                setTipAmount('');
+                setTipMethod('CASH_USD');
+                setTipClientRef('');
+            } else {
+                toast.error(result.message || 'Error al registrar propina');
+            }
+        } finally {
+            setIsTipProcessing(false);
+        }
+    };
+
     const handleCheckout = async () => {
         if (cart.length === 0) return;
         setIsProcessing(true);
@@ -248,7 +281,14 @@ export default function POSDeliveryPage() {
                     ? { payments: mixedPayments.length > 0 ? mixedPayments : [{ method: 'TRANSFER', amountUSD: finalTotal }],
                         amountPaid: totalMixedPaid || finalTotal,
                         divisasUsdAmount: discountType === 'DIVISAS_33' ? divisasUsdAmount : undefined }
-                    : { paymentMethod, amountPaid: (parseFloat(amountReceived) || 0) || finalTotal }),
+                    : (() => {
+                        const rawAmt = parseFloat(amountReceived) || 0;
+                        if (isBsPayMethod && exchangeRate && rawAmt > 0) {
+                            const usdAmt = rawAmt / exchangeRate;
+                            return { payments: [{ method: paymentMethod, amountUSD: usdAmt, amountBS: rawAmt, exchangeRate }], amountPaid: usdAmt };
+                        }
+                        return { paymentMethod, amountPaid: rawAmt || finalTotal };
+                    })()),
                 discountType,
                 discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercentNum : undefined,
                 authorizedById: authorizedManager?.id,
@@ -290,13 +330,8 @@ export default function POSDeliveryPage() {
                         if (discountType === 'CORTESIA_PERCENT') return (cartSubtotal * cortesiaPercentNum / 100);
                         return 0;
                     })(),
+                    hideDiscount: discountType === 'DIVISAS_33',
                     discountReason: (() => {
-                        if (discountType === 'DIVISAS_33' && isPagoDivisas) {
-                            const base = isMixedMode ? (divisasUsdAmount ?? cartSubtotal) : cartSubtotal;
-                            return base < cartSubtotal - 0.01
-                                ? `Pago Mixto Divisas (33.33% sobre $${base.toFixed(2)}) - Delivery $3`
-                                : 'Pago en Divisas (33.33%) - Delivery $3';
-                        }
                         if (discountType === 'CORTESIA_100') return 'Cortesía Autorizada (100%)';
                         if (discountType === 'CORTESIA_PERCENT') return `Cortesía Autorizada (${cortesiaPercentNum}%)`;
                         return undefined;
@@ -354,6 +389,13 @@ export default function POSDeliveryPage() {
                         className={`capsula-btn min-h-0 py-3 px-6 text-sm ${showWhatsAppParser ? 'capsula-btn-primary bg-emerald-600 border-emerald-700' : 'capsula-btn-secondary'}`}
                     >
                         💬 WhatsApp
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowTipModal(true)}
+                        className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black uppercase hover:bg-amber-500/20 transition-colors"
+                    >
+                        + Propina
                     </button>
                     <div className="px-4 py-2 bg-secondary/30 rounded-xl border border-border font-black text-sm tabular-nums text-foreground/70">
                         {new Date().toLocaleDateString('es-VE')}
@@ -561,8 +603,9 @@ export default function POSDeliveryPage() {
                                             { id: 'PDV_SHANKLISH',  label: '💳 PDV Shan.' },
                                             { id: 'PDV_SUPERFERRO', label: '💳 PDV Super.' },
                                             { id: 'MOVIL_NG',       label: '📱 Pago Móvil NG' },
+                                            { id: 'CASH_BS',        label: '💴 Efectivo Bs' },
                                         ] as const).map(m => (
-                                            <button key={m.id} type="button" onClick={() => setPaymentMethod(m.id)}
+                                            <button key={m.id} type="button" onClick={() => { setPaymentMethod(m.id); setAmountReceived(''); }}
                                                 className={`py-3.5 rounded-xl text-sm font-black uppercase transition-all active:scale-95 ${paymentMethod === m.id ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-background border border-border text-muted-foreground'}`}>
                                                 {m.label}
                                             </button>
@@ -570,9 +613,26 @@ export default function POSDeliveryPage() {
                                     </div>
                                     <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
                                         <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)}
-                                            placeholder="Recibido..." className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30" />
-                                        <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
+                                            placeholder={isBsPayMethod && exchangeRate ? `Bs ${(finalTotal * exchangeRate).toFixed(0)}` : 'Recibido...'}
+                                            className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30" />
+                                        <div className="pr-4 text-xs font-black text-muted-foreground uppercase">
+                                            {isBsPayMethod ? 'Bs' : 'USD'}
+                                        </div>
                                     </div>
+                                    {/* USD equivalent for Bs methods */}
+                                    {isBsPayMethod && exchangeRate && (parseFloat(amountReceived) || 0) > 0 && (
+                                        <div className="flex justify-between text-xs px-1">
+                                            <span className="text-muted-foreground">Equivalente USD</span>
+                                            <span className="font-bold text-emerald-400">${((parseFloat(amountReceived) || 0) / exchangeRate).toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                    {/* Change display for CASH_USD */}
+                                    {paymentMethod === 'CASH_USD' && (parseFloat(amountReceived) || 0) > finalTotal + 0.001 && (
+                                        <div className="flex justify-between text-sm font-black px-1">
+                                            <span className="text-amber-400">Vuelto</span>
+                                            <span className="text-amber-400">${Math.max(0, (parseFloat(amountReceived) || 0) - finalTotal).toFixed(2)}</span>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 /* ── Pago Mixto ── */
@@ -742,6 +802,70 @@ export default function POSDeliveryPage() {
                     </div>
                 </div>
             )}
+            {/* ── MODAL: PROPINA COLECTIVA ─────────────────────────────────────── */}
+            {showTipModal && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-card glass-panel w-full max-w-sm rounded-3xl shadow-2xl border border-amber-500/20 p-6 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-xl font-black uppercase tracking-tight text-amber-400">Propina Colectiva</h3>
+                            <button type="button" onClick={() => setShowTipModal(false)} className="text-muted-foreground hover:text-foreground text-2xl leading-none">×</button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Propina recibida después del cobro. Indica el cliente para trazabilidad.</p>
+                        {/* Cliente / referencia */}
+                        <input
+                            type="text"
+                            value={tipClientRef}
+                            onChange={e => setTipClientRef(e.target.value)}
+                            placeholder="Nombre del cliente (opcional)"
+                            className="w-full bg-background border border-border rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-amber-500/50 placeholder:text-muted-foreground/40"
+                        />
+                        <div className="grid grid-cols-3 gap-2">
+                            {[
+                                { id: 'CASH_USD',       label: '💵 Cash $' },
+                                { id: 'CASH_EUR',       label: '€ Cash €' },
+                                { id: 'ZELLE',          label: '⚡ Zelle' },
+                                { id: 'PDV_SHANKLISH',  label: '💳 PDV Shan.' },
+                                { id: 'PDV_SUPERFERRO', label: '💳 PDV Super.' },
+                                { id: 'MOVIL_NG',       label: '📱 Móvil NG' },
+                                { id: 'CASH_BS',        label: '💴 Efectivo Bs' },
+                            ].map(m => (
+                                <button key={m.id} type="button" onClick={() => setTipMethod(m.id)}
+                                    className={`py-2 rounded-xl text-xs font-black uppercase transition-all ${tipMethod === m.id ? 'bg-amber-500 text-white' : 'bg-background border border-border text-muted-foreground hover:border-amber-500/50'}`}>
+                                    {m.label}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex items-center bg-background border border-border rounded-2xl p-1">
+                            <span className="pl-4 text-muted-foreground text-sm font-black">
+                                {['CASH_BS','PDV_SHANKLISH','PDV_SUPERFERRO','MOVIL_NG'].includes(tipMethod) ? 'Bs' : '$'}
+                            </span>
+                            <input
+                                type="number" min="0" step="0.01"
+                                value={tipAmount}
+                                onChange={e => setTipAmount(e.target.value)}
+                                placeholder="0.00"
+                                className="flex-1 bg-transparent border-none px-3 py-3 text-2xl font-black focus:outline-none placeholder:text-muted-foreground/30"
+                                autoFocus
+                            />
+                        </div>
+                        {['CASH_BS','PDV_SHANKLISH','PDV_SUPERFERRO','MOVIL_NG'].includes(tipMethod) && exchangeRate && (parseFloat(tipAmount) || 0) > 0 && (
+                            <div className="flex justify-between text-xs px-1">
+                                <span className="text-muted-foreground">Equivalente USD</span>
+                                <span className="font-bold text-emerald-400">${((parseFloat(tipAmount) || 0) / exchangeRate).toFixed(2)}</span>
+                            </div>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleRecordTip}
+                            disabled={isTipProcessing || !(parseFloat(tipAmount) > 0)}
+                            className="w-full py-4 rounded-2xl bg-amber-500 text-white font-black uppercase text-lg shadow-lg shadow-amber-500/30 disabled:opacity-40 active:scale-95 transition-all"
+                        >
+                            {isTipProcessing ? 'Registrando...' : 'Registrar Propina'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Navegación móvil delivery */}
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex z-50 shadow-2xl">
                 <button

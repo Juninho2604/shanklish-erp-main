@@ -40,6 +40,8 @@ interface ReceiptData {
     serviceFee?: number;
     /** Cuando true imprime "PRE-CUENTA" en lugar de "RECIBO DE PAGO" y añade aviso informativo */
     isPrecuenta?: boolean;
+    /** Cuando true no muestra la línea de descuento (ej: pago en divisas — solo muestra el total neto) */
+    hideDiscount?: boolean;
 }
 
 export function printReceipt(data: ReceiptData) {
@@ -192,7 +194,7 @@ export function printReceipt(data: ReceiptData) {
             <span>$${deliveryFeeAmount.toFixed(2)}</span>
         </div>
         ` : ''}
-        ${discountAmount > 0 ? `
+        ${discountAmount > 0 && !data.hideDiscount ? `
         <div class="total-row">
             <span>${data.discountReason || 'Descuento aplicado'}:</span>
             <span>-$${discountAmount.toFixed(2)}</span>
