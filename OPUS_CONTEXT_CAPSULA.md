@@ -1304,8 +1304,8 @@ Todos estos módulos están **deshabilitados por default** (`enabledByDefault: f
 | Navbar | `components/layout/Navbar.tsx` | Barra superior con usuario, rol, tema |
 | Sidebar | `components/layout/Sidebar.tsx` | Menú lateral con módulos agrupados por sección |
 | ThemeToggle | `components/layout/ThemeToggle.tsx` | Dark/light mode |
-| NotificationBell | `components/layout/NotificationBell.tsx` | Campana con anuncios no leídos |
-| HelpPanel | `components/layout/HelpPanel.tsx` | Panel de ayuda contextual |
+| NotificationBell | `components/layout/NotificationBell.tsx` | Modal centrado z-[70], backdrop negro, animación zoom-in-95. Tabs Stock/Sistema con bg tint activo. Cards p-4 rounded-2xl. Legible light/dark. |
+| HelpPanel | `components/layout/HelpPanel.tsx` | Modal centrado z-[70], backdrop negro, animación zoom-in-95. Guía contextual por ruta. Cards p-4 rounded-2xl. Legible light/dark. |
 
 ### POS (6)
 | Componente | Archivo | Propósito |
@@ -1656,6 +1656,73 @@ npm run db:migrate:deploy  # prisma migrate deploy (aplicar migraciones pendient
 npm run db:studio          # prisma studio (explorar datos en navegador)
 npm run db:seed            # tsx prisma/seed.ts (datos iniciales)
 ```
+
+---
+
+---
+
+## 18. Convenciones de UI / Design System
+
+### 18.1 Z-Index Stack (inamovible)
+
+| Capa | Valor | Elementos |
+|------|-------|-----------|
+| Header fijo | `z-30` | Navbar de cada módulo POS |
+| Nav móvil | `z-50` | `<nav>` inferior en Restaurante, Delivery, PedidosYA |
+| Modales POS | `z-60` | Modifier, PIN, Tip, Table, Remove-item, Open-tab — todos los módulos |
+| NotificationBell / HelpPanel | `z-[70]` | Backdrop + modal card — siempre sobre todo lo anterior |
+
+**Regla**: Nunca poner un modal POS a `z-50` (colisiona con nav móvil). Verificar esta tabla ante cualquier nuevo modal.
+
+### 18.2 Sistema de Cards Unificado (4 módulos POS)
+
+| Propiedad | Valor | Aplica en |
+|-----------|-------|-----------|
+| Padding | `p-4` | Cart items, alert cards, tip cards |
+| Border radius | `rounded-2xl` | Cart items, modal cards de alerta/info |
+| Modal cards | `rounded-2xl` o `rounded-3xl` | Modales de tamaño completo |
+| Modal sheets (mobile) | `rounded-t-3xl sm:rounded-3xl` | Modales bottom-sheet |
+
+Módulos donde está aplicado: **Restaurante, Delivery, PedidosYA** (cart items + modales).
+
+### 18.3 Modal Pattern — NotificationBell / HelpPanel
+
+```
+fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4   ← backdrop
+  └── bg-card w-full max-w-sm rounded-2xl flex flex-col max-h-[90vh]
+      shadow-2xl border border-border overflow-hidden
+      animate-in fade-in zoom-in-95 duration-200                        ← animación
+        ├── Header: p-5 border-b bg-{color}/15   (legible light + dark)
+        ├── Tabs activos: border-b-2 bg-{color}/10  (no solo underline)
+        ├── Content: overflow-y-auto flex-1
+        └── Footer: bg-secondary/40  (separación visual clara)
+```
+
+### 18.4 Cajera Activa en Sesión
+
+- `validateCashierPinAction()` escribe el `id` de la cajera autenticada en el cookie JWT (`activeCashierId`)
+- `createSalesOrderAction()` usa `session.activeCashierId ?? session.id` como `createdById`
+- Función: `updateSessionCashier(cashierId)` en `src/lib/auth.ts`
+- Resultado: cuando varias cajeras comparten terminal, cada orden queda bajo la cajera que validó el PIN
+
+### 18.5 Redondeo de Divisas
+
+- Helper: `roundCents(n)` = `Math.round(n * 100) / 100` — en `pos.actions.ts`
+- Aplica en: descuento DIVISAS_33 (Delivery y Restaurante) antes de guardar en BD
+- Regla: igual o mayor a 0.5 → redondea arriba; menor a 0.5 → redondea abajo
+
+### 18.6 Skills Instalados en `.claude/skills/`
+
+Estos archivos son cargados automáticamente en toda sesión de Claude Code:
+
+| Skill | Archivo | Uso |
+|-------|---------|-----|
+| Frontend Design | `frontend-design.md` | Guía estética para componentes UI — tipografía, color, motion, layout |
+| Vercel React Best Practices | `vercel-react-best-practices.md` | 69 reglas de performance React/Next.js (waterfalls, bundle, re-renders) |
+| Error Handling Patterns | `error-handling-patterns.md` | Patrones de manejo de errores TypeScript — Result types, Circuit Breaker |
+| PostgreSQL Table Design | `postgresql-table-design.md` | Diseño de esquemas PostgreSQL — tipos, índices, constraints, partitioning |
+
+**Ubicación**: `C:\Users\Usuario\Desktop\SHANKLISH ERP 3.0\.claude\skills\`
 
 ---
 
