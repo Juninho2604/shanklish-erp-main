@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useUIStore } from '@/stores/ui.store';
 import { createSalesOrderAction, recordCollectiveTipAction, getMenuForPOSAction, validateManagerPinAction, type CartItem, type PaymentLine } from '@/app/actions/pos.actions';
 import MixedPaymentSelector from '@/components/pos/MixedPaymentSelector';
 import { getExchangeRateValue } from '@/app/actions/exchange.actions';
@@ -51,6 +52,7 @@ interface SelectedModifier {
 }
 
 export default function POSDeliveryPage() {
+    const { posFullscreen } = useUIStore();
     const [categories, setCategories] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -387,8 +389,8 @@ export default function POSDeliveryPage() {
     if (isLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><div className="text-4xl mb-4">🛵</div><div className="text-xl font-black text-foreground">Cargando Delivery...</div></div></div>;
 
     return (
-        <div className="min-h-screen bg-background text-foreground relative flex flex-col font-sans animate-in fade-in duration-700 pb-16 lg:pb-0">
-            <div className="glass-panel px-3 md:px-6 py-3 md:py-4 fixed top-0 w-full z-30 shadow-2xl flex justify-between items-center h-16 md:h-24 border-b-primary/10">
+        <div className={`${posFullscreen ? 'min-h-screen' : 'flex-1 -m-4 md:-m-6 h-[calc(100vh-4rem)]'} bg-background text-foreground flex flex-col font-sans animate-in fade-in duration-700 pb-16 lg:pb-0`}>
+            <div className={`glass-panel px-3 md:px-6 py-3 md:py-4 ${posFullscreen ? 'fixed top-0 w-full z-30' : 'relative w-full z-[31]'} shadow-2xl flex justify-between items-center h-16 md:h-24 border-b-primary/10`}>
                 <div className="flex items-center gap-4">
                     <div className="h-10 w-10 md:h-14 md:w-14 bg-blue-600 rounded-xl md:rounded-2xl flex items-center justify-center text-2xl md:text-4xl shadow-lg shadow-blue-500/20">🛵</div>
                     <div>
@@ -422,7 +424,7 @@ export default function POSDeliveryPage() {
                 </div>
             </div>
 
-            <div className="flex h-screen pt-16 md:pt-24 overflow-hidden">
+            <div className={`flex ${posFullscreen ? 'h-screen pt-16 md:pt-24' : 'flex-1 min-h-0'} overflow-hidden`}>
                 <div className={`flex-1 flex flex-col overflow-hidden bg-background ${mobileView === "menu" ? "flex" : "hidden"} lg:flex`}>
                     {/* Search bar */}
                     <div className="px-6 py-4 bg-background border-b border-border">
@@ -465,7 +467,7 @@ export default function POSDeliveryPage() {
                                 💡 {filteredMenuItems.length} productos coinciden con tu búsqueda
                             </p>
                         )}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 tablet-land:grid-cols-4 xl:grid-cols-4 gap-3">
                             {filteredMenuItems.map(item => (
                                 <button
                                     key={item.id}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useUIStore } from '@/stores/ui.store';
 import { getMenuForPOSAction, type CartItem } from '@/app/actions/pos.actions';
 import { createPedidosYAOrderAction } from '@/app/actions/pedidosya.actions';
 import { calcPedidosYaPrice } from '@/lib/pedidosya-price';
@@ -46,6 +47,7 @@ interface SelectedModifier {
 }
 
 export default function POSPedidosYAPage() {
+    const { posFullscreen } = useUIStore();
     const [categories, setCategories] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -217,9 +219,9 @@ export default function POSPedidosYAPage() {
     );
 
     return (
-        <div className="min-h-screen bg-background text-foreground relative flex flex-col font-sans">
+        <div className={`${posFullscreen ? 'min-h-screen' : 'flex-1 -m-4 md:-m-6 h-[calc(100vh-4rem)]'} bg-background text-foreground flex flex-col font-sans`}>
             {/* Header */}
-            <div className="glass-panel px-3 md:px-6 py-3 md:py-4 fixed top-0 w-full z-30 shadow-2xl flex justify-between items-center h-16 md:h-20 border-b border-border">
+            <div className={`glass-panel px-3 md:px-6 py-3 md:py-4 ${posFullscreen ? 'fixed top-0 w-full z-30' : 'relative w-full z-[31]'} shadow-2xl flex justify-between items-center h-16 md:h-20 border-b border-border`}>
                 <div className="flex items-center gap-3">
                     <div className="h-10 w-10 md:h-12 md:w-12 bg-orange-500/20 rounded-2xl flex items-center justify-center text-2xl md:text-3xl shadow-inner">🍔</div>
                     <div>
@@ -235,7 +237,7 @@ export default function POSPedidosYAPage() {
                 </div>
             </div>
 
-            <div className="flex h-screen pt-16 md:pt-20 overflow-hidden">
+            <div className={`flex ${posFullscreen ? 'h-screen pt-16 md:pt-20' : 'flex-1 min-h-0'} overflow-hidden`}>
                 {/* Menú izquierda */}
                 <div className="flex-1 flex flex-col overflow-hidden bg-background">
                     {/* Búsqueda */}
@@ -270,7 +272,7 @@ export default function POSPedidosYAPage() {
                     )}
                     {/* Productos */}
                     <div className="flex-1 p-4 overflow-y-auto pb-24">
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 tablet-land:grid-cols-4 xl:grid-cols-4 gap-3">
                             {filteredMenuItems.map(item => (
                                 <button
                                     key={item.id}
@@ -289,7 +291,7 @@ export default function POSPedidosYAPage() {
                 </div>
 
                 {/* Panel derecho */}
-                <div className="w-96 bg-card border-l border-border flex flex-col shadow-2xl z-20">
+                <div className="w-80 tablet-land:w-96 xl:w-96 bg-card border-l border-border flex flex-col shadow-2xl z-20">
                     {/* Datos del pedido */}
                     <div className="p-4 bg-card border-b border-border space-y-2">
                         <h2 className="font-black text-base flex items-center gap-2 text-foreground">📦 Datos del Pedido</h2>
