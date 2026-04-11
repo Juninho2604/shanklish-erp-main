@@ -45,7 +45,7 @@ export interface ZReportData {
         card: number;       // Punto PDV
         mobile: number;     // Pago Móvil
         transfer: number;   // Transferencia
-        external: number;   // PedidosYA / EXTERNAL
+        external: number;   // PedidosYA (PY)
         other: number;
     };
 
@@ -150,7 +150,7 @@ export async function getSalesHistoryAction(date?: string) {
                     createdAt: last.createdAt,
                     customerName: tab?.customerLabel || first.customerName,
                     customerPhone: tab?.customerPhone || first.customerPhone,
-                    createdBy: first.createdBy,
+                    createdBy: last.createdBy,
                     paymentMethod: first.paymentMethod,
                     subtotal,
                     discount,
@@ -381,7 +381,7 @@ export async function getDailyZReportAction(date?: string): Promise<{ success: b
             else if (k === 'CARD' || k === 'BS_POS' || k === 'PDV_SHANKLISH' || k === 'PDV_SUPERFERRO') pay.card     += amt;
             else if (k === 'MOBILE_PAY' || k === 'PAGO_MOVIL' || k === 'MOVIL_NG')                      pay.mobile   += amt;
             else if (k === 'TRANSFER' || k === 'BANK_TRANSFER')                                          pay.transfer += amt;
-            else if (k === 'EXTERNAL')                                                                   pay.external += amt;
+            else if (k === 'PY')                                                                         pay.external += amt;
             else                                                                                         pay.other    += amt;
         };
 

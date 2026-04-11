@@ -57,7 +57,7 @@ export async function createPedidosYAOrderAction(data: CreatePedidosYAOrderData)
                 serviceFlow: 'DIRECT_SALE',
                 sourceChannel: 'POS_PEDIDOSYA',
                 paymentStatus: 'PAID',
-                paymentMethod: 'EXTERNAL',
+                paymentMethod: 'PY',
                 kitchenStatus: 'SENT',
                 sentToKitchenAt: new Date(),
                 subtotal,

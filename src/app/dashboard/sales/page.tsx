@@ -948,6 +948,11 @@ export default function SalesHistoryPage() {
                             <div className="flex justify-between text-gray-300">
                                 <span>Cajera:</span><span>{voidTarget.createdBy?.firstName || '-'}</span>
                             </div>
+                            {voidTarget.authorizedById && (
+                                <div className="flex justify-between text-gray-300">
+                                    <span>Autorizado por:</span><span>{voidTarget.authorizedBy?.firstName || voidTarget.authorizedByName || '-'}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-gray-300">
                                 <span>Items:</span><span>{(voidTarget.items || []).length} productos</span>
                             </div>
