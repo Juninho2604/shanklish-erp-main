@@ -1855,6 +1855,53 @@ fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4   ← back
 #### Regla permanente
 > **PROPINA COLECTIVA siempre usa `amountPaid`, nunca `total`.** El campo `total` es 0 por diseño (no es una venta de producto). Cualquier lógica que agregue ingresos de propina debe usar `_sum.amountPaid` filtrado por `customerName='PROPINA COLECTIVA'`, no `_sum.total`.
 
+### 18.9 Correcciones Responsive — RedmiPad 2 + Desktop (2026-04-11)
+
+**Target devices**: RedmiPad 2 landscape 1200×2000px, Desktop 1920×1080px.
+
+**Breakpoints activos** (tailwind.config.ts):
+- `md:` = 768px — sidebar visible, main padding 24px
+- `lg:` = 1024px — paneles desktop POS activos
+- `tablet-land:` = 1200px — **breakpoint custom para tablet landscape** (antes sin uso)
+- `xl:` = 1280px — NO activa a 1200px (RedmiPad 2)
+
+#### 18.9.1 Modo Pantalla Completa (commits a6e4623)
+
+- **`ui.store.ts`**: `posFullscreen: boolean` + `togglePosFullscreen()` añadidos al `UIState`
+- **`DashboardShell.tsx`** (Client Component nuevo en `components/layout/`):
+  - Fullscreen: `h-screen w-screen overflow-hidden`, sin Sidebar/Navbar, botón flotante `z-[80]` "Salir POS" (bottom-right)
+  - Normal: renderiza Sidebar + Navbar + `<main p-4 md:p-6>`
+  - Recibe `sidebar` como prop (JSX del Server Component layout.tsx)
+- **`dashboard/layout.tsx`**: importa DashboardShell, pasa `<Sidebar ...>` como prop, ya no importa Navbar directamente
+- **`Navbar.tsx`**: botón fullscreen toggle (SVG expand/compress) en barra de acciones derecha
+
+#### 18.9.2 POS Restaurante — layout 3 paneles (commit 0f5f2ab)
+
+- Panel izquierdo (mesas): `lg:w-64 tablet-land:w-64 xl:w-72` (antes `lg:w-72 xl:w-80`)
+- Panel derecho (cuenta): `lg:w-[380px] tablet-land:w-[380px] xl:w-[440px]` (antes `lg:w-[420px] xl:w-[480px]`)
+- A 1200px: menú pasa de ~188px a ~308px de ancho
+- Grilla de productos: `tablet-land:grid-cols-4` añadido (antes solo `xl:grid-cols-4` que no activaba a 1200px)
+
+#### 18.9.3 Delivery + PedidosYA — doble header eliminado (commit efd32ea)
+
+**Problema**: Headers `fixed top-0 z-30` de las páginas POS quedaban ocultos detrás del Navbar `sticky z-40`. El body `pt-16/pt-24` creaba blank gap visible.
+
+**Solución**: Ambas páginas importan `useUIStore`:
+```tsx
+const { posFullscreen } = useUIStore();
+```
+
+- **Fullscreen** (comportamiento anterior): `fixed top-0 w-full z-30`, body `h-screen pt-16/pt-24`
+- **Normal**: header `relative w-full z-[31]` (en flow), body `flex-1 min-h-0`, root `flex-1 -m-4 md:-m-6 h-[calc(100vh-4rem)]` (negative margins cancelan padding del main)
+
+Ambas páginas también tienen `tablet-land:grid-cols-4` en su grilla de productos.
+PedidosYA: panel derecho `w-80 tablet-land:w-96 xl:w-96`.
+
+#### 18.9.4 Historial de Ventas — scroll horizontal (commit d8fa308)
+
+- `<table className="w-full min-w-[900px]">` en `sales/page.tsx`
+- El wrapper `overflow-x-auto` ya existía; el `min-w` evita compresión de columnas
+
 ### 18.6 Skills Instalados en `.claude/skills/`
 
 Estos archivos son cargados automáticamente en toda sesión de Claude Code:
@@ -1870,5 +1917,5 @@ Estos archivos son cargados automáticamente en toda sesión de Claude Code:
 
 ---
 
-*Generado el 2026-04-10 — Shanklish ERP / Cápsula SaaS — Documento Completo*
+*Actualizado el 2026-04-11 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *42 modelos Prisma · 47 módulos · 40 actions · 4 API routes · 3 services · 23 componentes*
