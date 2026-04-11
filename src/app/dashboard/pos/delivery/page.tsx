@@ -527,7 +527,7 @@ export default function POSDeliveryPage() {
                         ))}
                     </div>
 
-                    <div className="overflow-y-auto p-6 bg-secondary/30 border-t border-border space-y-4 shrink-0 max-h-[calc(100vh-220px)]">
+                    <div className="overflow-y-auto p-6 bg-secondary/30 border-t border-border space-y-4 shrink-0 max-h-[520px]">
                         <div className="capsula-card p-4 space-y-2 border-primary/10 shadow-lg">
                             <div className="flex justify-between text-xs font-black text-muted-foreground uppercase tracking-widest">
                                 <span>Subtotal Orden</span>
