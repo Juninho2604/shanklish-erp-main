@@ -1698,12 +1698,21 @@ fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4   ← back
         └── Footer: bg-secondary/40  (separación visual clara)
 ```
 
-### 18.4 Cajera Activa en Sesión
+### 18.4 Cajera Activa en Sesión y Trazabilidad
 
 - `validateCashierPinAction()` escribe el `id` de la cajera autenticada en el cookie JWT (`activeCashierId`)
 - `createSalesOrderAction()` usa `session.activeCashierId ?? session.id` como `createdById`
 - Función: `updateSessionCashier(cashierId)` en `src/lib/auth.ts`
 - Resultado: cuando varias cajeras comparten terminal, cada orden queda bajo la cajera que validó el PIN
+- **Mesa consolidada** (`getSalesHistoryAction`): en el tab RESTAURANT, el grupo de órdenes de un OpenTab se consolida en una fila. `createdBy` toma de `last.createdBy` (la orden más reciente = quien procesó el pago final), no de `first`. Así el historial refleja la cajera de cierre, no de apertura.
+- **Modal de anulación** (`sales/page.tsx`): muestra `createdBy.firstName` (cajera) y, si `authorizedById` existe, también `authorizedBy.firstName` con label "Autorizado por:"
+
+### 18.8 Método de Pago PedidosYA
+
+- El método de pago para órdenes PedidosYA se guarda en BD como `'PY'` (antes era `'EXTERNAL'`)
+- Escritura: `pedidosya.actions.ts:60` — `paymentMethod: 'PY'`
+- Lectura/arqueo: `sales.actions.ts` — branch `k === 'PY'` acumula en `pay.external` del resumen de caja
+- Nunca usar `'EXTERNAL'` — es el valor legado, ya renombrado
 
 ### 18.5 Redondeo de Descuentos
 
