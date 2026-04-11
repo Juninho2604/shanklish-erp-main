@@ -1011,18 +1011,35 @@ const SINGLE_PAY_METHODS = ["CASH_USD","CASH_EUR","ZELLE","PDV_SHANKLISH","PDV_S
 
 - **Ruta**: `/dashboard/usuarios`
 - **Página**: Server Component — importa `getUsers()` + `getEnabledModulesFromDB()`
-- **Actions**: `user.actions.ts` → 7 funciones:
-  - `getUsers()` — lista con roles, allowedModules, grantedPerms, revokedPerms
-  - `updateUserRole(userId, newRole)` — cambia rol (jerarquía: solo superiores)
+- **Actions**: `user.actions.ts` → 9 funciones:
+  - `getUsers()` — lista con roles, allowedModules, grantedPerms, revokedPerms, pinSet
+  - `updateUserRole(userId, newRole)` — cambia rol
   - `toggleUserStatus(userId, isActive)` — activar/desactivar
-  - `changePasswordAction(currentPassword, newPassword)` — cambio propio
+  - `changePasswordAction(currentPassword, newPassword)` — cambio propio (usa PBKDF2)
   - `updateUserModules(userId, allowedModules)` — asigna módulos individuales
   - `updateUserPin(userId, rawPin)` — asigna/cambia PIN de otro usuario (requiere MANAGE_USERS)
-  - `updateUserPermsAction(userId, grantedPerms, revokedPerms)` — sobreescribe permisos granulares
-- **Modelos**: User (`grantedPerms` y `revokedPerms` son campos `String?` en BD — JSON arrays de PERM keys)
-- **Componentes**: `ChangePasswordDialog`, `PinSection`, `PermsSection` (panel lateral derecho de `users-view.tsx`)
+  - `updateUserPerms(userId, grantedPerms, revokedPerms)` — sobreescribe permisos granulares
+  - **`createUserAction(data)`** — crea usuario nuevo; requiere MANAGE_USERS; hashea password con PBKDF2; valida email único; retorna `{ success, user, message }`
+  - **`adminResetPasswordAction(userId, newPassword)`** — resetea contraseña de otro usuario; requiere OWNER o ADMIN_MANAGER; no puede resetear la propia
+- **Modelos**: User (schema completo, no requiere migración para estas funciones)
+- **Componentes**: `PinSection`, `PasswordResetSection`, `PermsSection`, `CreateUserModal` (todos en `users-view.tsx`)
 - **Middleware**: Ruta protegida — solo OWNER, ADMIN_MANAGER
 - **Estado**: Funcional
+
+#### Crear Usuario (`CreateUserModal`)
+
+- **Dónde**: Botón "➕ Nuevo Usuario" en el header de `/dashboard/usuarios`, visible solo para `canManageUsers`
+- **Modal**: `z-60`, backdrop `bg-black/75 backdrop-blur-sm`, card `bg-card border border-border rounded-2xl`
+- **Campos**: firstName, lastName, email, password (min 6 chars), rol (select con todos los roles)
+- **Validaciones cliente**: todos los campos requeridos; server: email único, longitud password, formato email
+- **Al guardar**: usuario nuevo aparece al tope de la lista y queda seleccionado — sin recarga de página
+- **Password**: hasheado con PBKDF2-SHA256 antes de guardarse (ver `src/lib/password.ts`)
+
+#### Resetear Contraseña de Otro Usuario (`PasswordResetSection`)
+
+- **Dónde**: Panel lateral derecho, debajo de `PinSection`, visible solo para OWNER/ADMIN_MANAGER y cuando el seleccionado no es el mismo admin
+- **Validación**: mínimo 6 caracteres; el servidor rechaza `session.id === userId`
+- **Password resultante**: hasheada con PBKDF2-SHA256
 
 #### Panel de Permisos Granulares (`PermsSection`)
 
@@ -1057,10 +1074,15 @@ Consecuencia directa: la guardia UI `selectedUser.id !== currentUser?.id` compar
 
 #### Hashing PBKDF2 — Fuente Autoritativa
 
-- **Archivo**: `src/app/actions/user.actions.ts` (fuente única de verdad para el hashing)
-- **Funciones exportadas**: `hashPin(rawPin)`, `pbkdf2Hex(pin, saltHex)`
+- **Archivo compartido**: `src/lib/password.ts` — exporta `hashPassword(password)` y `verifyPassword(password, stored)`
+- **Archivo de PINs**: `src/app/actions/user.actions.ts` — exporta `hashPin(rawPin)` y `pbkdf2Hex(pin, saltHex)` (mismo algoritmo, sección específica para PINs)
 - **Algoritmo**: PBKDF2-SHA256, 100 000 iteraciones, salt aleatorio de 16 bytes por hash
-- **Formato en BD**: `"saltHex:hashHex"` — si no contiene `:` se trata como PIN legado en texto plano (período de transición)
+- **Formato en BD**: `"saltHex:hashHex"` — si no contiene `:` se trata como contraseña/PIN legado en texto plano (retrocompatibilidad con usuarios creados antes del hashing)
+- **Login retrocompatible**: `auth.actions.ts` → `verifyPassword(password, user.passwordHash)` detecta automáticamente si es PBKDF2 o texto plano
+
+#### Regla permanente: contraseñas en texto plano (usuarios legacy)
+
+> Existen usuarios en producción con `passwordHash` en texto plano (creados antes de 2026-04-11). `verifyPassword()` los soporta detectando la ausencia de `:`. Al cambiar o resetear la contraseña, se guarda en PBKDF2 automáticamente — migración progresiva sin script.
 - **Uso en POS**: `pos.actions.ts` importa `hashPin` y `pbkdf2Hex` desde `user.actions.ts`; `verifyPin()` permanece local en `pos.actions.ts`
 
 ### 7.2 Módulos por Usuario
