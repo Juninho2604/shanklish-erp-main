@@ -1117,13 +1117,17 @@ const SINGLE_PAY_METHODS = ["CASH_USD","CASH_EUR","ZELLE","PDV_SHANKLISH","PDV_S
   4. Gráficas: LineChart ventas diarias + PieChart donut gastos por categoría
   5. BarChart tendencia 6 meses (ventas, COGS, gastos, utilidad)
   6. Top 5 gastos del período + ventas por método de pago con barras de progreso
-  7. Alertas financieras (deudas vencidas, operación con pérdida)
+  7. Alertas financieras expandidas (6 tipos: deudas vencidas, pérdida operativa, margen bruto bajo <30%, ratio gastos alto >40%, caída ventas MoM >15%, flujo de caja negativo) con severidad critical/warning/info
   8. Cuentas por pagar pendientes (3 tarjetas: deudas, vencido, compras)
   9. Aging report de deudas (4 buckets coloreados azul→rojo)
+- **Exportación Excel**: Botón "📥 Exportar Excel" genera archivo `.xlsx` con ExcelJS — incluye P&L completo (ventas por tipo, COGS, utilidad bruta, gastos por categoría, utilidad operativa) + sección Flujo de Caja
 - **Modelos**: SalesOrder + SalesOrderItem (ingresos + COGS), Expense (gastos), AccountPayable + AccountPayment (deudas + pagos)
 - **Conexiones**: ← SalesOrder.total (ingresos), ← SalesOrderItem.costTotal (COGS), ← Expense.amountUsd (gastos), ← AccountPayable.remainingUsd (deudas), ← AccountPayment.amountUsd (pagos del período para flujo de caja)
 - **Charts**: recharts (BarChart, LineChart, PieChart con Pie + Cell)
-- **Estado**: Funcional — Mejorado con MoM, flujo de caja, gráficas, aging report
+- **Dependencias**: ExcelJS (exportación Excel)
+- **Widget en Dashboard Home** (`page.tsx`): Resumen financiero del mes con 5 tarjetas (Ventas, Gastos, Utilidad, Flujo Neto, Deudas) + indicadores MoM + enlace "Ver detalle →" a `/dashboard/finanzas`. Visible solo para roles con `VIEW_COSTS`. Fetch paralelo con `Promise.all` junto a stats generales.
+- **Acceso rápido**: Tarjeta "Finanzas" en sección de accesos rápidos del dashboard home (solo roles con `VIEW_COSTS`)
+- **Estado**: Funcional — Mejorado con MoM, flujo de caja, gráficas, aging report, exportación Excel P&L, alertas expandidas 6 tipos, widget resumen en dashboard home
 
 ### 7.10 Gastos
 
@@ -1138,13 +1142,16 @@ const SINGLE_PAY_METHODS = ["CASH_USD","CASH_EUR","ZELLE","PDV_SHANKLISH","PDV_S
   - KPI Cards con MoM comparison (% cambio vs mes anterior, inverted logic: gastos menores = verde)
   - Desglose por categoría con barras de progreso (existente)
   - PieChart donut distribución por categoría + BarChart horizontal por método de pago
+  - BarChart tendencia 6 meses de gastos (carga automática vía useEffect, llama `getExpensesAction` por cada mes)
   - Filtros avanzados: por categoría y por método de pago con conteo dinámico
   - Tabla detallada con filtrado aplicado
   - Modales: crear gasto, crear categoría, anular gasto
-- **Charts**: recharts (PieChart, BarChart horizontal)
+- **Exportación Excel**: Botón "📥 Exportar Excel" genera archivo `.xlsx` con ExcelJS — tabla de gastos filtrados (Fecha, Descripción, Categoría, Método de Pago, Monto USD, Registrado por) + fila TOTAL
+- **Charts**: recharts (PieChart, BarChart horizontal, BarChart tendencia 6 meses)
+- **Dependencias**: ExcelJS (exportación Excel)
 - **Modelos**: Expense, ExpenseCategory
 - **Conexiones**: → Finanzas (P&L como gasto operativo), → Caja (gastos del turno)
-- **Estado**: Funcional — Mejorado con gráficas donut/barras, MoM, filtros avanzados
+- **Estado**: Funcional — Mejorado con gráficas donut/barras, MoM, filtros avanzados, tendencia 6 meses, exportación Excel
 
 ### 7.11 Control de Caja
 
@@ -1224,6 +1231,11 @@ Finanzas ← SalesOrder (ingresos + COGS vía items.costTotal) + Expense (gastos
 P&L = Ingresos - COGS - Gastos Operativos
 Flujo de Caja = Ventas - (Gastos + Pagos a Proveedores)
 MoM = % cambio vs mes anterior
+Exportación: Excel P&L vía ExcelJS (finanzas) + Excel gastos filtrados (gastos)
+
+Dashboard Home ← getFinancialSummaryAction() (widget resumen 5 métricas con MoM, solo roles VIEW_COSTS)
+   ↓
+Acceso rápido a Finanzas desde dashboard principal
 
 Caja ← SalesOrder (ventas del turno) + Expense (gastos del turno)
    ↓

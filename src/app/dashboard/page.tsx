@@ -1,5 +1,6 @@
 import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
 import { getDashboardStatsAction } from '@/app/actions/dashboard.actions';
+import { getFinancialSummaryAction } from '@/app/actions/finance.actions';
 import { formatNumber, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -20,7 +21,11 @@ export default async function DashboardPage() {
     const showCosts = hasPermission(session?.role, PERMISSIONS.VIEW_COSTS);
 
     // Fetch real data
-    const { stats, salesKPIs, lowStockItems } = await getDashboardStatsAction();
+    const [{ stats, salesKPIs, lowStockItems }, financeSummary] = await Promise.all([
+      getDashboardStatsAction(),
+      showCosts ? getFinancialSummaryAction() : Promise.resolve({ success: false } as any),
+    ]);
+    const finance = financeSummary?.data ?? null;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700">
@@ -86,6 +91,75 @@ export default async function DashboardPage() {
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Financial Summary Widget */}
+            {finance && showCosts && (
+              <div className="glass-panel rounded-2xl border border-border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-xl">
+                      📊
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Resumen Financiero del Mes</h2>
+                      <p className="text-xs text-muted-foreground">{finance.period.label}</p>
+                    </div>
+                  </div>
+                  <Link
+                    href="/dashboard/finanzas"
+                    className="text-xs text-blue-500 hover:text-blue-400 font-medium"
+                  >
+                    Ver detalle →
+                  </Link>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ventas</p>
+                    <p className="text-xl font-black text-emerald-500 mt-0.5">
+                      ${finance.income.totalSalesUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    {finance.mom?.salesChange != null && (
+                      <p className={`text-[10px] font-bold mt-0.5 ${finance.mom.salesChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {finance.mom.salesChange >= 0 ? '▲' : '▼'} {Math.abs(finance.mom.salesChange).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-xl bg-red-500/5 border border-red-500/20 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Gastos</p>
+                    <p className="text-xl font-black text-red-500 mt-0.5">
+                      ${finance.expenses.totalExpensesUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    {finance.mom?.expensesChange != null && (
+                      <p className={`text-[10px] font-bold mt-0.5 ${finance.mom.expensesChange <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {finance.mom.expensesChange >= 0 ? '▲' : '▼'} {Math.abs(finance.mom.expensesChange).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                  <div className={`rounded-xl p-3 ${finance.profitLoss.operatingProfit >= 0 ? 'bg-blue-500/5 border border-blue-500/20' : 'bg-red-500/5 border border-red-500/20'}`}>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Utilidad</p>
+                    <p className={`text-xl font-black mt-0.5 ${finance.profitLoss.operatingProfit >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
+                      ${Math.abs(finance.profitLoss.operatingProfit).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Margen: {finance.profitLoss.operatingMarginPct}%</p>
+                  </div>
+                  <div className={`rounded-xl p-3 ${(finance.cashFlow?.net ?? 0) >= 0 ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-red-500/5 border border-red-500/20'}`}>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Flujo Neto</p>
+                    <p className={`text-xl font-black mt-0.5 ${(finance.cashFlow?.net ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                      ${Math.abs(finance.cashFlow?.net ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className={`rounded-xl p-3 border ${finance.accountsPayable.overdueUsd > 0 ? 'bg-red-500/5 border-red-500/20' : 'bg-muted/30 border-border'}`}>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Deudas</p>
+                    <p className={`text-xl font-black mt-0.5 ${finance.accountsPayable.overdueUsd > 0 ? 'text-red-500' : 'text-foreground'}`}>
+                      ${finance.accountsPayable.totalPendingUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    {finance.accountsPayable.overdueUsd > 0 && (
+                      <p className="text-[10px] font-bold text-red-400 mt-0.5">${finance.accountsPayable.overdueUsd.toLocaleString('es-VE', { minimumFractionDigits: 2 })} vencido</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Stats Grid */}
@@ -398,6 +472,29 @@ export default async function DashboardPage() {
                             </span>
                         </div>
                     </Link>
+                )}
+                {showCosts && (
+                  <Link
+                    href="/dashboard/finanzas"
+                    className="group capsula-card hover:border-emerald-500 hover:shadow-emerald-500/10 p-2"
+                  >
+                    <div className="flex items-center gap-5 p-4 rounded-xl transition-all group-hover:bg-emerald-500/5">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-3xl text-white shadow-xl shadow-emerald-500/30 group-hover:scale-110 transition-transform">
+                        📊
+                      </div>
+                      <div>
+                        <p className="text-lg font-black text-gray-900 dark:text-white">
+                          Finanzas
+                        </p>
+                        <p className="text-sm font-medium text-gray-500">
+                          P&L y flujo de caja
+                        </p>
+                      </div>
+                      <span className="ml-auto text-emerald-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
+                        →
+                      </span>
+                    </div>
+                  </Link>
                 )}
             </div>
         </div>

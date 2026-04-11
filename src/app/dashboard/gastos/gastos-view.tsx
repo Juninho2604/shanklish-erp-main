@@ -8,6 +8,7 @@ import {
   type ExpenseData, type ExpenseSummary, type ExpenseCategoryData,
 } from '@/app/actions/expense.actions';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import ExcelJS from 'exceljs';
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ export function GastosView({ initialExpenses, initialSummary, categories: initia
   const [prevSummary, setPrevSummary] = useState<ExpenseSummary | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterMethod, setFilterMethod] = useState<string>('');
+  const [expenseTrend, setExpenseTrend] = useState<{ label: string; total: number }[]>([]);
 
   const canManage = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(currentUserRole);
   const canAdmin = ['OWNER', 'ADMIN_MANAGER'].includes(currentUserRole);
@@ -98,6 +100,27 @@ export function GastosView({ initialExpenses, initialSummary, categories: initia
     getExpensesAction({ month: prevM, year: prevY }).then(r => {
       if (r.success) setPrevSummary(r.summary ?? null);
     });
+  }, []);
+
+  // Load 6-month trend
+  useEffect(() => {
+    const loadTrend = async () => {
+      const months: { label: string; total: number }[] = [];
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const m = d.getMonth() + 1;
+        const y = d.getFullYear();
+        const result = await getExpensesAction({ month: m, year: y });
+        const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        months.push({
+          label: `${monthNames[m - 1]} ${y}`,
+          total: result.summary?.totalUsd ?? 0,
+        });
+      }
+      setExpenseTrend(months);
+    };
+    loadTrend();
   }, []);
 
   const handleMonthChange = (delta: number) => {
@@ -179,6 +202,55 @@ export function GastosView({ initialExpenses, initialSummary, categories: initia
     return true;
   });
 
+  // ── Exportar a Excel ────────────────────────────────────────────────────────
+  const exportExpensesExcel = async () => {
+    if (filteredExpenses.length === 0) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Gastos');
+
+    ws.mergeCells('A1:F1');
+    ws.getCell('A1').value = `Gastos Operativos — ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+    ws.getCell('A1').font = { bold: true, size: 14 };
+
+    ws.getRow(3).values = ['Fecha', 'Descripción', 'Categoría', 'Método de Pago', 'Monto USD', 'Registrado por'];
+    ws.getRow(3).font = { bold: true };
+    ws.getColumn(1).width = 14;
+    ws.getColumn(2).width = 35;
+    ws.getColumn(3).width = 20;
+    ws.getColumn(4).width = 20;
+    ws.getColumn(5).width = 15;
+    ws.getColumn(5).numFmt = '#,##0.00';
+    ws.getColumn(6).width = 20;
+
+    filteredExpenses.forEach((e, i) => {
+      ws.getRow(4 + i).values = [
+        new Date(e.paidAt).toLocaleDateString('es-VE'),
+        e.description,
+        e.categoryName,
+        paymentLabel(e.paymentMethod),
+        e.amountUsd,
+        e.createdByName,
+      ];
+    });
+
+    // Total row
+    const totalRow = 4 + filteredExpenses.length + 1;
+    ws.getCell(`A${totalRow}`).value = 'TOTAL';
+    ws.getCell(`A${totalRow}`).font = { bold: true };
+    ws.getCell(`E${totalRow}`).value = filteredExpenses.reduce((s: number, e) => s + e.amountUsd, 0);
+    ws.getCell(`E${totalRow}`).font = { bold: true };
+    ws.getCell(`E${totalRow}`).numFmt = '#,##0.00';
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Gastos_${MONTH_NAMES[selectedMonth - 1]}_${selectedYear}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -188,20 +260,28 @@ export function GastosView({ initialExpenses, initialSummary, categories: initia
           <h1 className="text-2xl font-bold text-foreground">💸 Gastos Operativos</h1>
           <p className="text-sm text-muted-foreground">Registro y control de gastos del negocio</p>
         </div>
-        {canManage && (
-          <div className="flex gap-2">
-            {canAdmin && (
-              <button onClick={() => setShowCatForm(true)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors">
-                + Categoría
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={exportExpensesExcel}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+          >
+            📥 Exportar Excel
+          </button>
+          {canManage && (
+            <>
+              {canAdmin && (
+                <button onClick={() => setShowCatForm(true)}
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors">
+                  + Categoría
+                </button>
+              )}
+              <button onClick={() => setShowForm(true)}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors">
+                + Registrar Gasto
               </button>
-            )}
-            <button onClick={() => setShowForm(true)}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors">
-              + Registrar Gasto
-            </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Navegador de período */}
@@ -312,6 +392,23 @@ export function GastosView({ initialExpenses, initialSummary, categories: initia
           </div>
         )}
       </div>
+
+      {/* Expense Trend */}
+      {expenseTrend.length > 0 && (
+        <div className="glass-panel rounded-2xl border border-border p-6">
+          <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-4">Tendencia de Gastos (6 Meses)</h3>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={expenseTrend} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v: number) => `$${v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(0)}`} tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} width={50} />
+                <Tooltip formatter={(value: number) => [`$${value.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Gastos']} contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: 12 }} />
+                <Bar dataKey="total" name="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">

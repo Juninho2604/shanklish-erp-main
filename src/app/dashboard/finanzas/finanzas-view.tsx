@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { getFinancialSummaryAction, type FinancialSummary } from '@/app/actions/finance.actions';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import ExcelJS from 'exceljs';
 
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -66,12 +67,80 @@ export function FinanzasView({ initialSummary, initialTrend, currentMonth, curre
 
   const s = summary;
 
+  const exportPnLExcel = async () => {
+    if (!s) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Estado de Resultados');
+
+    // Title
+    ws.mergeCells('A1:C1');
+    ws.getCell('A1').value = `Estado de Resultados — ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+    ws.getCell('A1').font = { bold: true, size: 14 };
+    ws.getCell('A1').alignment = { horizontal: 'center' };
+
+    // Headers
+    ws.getRow(3).values = ['Concepto', 'Monto (USD)', '% sobre Ventas'];
+    ws.getRow(3).font = { bold: true };
+    ws.getColumn(1).width = 35;
+    ws.getColumn(2).width = 18;
+    ws.getColumn(3).width = 18;
+    ws.getColumn(2).numFmt = '#,##0.00';
+    ws.getColumn(3).numFmt = '0.0"%"';
+
+    let row = 4;
+    const addRow = (label: string, amount: number, pct?: number, bold?: boolean, indent?: boolean) => {
+      ws.getRow(row).values = [indent ? `   ${label}` : label, amount, pct ?? (s.income.totalSalesUsd > 0 ? (amount / s.income.totalSalesUsd) * 100 : 0)];
+      if (bold) ws.getRow(row).font = { bold: true };
+      row++;
+    };
+
+    addRow('(+) Ventas Totales', s.income.totalSalesUsd, 100, true);
+    s.income.byType.forEach(t => addRow(`↳ ${t.type}`, t.total, undefined, false, true));
+    row++;
+    addRow('(−) Costo de Ventas (COGS)', s.cogs.totalCogsUsd, undefined, false);
+    addRow('= Utilidad Bruta', s.profitLoss.grossProfit, s.profitLoss.grossMarginPct, true);
+    row++;
+    addRow('(−) Gastos Operativos', s.expenses.totalExpensesUsd, undefined, false);
+    s.expenses.byCategory.forEach(c => addRow(`↳ ${c.name}`, c.total, undefined, false, true));
+    row++;
+    addRow('= Utilidad Operativa', s.profitLoss.operatingProfit, s.profitLoss.operatingMarginPct, true);
+    row += 2;
+
+    // Cash Flow section
+    ws.getCell(`A${row}`).value = 'Flujo de Caja';
+    ws.getCell(`A${row}`).font = { bold: true, size: 12 };
+    row++;
+    addRow('Ingresos (Entradas)', s.cashFlow?.inflows ?? 0);
+    addRow('Egresos (Salidas)', s.cashFlow?.outflows ?? 0);
+    addRow('Flujo Neto', s.cashFlow?.net ?? 0, undefined, true);
+
+    // Generate and download
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PnL_${MONTH_NAMES[selectedMonth - 1]}_${selectedYear}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">📊 Dashboard Financiero</h1>
-        <p className="text-sm text-muted-foreground">Estado de resultados y flujo de caja</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">📊 Dashboard Financiero</h1>
+          <p className="text-sm text-muted-foreground">Estado de resultados y flujo de caja</p>
+        </div>
+        {s && (
+          <button
+            onClick={exportPnLExcel}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+          >
+            📥 Exportar Excel
+          </button>
+        )}
       </div>
 
       {/* Navegador período */}
@@ -281,19 +350,41 @@ export function FinanzasView({ initialSummary, initialTrend, currentMonth, curre
           </div>
 
           {/* Alertas financieras */}
-          {(s.accountsPayable.overdueUsd > 0 || s.profitLoss.operatingProfit < 0) && (
-            <div className="glass-panel rounded-2xl border border-red-500/30 bg-red-500/5 p-5">
-              <h3 className="text-sm font-black uppercase tracking-widest text-red-500 mb-3">⚠️ Alertas Financieras</h3>
-              <div className="space-y-2">
-                {s.accountsPayable.overdueUsd > 0 && (
-                  <AlertItem icon="🚨" text={`Tienes $${fmt(s.accountsPayable.overdueUsd)} en cuentas por pagar vencidas`} href="/dashboard/cuentas-pagar" />
-                )}
-                {s.profitLoss.operatingProfit < 0 && (
-                  <AlertItem icon="📉" text={`El negocio operó con pérdida de $${fmt(Math.abs(s.profitLoss.operatingProfit))} este período`} />
-                )}
+          {(() => {
+            const alerts: { icon: string; text: string; href?: string; severity: 'critical' | 'warning' | 'info' }[] = [];
+            if (s.accountsPayable.overdueUsd > 0) {
+              alerts.push({ icon: '🚨', text: `Tienes $${fmt(s.accountsPayable.overdueUsd)} en cuentas por pagar vencidas`, href: '/dashboard/cuentas-pagar', severity: 'critical' });
+            }
+            if (s.profitLoss.operatingProfit < 0) {
+              alerts.push({ icon: '📉', text: `El negocio operó con pérdida de $${fmt(Math.abs(s.profitLoss.operatingProfit))} este período`, severity: 'critical' });
+            }
+            if (s.profitLoss.grossMarginPct < 30 && s.income.totalSalesUsd > 0) {
+              alerts.push({ icon: '⚠️', text: `Margen bruto bajo: ${s.profitLoss.grossMarginPct}% (se recomienda >30%)`, href: '/dashboard/costos/margen', severity: 'warning' });
+            }
+            if (s.expenses.totalExpensesUsd > 0 && s.income.totalSalesUsd > 0 && (s.expenses.totalExpensesUsd / s.income.totalSalesUsd) > 0.40) {
+              alerts.push({ icon: '💸', text: `Gastos operativos representan ${((s.expenses.totalExpensesUsd / s.income.totalSalesUsd) * 100).toFixed(1)}% de las ventas (se recomienda <40%)`, href: '/dashboard/gastos', severity: 'warning' });
+            }
+            if (s.mom?.salesChange != null && s.mom.salesChange < -15) {
+              alerts.push({ icon: '📊', text: `Ventas cayeron ${Math.abs(s.mom.salesChange).toFixed(1)}% vs mes anterior`, severity: 'warning' });
+            }
+            if ((s.cashFlow?.net ?? 0) < 0) {
+              alerts.push({ icon: '🏦', text: `Flujo de caja negativo: -$${fmt(Math.abs(s.cashFlow?.net ?? 0))}. Los egresos superan los ingresos`, severity: 'warning' });
+            }
+            if (alerts.length === 0) return null;
+            const hasCritical = alerts.some(a => a.severity === 'critical');
+            return (
+              <div className={`glass-panel rounded-2xl border p-5 ${hasCritical ? 'border-red-500/30 bg-red-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
+                <h3 className={`text-sm font-black uppercase tracking-widest mb-3 ${hasCritical ? 'text-red-500' : 'text-amber-500'}`}>
+                  {hasCritical ? '🚨 Alertas Financieras' : '⚠️ Atención'}
+                </h3>
+                <div className="space-y-2">
+                  {alerts.map((alert, i) => (
+                    <AlertItem key={i} icon={alert.icon} text={alert.text} href={alert.href} />
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Cuentas por pagar pendientes */}
           <div className="grid gap-4 sm:grid-cols-3">
