@@ -288,6 +288,20 @@ export default function POSDeliveryPage() {
                         divisasUsdAmount: discountType === 'DIVISAS_33' ? divisasUsdAmount : undefined }
                     : (() => {
                         const rawAmt = parseFloat(amountReceived) || 0;
+                        // PDV terminals always charge exact total — never need manual Bs entry
+                        if (paymentMethod === 'PDV_SHANKLISH' || paymentMethod === 'PDV_SUPERFERRO') {
+                            return { paymentMethod, amountPaid: finalTotal };
+                        }
+                        // MOVIL_NG: only do Bs→USD if rawAmt clearly looks like Bs (≥ 10× USD total)
+                        // Protects against cashier entering USD amount in the Bs field
+                        if (paymentMethod === 'MOVIL_NG') {
+                            if (exchangeRate && rawAmt >= finalTotal * 10) {
+                                const usdAmt = rawAmt / exchangeRate;
+                                return { payments: [{ method: paymentMethod, amountUSD: usdAmt, amountBS: rawAmt, exchangeRate }], amountPaid: usdAmt };
+                            }
+                            return { paymentMethod, amountPaid: finalTotal };
+                        }
+                        // CASH_BS: standard Bs→USD conversion with actual bills received
                         if (isBsPayMethod && exchangeRate && rawAmt > 0) {
                             const usdAmt = rawAmt / exchangeRate;
                             return { payments: [{ method: paymentMethod, amountUSD: usdAmt, amountBS: rawAmt, exchangeRate }], amountPaid: usdAmt };
