@@ -2,6 +2,7 @@
 
 import prisma from '@/server/db';
 import { createSession, deleteSession } from '@/lib/auth';
+import { verifyPassword } from '@/lib/password';
 import { redirect } from 'next/navigation';
 
 export async function loginAction(prevState: any, formData: FormData) {
@@ -21,8 +22,8 @@ export async function loginAction(prevState: any, formData: FormData) {
             return { success: false, message: 'Credenciales inválidas (usuario no existe)' };
         }
 
-        // Validación simple (en prod usar bcrypt)
-        if (user.passwordHash !== password) {
+        const valid = await verifyPassword(password, user.passwordHash ?? '');
+        if (!valid) {
             return { success: false, message: 'Contraseña incorrecta' };
         }
 

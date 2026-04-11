@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { UserRole } from '@/types';
 import { ROLE_INFO } from '@/lib/constants/roles';
-import { updateUserRole, toggleUserStatus, updateUserModules, updateUserPin, updateUserPerms } from '@/app/actions/user.actions';
+import { updateUserRole, toggleUserStatus, updateUserModules, updateUserPin, updateUserPerms, createUserAction, adminResetPasswordAction } from '@/app/actions/user.actions';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '@/stores/auth.store';
 import { PERMISSIONS, hasPermission } from '@/lib/permissions';
@@ -35,6 +35,13 @@ export default function UsersView({ initialUsers, enabledModuleIds }: UsersViewP
 
     const [users, setUsers] = useState(initialUsers);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+
+    const handleUserCreated = (newUser: User) => {
+        setUsers(prev => [newUser, ...prev]);
+        setSelectedUser(newUser);
+        setShowCreateModal(false);
+    };
 
     const active = users.filter(u => u.isActive);
     const inactive = users.filter(u => !u.isActive);
@@ -106,12 +113,23 @@ export default function UsersView({ initialUsers, enabledModuleIds }: UsersViewP
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="mb-4">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Módulos por Usuario</h1>
-                <p className="text-sm text-gray-500 mt-1">
-                    Selecciona un usuario para configurar qué módulos del sistema puede ver en su menú.
-                    Si usas <span className="font-semibold">acceso por rol</span>, el sistema aplica las reglas predeterminadas del rol.
-                </p>
+            <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Módulos por Usuario</h1>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Selecciona un usuario para configurar qué módulos del sistema puede ver en su menú.
+                        Si usas <span className="font-semibold">acceso por rol</span>, el sistema aplica las reglas predeterminadas del rol.
+                    </p>
+                </div>
+                {canManageUsers && (
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="shrink-0 flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-lg hover:bg-amber-600 active:scale-95 transition-all"
+                    >
+                        <span className="text-base leading-none">➕</span>
+                        Nuevo Usuario
+                    </button>
+                )}
             </div>
 
             {/* Split panel */}
@@ -160,6 +178,7 @@ export default function UsersView({ initialUsers, enabledModuleIds }: UsersViewP
                             user={selectedUser}
                             enabledModuleIds={enabledModuleIds}
                             canManage={canManageUsers && selectedUser.id !== currentUser?.id && (isOwner || selectedUser.role !== 'OWNER')}
+                            canResetPassword={(isOwner || currentUser?.role === 'ADMIN_MANAGER') && selectedUser.id !== currentUser?.id}
                             isOwner={isOwner}
                             onRoleChange={handleRoleChange}
                             onStatusToggle={handleStatusToggle}
@@ -175,6 +194,14 @@ export default function UsersView({ initialUsers, enabledModuleIds }: UsersViewP
                     )}
                 </div>
             </div>
+
+            {/* Modal: Crear nuevo usuario */}
+            {showCreateModal && (
+                <CreateUserModal
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={handleUserCreated}
+                />
+            )}
         </div>
     );
 }
@@ -222,6 +249,7 @@ interface ModulesPanelProps {
     user: User;
     enabledModuleIds: string[];
     canManage: boolean;
+    canResetPassword: boolean;
     isOwner: boolean;
     onRoleChange: (userId: string, newRole: string) => void;
     onStatusToggle: (userId: string, currentStatus: boolean) => void;
@@ -293,6 +321,56 @@ function PinSection({ userId, canManage, pinSet, onSaved }: { userId: string; ca
                     {isPending ? 'Guardando…' : pinSet ? 'Cambiar PIN' : 'Guardar PIN'}
                 </button>
             </div>
+        </div>
+    );
+}
+
+// ─── Password Reset Section ───────────────────────────────────────────────────
+
+function PasswordResetSection({ userId, canResetPassword }: { userId: string; canResetPassword: boolean }) {
+    const [newPassword, setNewPassword] = useState('');
+    const [isPending, startTransition] = useTransition();
+
+    if (!canResetPassword) return null;
+
+    function handleReset() {
+        if (newPassword.trim().length < 6) return;
+        startTransition(async () => {
+            const res = await adminResetPasswordAction(userId, newPassword.trim());
+            if (res.success) {
+                toast.success(res.message);
+                setNewPassword('');
+            } else {
+                toast.error(res.message);
+            }
+        });
+    }
+
+    return (
+        <div className="border-t border-border px-5 py-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                Resetear Contraseña
+            </p>
+            <div className="flex items-center gap-2">
+                <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Nueva contraseña (mín. 6 caracteres)"
+                    disabled={isPending}
+                    className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                />
+                <button
+                    onClick={handleReset}
+                    disabled={isPending || newPassword.trim().length < 6}
+                    className="shrink-0 rounded-xl bg-red-600/80 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 active:scale-95 disabled:opacity-50 transition"
+                >
+                    {isPending ? 'Guardando…' : 'Resetear'}
+                </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+                ⚠️ El usuario deberá usar esta contraseña en su próximo inicio de sesión.
+            </p>
         </div>
     );
 }
@@ -442,7 +520,7 @@ function PermsSection({ userId, role, grantedPerms, revokedPerms, canManage, onS
     );
 }
 
-function ModulesPanel({ user, enabledModuleIds, canManage, isOwner, onRoleChange, onStatusToggle, onModulesSaved, onPermsSaved, onPinSaved }: ModulesPanelProps) {
+function ModulesPanel({ user, enabledModuleIds, canManage, canResetPassword, isOwner, onRoleChange, onStatusToggle, onModulesSaved, onPermsSaved, onPinSaved }: ModulesPanelProps) {
     const [isPending, startTransition] = useTransition();
     const roleInfo = ROLE_INFO[user.role as UserRole] || { labelEs: user.role, color: '#6b7280' };
 
@@ -600,6 +678,9 @@ function ModulesPanel({ user, enabledModuleIds, canManage, isOwner, onRoleChange
             {/* PIN section */}
             <PinSection userId={user.id} canManage={canManage} pinSet={user.pinSet} onSaved={() => onPinSaved(user.id)} />
 
+            {/* Password Reset section */}
+            <PasswordResetSection userId={user.id} canResetPassword={canResetPassword} />
+
             {/* Perms section */}
             <PermsSection
                 userId={user.id}
@@ -632,5 +713,186 @@ function ModulesPanel({ user, enabledModuleIds, canManage, isOwner, onRoleChange
                 </div>
             )}
         </>
+    );
+}
+
+// ─── Create User Modal ────────────────────────────────────────────────────────
+
+interface CreateUserModalProps {
+    onClose: () => void;
+    onCreated: (user: User) => void;
+}
+
+function CreateUserModal({ onClose, onCreated }: CreateUserModalProps) {
+    const [form, setForm] = useState({
+        firstName: '',
+        lastName: '',
+        email: '',
+        password: '',
+        role: 'CASHIER',
+    });
+    const [error, setError] = useState<string | null>(null);
+    const [isPending, startTransition] = useTransition();
+
+    function handleChange(field: keyof typeof form, value: string) {
+        setForm(prev => ({ ...prev, [field]: value }));
+        setError(null);
+    }
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setError(null);
+        startTransition(async () => {
+            const res = await createUserAction(form);
+            if (res.success && res.user) {
+                toast.success(res.message ?? 'Usuario creado');
+                onCreated(res.user as User);
+            } else {
+                setError(res.message ?? 'Error al crear usuario');
+            }
+        });
+    }
+
+    return (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+            <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                    <div>
+                        <h2 className="text-base font-bold text-foreground">Nuevo Usuario</h2>
+                        <p className="text-xs text-muted-foreground mt-0.5">Los datos se pueden modificar después</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        disabled={isPending}
+                        className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition disabled:opacity-40"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+                    {/* Nombre / Apellido */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                                Nombre
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                value={form.firstName}
+                                onChange={e => handleChange('firstName', e.target.value)}
+                                placeholder="Juan"
+                                disabled={isPending}
+                                className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                                Apellido
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                value={form.lastName}
+                                onChange={e => handleChange('lastName', e.target.value)}
+                                placeholder="Pérez"
+                                disabled={isPending}
+                                className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                            Correo electrónico
+                        </label>
+                        <input
+                            type="email"
+                            required
+                            value={form.email}
+                            onChange={e => handleChange('email', e.target.value)}
+                            placeholder="usuario@shanklish.com"
+                            disabled={isPending}
+                            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                        />
+                    </div>
+
+                    {/* Contraseña */}
+                    <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                            Contraseña inicial
+                        </label>
+                        <input
+                            type="password"
+                            required
+                            minLength={6}
+                            value={form.password}
+                            onChange={e => handleChange('password', e.target.value)}
+                            placeholder="Mínimo 6 caracteres"
+                            disabled={isPending}
+                            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                        />
+                    </div>
+
+                    {/* Rol */}
+                    <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                            Rol
+                        </label>
+                        <select
+                            required
+                            value={form.role}
+                            onChange={e => handleChange('role', e.target.value)}
+                            disabled={isPending}
+                            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50 cursor-pointer"
+                        >
+                            {Object.entries(ROLE_INFO).map(([role, info]) => (
+                                <option key={role} value={role}>
+                                    {info.labelEs}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                            {ROLE_INFO[form.role as import('@/types').UserRole]?.description ?? ''}
+                        </p>
+                    </div>
+
+                    {/* Error */}
+                    {error && (
+                        <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+                            ⚠️ {error}
+                        </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-1">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={isPending}
+                            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50 transition"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isPending}
+                            className="flex-1 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-600 active:scale-95 disabled:opacity-50 transition"
+                        >
+                            {isPending ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    Creando…
+                                </span>
+                            ) : 'Crear Usuario'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
 }

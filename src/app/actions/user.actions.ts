@@ -2,6 +2,7 @@
 
 import { prisma } from '@/server/db'; // Correct path from previous files
 import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
+import { hashPassword, verifyPassword } from '@/lib/password';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================================
@@ -163,8 +164,9 @@ export async function changePasswordAction(currentPassword: string, newPassword:
             return { success: false, message: 'Usuario no encontrado' };
         }
 
-        // 2. Verificar contraseña actual (Comparación simple por ahora, igual que login)
-        if (user.passwordHash !== currentPassword) {
+        // 2. Verificar contraseña actual (retrocompatible: plain-text legacy o PBKDF2)
+        const valid = await verifyPassword(currentPassword, user.passwordHash ?? '');
+        if (!valid) {
             return { success: false, message: 'La contraseña actual es incorrecta' };
         }
 
@@ -173,10 +175,11 @@ export async function changePasswordAction(currentPassword: string, newPassword:
             return { success: false, message: 'La nueva contraseña debe tener al menos 6 caracteres' };
         }
 
-        // 4. Actualizar contraseña
+        // 4. Actualizar contraseña con hash PBKDF2-SHA256
+        const hashed = await hashPassword(newPassword);
         await prisma.user.update({
             where: { id: session.id },
-            data: { passwordHash: newPassword },
+            data: { passwordHash: hashed },
         });
 
         return { success: true, message: 'Contraseña actualizada correctamente' };
@@ -291,5 +294,128 @@ export async function updateUserPerms(
     } catch (error) {
         console.error('Error updating user perms:', error);
         return { success: false, message: 'Error al actualizar permisos' };
+    }
+}
+
+/**
+ * Crea un nuevo usuario en el sistema.
+ * Solo roles con MANAGE_USERS pueden crear usuarios.
+ * La contraseña se hashea con PBKDF2-SHA256 antes de guardarse.
+ */
+export async function createUserAction(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    role: string;
+}) {
+    const session = await getSession();
+
+    if (!session) {
+        return { success: false, message: 'No autenticado' };
+    }
+
+    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
+        return { success: false, message: 'Sin permisos para crear usuarios' };
+    }
+
+    const email = data.email.trim().toLowerCase();
+    const firstName = data.firstName.trim();
+    const lastName = data.lastName.trim();
+
+    if (!email || !data.password || !firstName || !lastName) {
+        return { success: false, message: 'Todos los campos son requeridos' };
+    }
+
+    if (data.password.length < 6) {
+        return { success: false, message: 'La contraseña debe tener al menos 6 caracteres' };
+    }
+
+    // Validar email básico
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return { success: false, message: 'Correo electrónico inválido' };
+    }
+
+    try {
+        const existing = await prisma.user.findUnique({ where: { email } });
+        if (existing) {
+            return { success: false, message: 'Ya existe un usuario con ese correo electrónico' };
+        }
+
+        const passwordHash = await hashPassword(data.password);
+
+        const user = await prisma.user.create({
+            data: {
+                email,
+                passwordHash,
+                firstName,
+                lastName,
+                role: data.role || 'CHEF',
+                isActive: true,
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                role: true,
+                isActive: true,
+                allowedModules: true,
+                grantedPerms: true,
+                revokedPerms: true,
+                pin: true,
+            },
+        });
+
+        revalidatePath('/dashboard/usuarios');
+
+        const { pin, ...userWithoutPin } = user;
+        return {
+            success: true,
+            message: `Usuario ${firstName} ${lastName} creado correctamente`,
+            user: { ...userWithoutPin, pinSet: pin !== null },
+        };
+    } catch (error) {
+        console.error('Error creating user:', error);
+        return { success: false, message: 'Error al crear el usuario' };
+    }
+}
+
+/**
+ * Permite a OWNER o ADMIN_MANAGER resetear la contraseña de otro usuario.
+ * No puede resetear la propia contraseña por esta vía (usar changePasswordAction).
+ */
+export async function adminResetPasswordAction(userId: string, newPassword: string) {
+    const session = await getSession();
+
+    if (!session) {
+        return { success: false, message: 'No autenticado' };
+    }
+
+    if (!['OWNER', 'ADMIN_MANAGER'].includes(session.role)) {
+        return { success: false, message: 'Solo OWNER o Admin Manager pueden resetear contraseñas' };
+    }
+
+    if (session.id === userId) {
+        return { success: false, message: 'Para cambiar tu propia contraseña usa la sección de perfil' };
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+        return { success: false, message: 'La contraseña debe tener al menos 6 caracteres' };
+    }
+
+    try {
+        const passwordHash = await hashPassword(newPassword);
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { passwordHash },
+        });
+
+        revalidatePath('/dashboard/usuarios');
+        return { success: true, message: 'Contraseña actualizada correctamente' };
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        return { success: false, message: 'Error al actualizar la contraseña' };
     }
 }
