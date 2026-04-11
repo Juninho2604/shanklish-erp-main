@@ -1773,7 +1773,19 @@ fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4   ← back
   - `restaurante/page.tsx` → IIFE display `pickupTotal`: para que la pantalla muestre el mismo total redondeado
   - `delivery/page.tsx` → `finalTotal`: único punto de display y submit en delivery
 
-### 18.7 Propina Colectiva — Conversión Bs a USD
+### 18.7 amountPaid en Delivery — Regla por Método Bs
+
+**Regla implementada en `delivery/page.tsx` → `handleCheckout` IIFE (desde 2026-04-11):**
+
+| Método | Comportamiento |
+|--------|---------------|
+| `PDV_SHANKLISH`, `PDV_SUPERFERRO` | Siempre `amountPaid = finalTotal`. Terminales que cobran exacto, sin entrada manual. |
+| `MOVIL_NG` | Si `rawAmt >= finalTotal * 10` → convierte Bs→USD (`rawAmt / exchangeRate`). Si no, usa `finalTotal`. |
+| `CASH_BS` | Siempre convierte Bs→USD con el monto real ingresado (para calcular vuelto). |
+
+**Bug corregido (2026-04-11):** Entre DEL-0156 (10 abr) y DEL-0197 (11 abr), `amountPaid` se guardaba como `total / exchangeRate` en lugar de `total`. Root cause: el cajero ingresaba el monto USD (ej. `22.5`) en el campo Bs; el código lo dividía por el tipo de cambio → `22.5 / 476 = $0.047`. 25 órdenes afectadas (MOVIL_NG + PDV_SHANKLISH). Corregidas con `scripts/fix-movil-ng-amounts.ts` el 11 abr 2026 (`amountPaid = total`, `change = 0`). El historial de ventas y Z-Report usan `amountPaid - change` para la columna COBRADO — quedaron correctos tras el fix.
+
+### 18.8 Propina Colectiva — Conversión Bs a USD
 
 - `handleRecordTip` (restaurante/page.tsx) detecta si el método de pago es Bs (`CASH_BS`, `PDV_SHANKLISH`, `PDV_SUPERFERRO`, `MOVIL_NG`)
 - Si es Bs: convierte antes de llamar `recordCollectiveTipAction`: `tipAmountUSD = Math.round(amount / exchangeRate * 100) / 100`
