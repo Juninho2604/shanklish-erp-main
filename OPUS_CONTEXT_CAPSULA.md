@@ -1714,13 +1714,26 @@ fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4   ← back
 - Lectura/arqueo: `sales.actions.ts` — branch `k === 'PY'` acumula en `pay.external` del resumen de caja
 - Nunca usar `'EXTERNAL'` — es el valor legado, ya renombrado
 
-### 18.5 Redondeo de Descuentos
+### 18.5 Redondeo de Descuentos y Total Final
 
+#### roundCents — redondeo de descuentos intermedios
 - Helper: `roundCents(n)` = `Math.round(n * 100) / 100` — en `pos.actions.ts` (función privada)
 - **Aplica a todos los tipos de descuento** en `calculateCartTotals`: `DIVISAS_33` y `CORTESIA_PERCENT` (ambas ramas DELIVERY y RESTAURANT/PICKUP)
 - El frontend (`handleCheckoutPickup` en restaurante/page.tsx) replica el redondeo con `rc()` inline para mantener consistencia de vuelto en pantalla
 - `CORTESIA_100` no requiere redondeo (siempre es subtotal exacto)
 - Regla: igual o mayor a 0.5 → redondea arriba; menor a 0.5 → redondea abajo
+
+#### roundToWhole — redondeo del total final por método de pago
+- Helper: `roundToWhole(amount, paymentMethod)` — en `pos.actions.ts` (función privada) y replicado como lambda en restaurante/page.tsx y delivery/page.tsx
+- **Aplica Math.round al total final** solo para: `CASH_USD`, `ZELLE`, `CASH_BS`
+- **No aplica** para: `PDV_SHANKLISH`, `PDV_SUPERFERRO`, `MOVIL_NG`, `PY`, y cualquier otro método
+- **Orden de aplicación:** ÚLTIMO paso — después de todos los descuentos y después del 10% service charge si aplica
+- Ubicaciones de aplicación:
+  - `pos.actions.ts` → `calculateCartTotals()`: al `total` final, en ambas ramas (DELIVERY y RESTAURANT/PICKUP), antes de calcular el vuelto
+  - `restaurante/page.tsx` → `paymentAmountToCharge`: aplicado después del `* 1.1` (service charge)
+  - `restaurante/page.tsx` → `handleCheckoutPickup` `finalTotal`: aplicado al total pickup antes de enviar a la action
+  - `restaurante/page.tsx` → IIFE display `pickupTotal`: para que la pantalla muestre el mismo total redondeado
+  - `delivery/page.tsx` → `finalTotal`: único punto de display y submit en delivery
 
 ### 18.7 Propina Colectiva — Conversión Bs a USD
 

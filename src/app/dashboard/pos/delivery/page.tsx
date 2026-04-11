@@ -221,6 +221,8 @@ export default function POSDeliveryPage() {
 
     const cartSubtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
     // Divisas methods: CASH, CASH_USD, CASH_EUR, ZELLE get 33.33% discount
+    const roundToWhole = (amount: number, method: string): number =>
+        (method === 'CASH_USD' || method === 'ZELLE' || method === 'CASH_BS') ? Math.round(amount) : amount;
     const isDivisasMethod = (m: string) => m === 'CASH' || m === 'CASH_USD' || m === 'CASH_EUR' || m === 'ZELLE';
     // Bs methods: user enters amount in Bs, needs conversion to USD
     const BS_SINGLE_METHODS = new Set(['PDV_SHANKLISH', 'PDV_SUPERFERRO', 'MOVIL_NG', 'CASH_BS']);
@@ -240,9 +242,12 @@ export default function POSDeliveryPage() {
         : discountType === 'CORTESIA_100' ? 0
         : discountType === 'CORTESIA_PERCENT' ? cartSubtotal * (1 - cortesiaPercentNum / 100)
         : cartSubtotal;
-    const finalTotal = (discountType === 'CORTESIA_100') ? 0
+    const finalTotal = roundToWhole(
+        (discountType === 'CORTESIA_100') ? 0
         : discountType === 'CORTESIA_PERCENT' ? itemsAfterDiscount + (cortesiaPercentNum >= 100 ? 0 : deliveryFee)
-        : itemsAfterDiscount + deliveryFee;
+        : itemsAfterDiscount + deliveryFee,
+        paymentMethod
+    );
     const totalMixedPaid = mixedPayments.reduce((s, p) => s + p.amountUSD, 0);
 
     const handleRecordTip = async () => {

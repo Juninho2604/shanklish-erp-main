@@ -270,7 +270,20 @@ function roundCents(n: number): number {
     return Math.round(n * 100) / 100;
 }
 
-function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' | 'discountType' | 'discountPercent' | 'amountPaid' | 'divisasUsdAmount'>) {
+/**
+ * Redondea al entero más cercano solo para métodos de efectivo donde aplica vuelto
+ * (CASH_USD, ZELLE, CASH_BS). Para PDV_SHANKLISH, PDV_SUPERFERRO, MOVIL_NG, PY
+ * y cualquier otro método devuelve el monto sin cambios.
+ * Debe aplicarse como último paso, después de descuentos y service charge.
+ */
+function roundToWhole(amount: number, paymentMethod?: string): number {
+    if (paymentMethod === 'CASH_USD' || paymentMethod === 'ZELLE' || paymentMethod === 'CASH_BS') {
+        return Math.round(amount);
+    }
+    return amount;
+}
+
+function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' | 'discountType' | 'discountPercent' | 'amountPaid' | 'divisasUsdAmount' | 'paymentMethod'>) {
     const itemsSubtotal = data.items.reduce((sum, item) => sum + item.lineTotal, 0);
 
     // DELIVERY: $4.5 fee normal, $3 en divisas. Sin 10% servicio.
@@ -306,6 +319,7 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' |
             total = subtotal;
         }
 
+        total = roundToWhole(total, data.paymentMethod);
         const change = (data.amountPaid || 0) - total;
         return { subtotal, discount, total, change: change > 0 ? change : 0, discountReason };
     }
@@ -332,7 +346,7 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' |
 
     if (discount > subtotal) discount = subtotal;
 
-    const total = subtotal - discount;
+    const total = roundToWhole(subtotal - discount, data.paymentMethod);
     const change = (data.amountPaid || 0) - total;
 
     return {

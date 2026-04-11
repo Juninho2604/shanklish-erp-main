@@ -397,6 +397,8 @@ export default function POSSportBarPage() {
     ? rawAmount / exchangeRate
     : rawAmount;
   // Divisas methods: CASH, CASH_USD, CASH_EUR, ZELLE get 33.33% discount
+  const roundToWhole = (amount: number, method: string): number =>
+    (method === 'CASH_USD' || method === 'ZELLE' || method === 'CASH_BS') ? Math.round(amount) : amount;
   const isDivisasMethod = (m: string) => m === "CASH" || m === "CASH_USD" || m === "CASH_EUR" || m === "ZELLE";
   // isPagoDivisas: used by TABLE mode (registerOpenTabPaymentAction)
   const isPagoDivisas = isDivisasMethod(paymentMethod);
@@ -427,7 +429,7 @@ export default function POSSportBarPage() {
       ? activeTab.balanceDue * (1 - cortesiaPercentNum / 100)
       : activeTab.balanceDue
     : 0;
-  const paymentAmountToCharge = serviceFeeIncluded ? paymentBaseAmount * 1.1 : paymentBaseAmount;
+  const paymentAmountToCharge = roundToWhole(serviceFeeIncluded ? paymentBaseAmount * 1.1 : paymentBaseAmount, paymentMethod);
 
   // ============================================================================
   // OPEN TAB
@@ -860,7 +862,7 @@ export default function POSSportBarPage() {
         : discountType === "CORTESIA_100" ? rc(cartTotal)
         : discountType === "CORTESIA_PERCENT" ? rc(cartTotal * (cortesiaPercentNum / 100))
         : 0;
-      const finalTotal = Math.max(0, cartTotal - pickupDiscount);
+      const finalTotal = roundToWhole(Math.max(0, cartTotal - pickupDiscount), paymentMethod);
 
       const result = await createSalesOrderAction({
         orderType: "RESTAURANT",
@@ -1509,7 +1511,7 @@ export default function POSSportBarPage() {
                     : discountType === "CORTESIA_100" ? cartTotal
                     : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
                     : 0;
-                  const pickupTotal = Math.max(0, cartTotal - baseDiscount);
+                  const pickupTotal = roundToWhole(Math.max(0, cartTotal - baseDiscount), paymentMethod);
                   const singlePaidAmount = parseFloat(amountReceived) || 0;
                   const pickupChange = isPickupMixedMode
                     ? Math.max(0, totalMixedPickupPaid - pickupTotal)
