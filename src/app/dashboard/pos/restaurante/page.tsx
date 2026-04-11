@@ -1017,7 +1017,7 @@ export default function POSSportBarPage() {
 
       {/* ── MODAL: PROPINA COLECTIVA ─────────────────────────────────────── */}
       {showTipModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-60 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-card glass-panel w-full max-w-sm rounded-3xl shadow-2xl border border-amber-500/20 p-6 space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-black uppercase tracking-tight text-amber-400">Propina Colectiva</h3>
@@ -1437,7 +1437,7 @@ export default function POSSportBarPage() {
                 {cart.map((item, idx) => (
                   <div
                     key={idx}
-                    className="bg-card p-3 rounded-xl border border-border flex justify-between shadow-sm"
+                    className="bg-card p-4 rounded-2xl border border-border flex justify-between shadow-sm"
                   >
                     <div>
                       <div className="font-bold text-sm flex items-center gap-1.5 flex-wrap">
@@ -2039,7 +2039,7 @@ export default function POSSportBarPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showTableModal && selectedTable && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4"
+          className="fixed inset-0 z-60 bg-black/60 flex items-end sm:items-center justify-center p-4"
           onClick={() => setShowTableModal(false)}
         >
           <div
@@ -2110,7 +2110,7 @@ export default function POSSportBarPage() {
       {/* MODAL: ABRIR CUENTA                                              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showOpenTabModal && selectedTable && (
-        <div className="fixed inset-0 z-50 bg-background/90 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-background/90 flex items-end sm:items-center justify-center p-4">
           <div className="bg-card border border-border w-full max-w-md mx-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
             <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black">Abrir cuenta — {selectedTable.name}</h3>
@@ -2205,7 +2205,7 @@ export default function POSSportBarPage() {
       {/* MODAL: PIN CAJERA — REGISTRAR PAGO                               */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showPaymentPinModal && activeTab && (
-        <div className="fixed inset-0 z-50 bg-background/90 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-background/90 flex items-end sm:items-center justify-center p-4">
           <div className="bg-card border border-border w-full max-w-sm mx-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
             <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black">🔐 Autorizar cobro</h3>
@@ -2334,7 +2334,7 @@ export default function POSSportBarPage() {
       {/* MODAL: ELIMINAR ITEM (PIN + JUSTIFICACIÓN)                       */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showRemoveModal && removeTarget && (
-        <div className="fixed inset-0 z-50 bg-background/90 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-background/90 flex items-end sm:items-center justify-center p-4">
           <div className="bg-card border border-red-900/50 w-full max-w-sm mx-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
             <div className="border-b border-border p-5 flex items-center justify-between">
               <h3 className="text-lg font-black text-red-400">🗑️ Eliminar item</h3>
@@ -2406,7 +2406,7 @@ export default function POSSportBarPage() {
       {/* MODAL: MODIFICADORES                                              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showModifierModal && selectedItemForModifier && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-background/90 p-4 text-foreground">
+        <div className="fixed inset-0 z-60 flex items-end sm:items-center justify-center bg-background/90 p-4 text-foreground">
           <div className="max-h-[92vh] sm:max-h-[90vh] w-full max-w-lg mx-auto overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-border bg-card shadow-2xl">
             <div className="border-b border-border p-5 flex items-start justify-between">
               <div>
