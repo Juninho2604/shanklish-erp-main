@@ -32,7 +32,7 @@ export async function getExchangeRateValue(): Promise<number | null> {
 export async function setExchangeRateAction(rate: number, effectiveDate: Date) {
     const session = await getSession();
     if (!session) return { success: false, message: 'No autorizado' };
-    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'].includes(session.role)) {
         return { success: false, message: 'No tienes permiso para actualizar la tasa de cambio' };
     }
 

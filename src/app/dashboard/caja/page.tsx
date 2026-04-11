@@ -13,7 +13,7 @@ export const metadata = {
 export default async function CajaPage() {
   const session = await getSession();
   if (!session) redirect('/login');
-  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
+  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CASHIER'].includes(session.role)) {
     redirect('/dashboard');
   }
 

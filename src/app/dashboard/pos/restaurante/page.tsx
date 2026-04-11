@@ -158,8 +158,6 @@ function getRoleLabel(role: string) {
     AREA_LEAD: "Cajera/Líder",
     CHEF: "Cocina",
     WAITER: "Mesonero",
-    CASHIER_RESTAURANT: "Cajero Rest.",
-    CASHIER_DELIVERY: "Cajero Delivery",
     KITCHEN_CHEF: "Chef Cocina",
   };
   return map[role] || role;

@@ -12,9 +12,7 @@ export const UserRole = {
   HR_MANAGER: 'HR_MANAGER',
   CHEF: 'CHEF',
   AREA_LEAD: 'AREA_LEAD',
-  CASHIER: 'CASHIER',                          // Cajera unificada (nuevo rol canónico)
-  CASHIER_RESTAURANT: 'CASHIER_RESTAURANT',    // @deprecated → usar CASHIER
-  CASHIER_DELIVERY: 'CASHIER_DELIVERY',        // @deprecated → usar CASHIER
+  CASHIER: 'CASHIER',                          // Cajera unificada (rol canónico)
   KITCHEN_CHEF: 'KITCHEN_CHEF',
   WAITER: 'WAITER',
 } as const;
@@ -35,8 +33,6 @@ export const ROLE_HIERARCHY: Record<UserRoleType, number> = {
   [UserRole.KITCHEN_CHEF]: 7,
   [UserRole.WAITER]: 8,
   [UserRole.CASHIER]: 8,
-  [UserRole.CASHIER_RESTAURANT]: 8,  // deprecated
-  [UserRole.CASHIER_DELIVERY]: 8,    // deprecated
 };
 
 /**
@@ -95,18 +91,6 @@ export const ROLE_INFO: Record<UserRoleType, {
     labelEs: 'Cajera',
     description: 'Punto de venta (restaurante o delivery según módulos)',
     color: '#059669', // Teal
-  },
-  [UserRole.CASHIER_RESTAURANT]: {
-    label: 'Cashier Restaurant',
-    labelEs: 'Cajera Restaurante (deprecated)',
-    description: 'Usar CASHIER con allowedModules',
-    color: '#059669', // Teal
-  },
-  [UserRole.CASHIER_DELIVERY]: {
-    label: 'Cashier Delivery',
-    labelEs: 'Cajera Delivery (deprecated)',
-    description: 'Usar CASHIER con allowedModules',
-    color: '#7C3AED', // Violet
   },
   [UserRole.WAITER]: {
     label: 'Waiter',
@@ -257,18 +241,6 @@ export const ROLE_PERMISSIONS: Record<UserRoleType, Partial<Record<SystemModuleT
     [SystemModule.INVENTORY]: ['view', 'edit'], // Solo de su área
     [SystemModule.RECIPES]: ['view'],
     [SystemModule.PRODUCTION]: ['view', 'create'], // Reportar producción
-  },
-
-  [UserRole.CASHIER_RESTAURANT]: {
-    // Solo acceso al POS de restaurante
-    [SystemModule.POS_RESTAURANT]: ['view', 'create'],
-    [SystemModule.SALES_HISTORY]: ['view'], // Solo sus ventas del día
-  },
-
-  [UserRole.CASHIER_DELIVERY]: {
-    // Solo acceso al POS de delivery
-    [SystemModule.POS_DELIVERY]: ['view', 'create'],
-    [SystemModule.SALES_HISTORY]: ['view'], // Solo sus ventas del día
   },
 
   [UserRole.CASHIER]: {

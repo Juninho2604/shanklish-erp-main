@@ -671,7 +671,7 @@ export async function validateCashierPinAction(pin: string): Promise<ActionResul
 
         const candidates = await prisma.user.findMany({
             where: {
-                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'] },
+                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER'] },
                 isActive: true,
                 pin: { not: null },
             },

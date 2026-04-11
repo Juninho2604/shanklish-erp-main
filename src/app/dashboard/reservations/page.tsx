@@ -15,7 +15,7 @@ const STATUS_CONFIG = {
 export default async function ReservationsPage() {
     const session = await getSession();
     if (!session) redirect('/login');
-    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT'].includes(session.role)) {
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'].includes(session.role)) {
         redirect('/dashboard');
     }
 

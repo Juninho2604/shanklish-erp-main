@@ -15,7 +15,7 @@ import { getNextCorrelativo } from '@/lib/invoice-counter';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const GAMES_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] as const;
-const CASHIER_ROLES = [...GAMES_ROLES, 'CASHIER', 'CASHIER_RESTAURANT'] as const;
+const CASHIER_ROLES = [...GAMES_ROLES, 'CASHIER'] as const;
 
 async function requireRole(roles: readonly string[]) {
     const session = await getSession();

@@ -22,8 +22,6 @@ export type UserRole =
     | 'CHEF'
     | 'AREA_LEAD'
     | 'CASHIER'
-    | 'CASHIER_RESTAURANT'   // @deprecated
-    | 'CASHIER_DELIVERY'     // @deprecated
     | 'KITCHEN_CHEF'
     | 'WAITER';
 

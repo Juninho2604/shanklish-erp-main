@@ -63,7 +63,7 @@ export async function getEstadisticasAction(): Promise<{ success: boolean; data?
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const isCashier = role === 'CASHIER' || role === 'CASHIER_RESTAURANT' || role === 'CASHIER_DELIVERY' || role === 'WAITER';
+    const isCashier = role === 'CASHIER' || role === 'WAITER';
     const isChef = role === 'CHEF' || role === 'KITCHEN_CHEF';
     const isAuditor = role === 'AUDITOR';
     const isAdmin = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'].includes(role);

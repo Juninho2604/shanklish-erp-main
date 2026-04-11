@@ -14,13 +14,6 @@ export default async function DashboardPage() {
         // Rol unificado: módulos visibles controlados por allowedModules
         redirect('/dashboard/pos/restaurante');
     }
-    if (session?.role === 'CASHIER_RESTAURANT') {
-        redirect('/dashboard/pos/restaurante');
-    }
-    if (session?.role === 'CASHIER_DELIVERY') {
-        redirect('/dashboard/pos/delivery');
-    }
-
     const showCosts = hasPermission(session?.role, PERMISSIONS.VIEW_COSTS);
 
     // Fetch real data

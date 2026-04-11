@@ -12,7 +12,7 @@ export default async function TasaCambioPage() {
     const session = await getSession();
     if (!session) redirect('/login');
 
-    const allowed = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'];
+    const allowed = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'];
     if (!allowed.includes(session.role)) redirect('/dashboard');
 
     const history = await getExchangeRateHistory(15);

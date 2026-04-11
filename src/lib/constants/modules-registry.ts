@@ -548,7 +548,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
  */
 export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   dashboard: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER', 'CHEF', 'AREA_LEAD'],
-  estadisticas: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CHEF', 'KITCHEN_CHEF', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'WAITER'],
+  estadisticas: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CHEF', 'KITCHEN_CHEF', 'CASHIER', 'WAITER'],
   inventory_daily: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD'],
   inventory: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD'],
   inventory_count: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD', 'AUDITOR'],
@@ -566,20 +566,20 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   asistente: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF'],
   menu: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   modifiers: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
-  pos_restaurant: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
+  pos_restaurant: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'],
   pos_waiter: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'WAITER'],
-  pos_delivery: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_DELIVERY'],
-  pedidosya: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_DELIVERY'],
+  pos_delivery: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'],
+  pedidosya: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'],
   sales_entry: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
-  sales_history: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CHEF', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
+  sales_history: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CHEF', 'CASHIER'],
   kitchen_display: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'KITCHEN_CHEF'],
-  barra_display: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'KITCHEN_CHEF', 'AREA_LEAD', 'CASHIER', 'CASHIER_RESTAURANT'],
-  pos_config: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
+  barra_display: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'KITCHEN_CHEF', 'AREA_LEAD', 'CASHIER'],
+  pos_config: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER'],
   // Juegos (Table Pong)
   games: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
-  reservations: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT'],
+  reservations: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'],
   wristbands: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
-  queue: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT'],
+  queue: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'],
   // Intercompany
   intercompany: ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
   // Admin
@@ -589,13 +589,13 @@ export const MODULE_ROLE_ACCESS: Record<string, string[]> = {
   roles_config: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   module_config: ['OWNER'], // Solo el OWNER puede activar/desactivar módulos
   almacenes: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
-  tasa_cambio: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'],
+  tasa_cambio: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'],
   anuncios: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
   metas: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'AUDITOR'],
   // Módulo Financiero
   finanzas:      ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
   gastos:        ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
-  caja:          ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AUDITOR'],
+  caja:          ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'AUDITOR'],
   cuentas_pagar: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
 };
 

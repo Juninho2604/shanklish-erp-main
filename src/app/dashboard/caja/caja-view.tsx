@@ -67,7 +67,7 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
   const [closeTarget, setCloseTarget] = useState<CashRegisterData | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const canManage = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(currentUserRole);
+  const canManage = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'].includes(currentUserRole);
 
   const [openForm, setOpenForm] = useState({ registerName: 'Caja Restaurante', shiftType: 'DAY', openingCashUsd: '', openingCashBs: '', notes: '' });
   const [closeForm, setCloseForm] = useState({ closingCashUsd: '', closingCashBs: '', notes: '' });

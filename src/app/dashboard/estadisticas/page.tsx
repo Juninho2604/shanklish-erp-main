@@ -126,7 +126,7 @@ export default async function EstadisticasPage() {
   const role = d.role;
   const isAdmin = ['OWNER', 'ADMIN_MANAGER'].includes(role);
   const isOps = ['OPS_MANAGER', 'AREA_LEAD'].includes(role);
-  const isCashier = ['CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'WAITER'].includes(role);
+  const isCashier = ['CASHIER', 'WAITER'].includes(role);
   const isChef = ['CHEF', 'KITCHEN_CHEF'].includes(role);
   const isAuditor = role === 'AUDITOR';
   const revenueTrend = pct(d.today.revenue, d.yesterday.revenue);

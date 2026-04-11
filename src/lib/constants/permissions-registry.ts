@@ -111,20 +111,6 @@ export const ROLE_BASE_PERMS: Record<string, PermKey[]> = {
     PERM.CLOSE_CASH_REGISTER,
   ],
 
-  // Aliases deprecated — mismos permisos que CASHIER durante transición
-  CASHIER_RESTAURANT: [
-    PERM.APPLY_DISCOUNT,
-    PERM.REPRINT_COMANDA,
-    PERM.OPEN_CASH_REGISTER,
-    PERM.CLOSE_CASH_REGISTER,
-  ],
-  CASHIER_DELIVERY: [
-    PERM.APPLY_DISCOUNT,
-    PERM.REPRINT_COMANDA,
-    PERM.OPEN_CASH_REGISTER,
-    PERM.CLOSE_CASH_REGISTER,
-  ],
-
   KITCHEN_CHEF: [],
   WAITER: [],
 };

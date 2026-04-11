@@ -37,7 +37,7 @@ export async function getCashRegistersAction(filters?: {
 }): Promise<{ success: boolean; data?: CashRegisterData[]; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
+  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CASHIER'].includes(session.role)) {
     return { success: false, error: 'Sin permisos' };
   }
 
@@ -102,7 +102,7 @@ export async function openCashRegisterAction(input: {
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
+  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'].includes(session.role)) {
     return { success: false, error: 'Sin permisos para abrir caja' };
   }
 
@@ -168,7 +168,7 @@ export async function closeCashRegisterAction(
 ): Promise<{ success: boolean; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
+  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'].includes(session.role)) {
     return { success: false, error: 'Sin permisos para cerrar caja' };
   }
 
@@ -250,7 +250,7 @@ export async function updateRegisterOperatorsAction(
 ): Promise<{ success: boolean; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'].includes(session.role)) {
+  if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'].includes(session.role)) {
     return { success: false, error: 'Sin permisos' };
   }
   const name = operatorName.trim();

@@ -809,7 +809,7 @@ export default function POSMeseroPage() {
                 className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none"
               >
                 <option value="">Mesonero responsable (opcional)</option>
-                {users.filter(u => ["WAITER", "CASHIER_RESTAURANT", "AREA_LEAD"].includes(u.role)).map(u => (
+                {users.filter(u => ["WAITER", "AREA_LEAD"].includes(u.role)).map(u => (
                   <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
                 ))}
               </select>

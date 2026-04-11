@@ -8,8 +8,6 @@ export function hasPermission(userRole: string | undefined, requiredRoleLevel: n
         'CHEF': 50,
         'AREA_LEAD': 40,
         'CASHIER': 20,
-        'CASHIER_RESTAURANT': 20,
-        'CASHIER_DELIVERY': 20,
         'KITCHEN_CHEF': 15,
         'WAITER': 15,
         'STAFF': 10,

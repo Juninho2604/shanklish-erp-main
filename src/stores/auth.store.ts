@@ -28,8 +28,6 @@ const ROLE_LEVELS: Record<UserRole, number> = {
     CHEF: 6,
     AREA_LEAD: 7,
     CASHIER: 8,
-    CASHIER_RESTAURANT: 8,  // deprecated
-    CASHIER_DELIVERY: 8,    // deprecated
     KITCHEN_CHEF: 9,
     WAITER: 9,
 };
