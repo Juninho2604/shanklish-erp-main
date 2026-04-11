@@ -178,11 +178,11 @@ export function NotificationBell() {
           onClick={() => setIsOpen(false)}
         >
           <div
-            className="bg-card w-full max-w-sm rounded-2xl flex flex-col max-h-[90vh] shadow-2xl border border-border overflow-hidden"
+            className="bg-card w-full max-w-sm rounded-2xl flex flex-col max-h-[90vh] shadow-2xl border border-border overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
         {/* Header */}
-        <div className="p-5 border-b border-border flex items-center justify-between bg-amber-500/5">
+        <div className="p-5 border-b border-border flex items-center justify-between bg-amber-500/15">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-2xl">
               🔔
@@ -217,7 +217,7 @@ export function NotificationBell() {
           <button
             onClick={() => setActiveTab('stock')}
             className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 ${
-              activeTab === 'stock' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'stock' ? 'text-amber-500 border-b-2 border-amber-500 bg-amber-500/10' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             📦 Stock
@@ -230,7 +230,7 @@ export function NotificationBell() {
           <button
             onClick={() => setActiveTab('system')}
             className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 ${
-              activeTab === 'system' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'system' ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-500/10' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             📣 Sistema
@@ -280,7 +280,7 @@ export function NotificationBell() {
                     return (
                       <div
                         key={alert.id}
-                        className={`p-3 rounded-xl border ${s.bg} ${s.border} flex items-start gap-3`}
+                        className={`p-4 rounded-2xl border ${s.bg} ${s.border} flex items-start gap-3`}
                       >
                         <span className="text-lg shrink-0 mt-0.5">{s.icon}</span>
                         <div className="flex-1 min-w-0">
@@ -337,7 +337,7 @@ export function NotificationBell() {
                 return (
                   <div
                     key={msg.id}
-                    className={`p-3 rounded-xl border ${s.bg} ${s.border}`}
+                    className={`p-4 rounded-2xl border ${s.bg} ${s.border}`}
                   >
                     <div className="flex items-start gap-2">
                       <span className="text-base shrink-0">{s.icon}</span>
@@ -427,7 +427,7 @@ export function NotificationBell() {
           </div>
         )}
 
-        <div className="p-4 border-t border-border bg-secondary/20">
+        <div className="p-4 border-t border-border bg-secondary/40">
           <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest text-center">
             CAPSULA ERP · Alertas en tiempo real · Actualiza cada 90 seg
           </p>

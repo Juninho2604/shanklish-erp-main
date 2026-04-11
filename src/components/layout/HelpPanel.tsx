@@ -277,11 +277,11 @@ export function HelpPanel() {
           onClick={() => setIsOpen(false)}
         >
           <div
-            className="bg-card w-full max-w-sm rounded-2xl flex flex-col max-h-[90vh] shadow-2xl border border-border overflow-hidden"
+            className="bg-card w-full max-w-sm rounded-2xl flex flex-col max-h-[90vh] shadow-2xl border border-border overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
         {/* Header */}
-        <div className="p-5 border-b border-border flex items-center justify-between bg-primary/5">
+        <div className="p-5 border-b border-border flex items-center justify-between bg-primary/10">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl">
               {guide.icon}
@@ -354,7 +354,7 @@ export function HelpPanel() {
                 </h3>
                 <div className="space-y-2">
                   {guide.tips.map((tip, i) => (
-                    <div key={i} className="flex gap-2 items-start p-3 bg-primary/5 rounded-xl border border-primary/10">
+                    <div key={i} className="flex gap-2 items-start p-4 bg-primary/5 rounded-2xl border border-primary/10">
                       <span className="text-primary text-xs shrink-0 mt-0.5">→</span>
                       <p className="text-xs text-foreground/70 font-medium leading-snug">{tip}</p>
                     </div>
@@ -365,7 +365,7 @@ export function HelpPanel() {
           ) : (
             /* Estándares de nomenclatura */
             <div>
-              <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 mb-4">
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-4">
                 <p className="text-xs font-bold text-amber-400">
                   ⚠️ Los estándares son críticos para que el inventario se descuente correctamente.
                   Un nombre inconsistente rompe la conexión receta → venta → inventario.
@@ -386,7 +386,7 @@ export function HelpPanel() {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-border bg-secondary/20">
+        <div className="p-4 border-t border-border bg-secondary/40">
           <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest text-center">
             CAPSULA ERP · Módulo: {guide.title}
           </p>
