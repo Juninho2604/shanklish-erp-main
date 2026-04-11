@@ -827,9 +827,15 @@ export default function POSSportBarPage() {
       const note = tipTableRef.trim()
         ? `Propina colectiva — Mesa/Ref: ${tipTableRef.trim()}`
         : 'Propina colectiva';
-      const result = await recordCollectiveTipAction({ tipAmount: amount, paymentMethod: tipMethod, note });
+      const isBsMethod = ['CASH_BS', 'PDV_SHANKLISH', 'PDV_SUPERFERRO', 'MOVIL_NG'].includes(tipMethod);
+      // Si el monto está en Bs, convertir a USD antes de guardar en BD
+      const tipAmountUSD = isBsMethod && exchangeRate ? Math.round(amount / exchangeRate * 100) / 100 : amount;
+      const result = await recordCollectiveTipAction({ tipAmount: tipAmountUSD, paymentMethod: tipMethod, note });
       if (result.success) {
-        toast.success(`Propina de $${amount.toFixed(2)} registrada`);
+        const displayStr = isBsMethod
+          ? `Bs ${amount.toFixed(2)} ($${tipAmountUSD.toFixed(2)}) registrada`
+          : `$${amount.toFixed(2)} registrada`;
+        toast.success(`Propina de ${displayStr}`);
         setShowTipModal(false);
         setTipAmount('');
         setTipMethod('CASH_USD');
@@ -846,12 +852,13 @@ export default function POSSportBarPage() {
     if (cart.length === 0) return;
     setIsProcessing(true);
     try {
+      const rc = (n: number) => Math.round(n * 100) / 100;
       const pickupDiscount = discountType === "DIVISAS_33"
-        ? (isPickupMixedMode && divisasUsdAmountPickup != null
+        ? rc(isPickupMixedMode && divisasUsdAmountPickup != null
             ? divisasUsdAmountPickup / 3            // partial: only divisas portion gets -33%
             : cartTotal / 3)                        // full: entire order in USD
-        : discountType === "CORTESIA_100" ? cartTotal
-        : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
+        : discountType === "CORTESIA_100" ? rc(cartTotal)
+        : discountType === "CORTESIA_PERCENT" ? rc(cartTotal * (cortesiaPercentNum / 100))
         : 0;
       const finalTotal = Math.max(0, cartTotal - pickupDiscount);
 

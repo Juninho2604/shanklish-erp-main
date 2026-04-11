@@ -297,7 +297,7 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' |
         } else if (data.discountType === 'CORTESIA_PERCENT' && data.discountPercent != null) {
             const pct = Math.min(100, Math.max(0, data.discountPercent)) / 100;
             subtotal = itemsSubtotal + DELIVERY_FEE_NORMAL;
-            discount = subtotal * pct;
+            discount = roundCents(subtotal * pct);
             total = subtotal - discount;
             discountReason = `Cortesía Autorizada (${data.discountPercent}%)`;
         } else {
@@ -326,7 +326,7 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'orderType' | 'items' |
         discountReason = 'Cortesía Autorizada (100%)';
     } else if (data.discountType === 'CORTESIA_PERCENT' && data.discountPercent != null) {
         const pct = Math.min(100, Math.max(0, data.discountPercent)) / 100;
-        discount = subtotal * pct;
+        discount = roundCents(subtotal * pct);
         discountReason = `Cortesía Autorizada (${data.discountPercent}%)`;
     }
 
