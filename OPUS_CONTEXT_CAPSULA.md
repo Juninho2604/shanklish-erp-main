@@ -776,7 +776,7 @@ Proteínas ──→ InventoryMovement (salida source, entrada subproductos) ─
 ### 6.1 POS Restaurante
 
 - **Ruta**: `/dashboard/pos/restaurante`
-- **Página**: `src/app/dashboard/pos/restaurante/page.tsx` — **2581 líneas**, Client Component (el archivo más grande del sistema)
+- **Página**: `src/app/dashboard/pos/restaurante/page.tsx` — **~2850 líneas**, Client Component (el archivo más grande del sistema)
 - **Actions**: `pos.actions.ts` (1470 líneas) → funciones usadas:
   - `getMenuForPOSAction()` — carga menú completo para POS
   - `validateManagerPinAction(pin)` — autoriza descuentos/cortesías
@@ -795,12 +795,18 @@ Proteínas ──→ InventoryMovement (salida source, entrada subproductos) ─
 - **Modelos leídos**: MenuItem, MenuCategory, MenuModifier, ExchangeRate, ServiceZone, TableOrStation, Waiter
 - **Componentes**: `MixedPaymentSelector`, `PrintTicket`, `PriceDisplay`, `CashierShiftModal`, `BillDenominationInput`, `CurrencyCalculator`
 - **Lógica clave**:
-  - Dos flujos: **Venta Directa** (delivery-style, cobro inmediato) y **Mesa/Tab** (abrir → agregar items → enviar cocina → cobrar → cerrar)
+  - Tres flujos: **Mesa/Tab** (abrir → agregar items → enviar cocina → cobrar → cerrar), **Pickup Tabs** (múltiples pedidos de mostrador simultáneos, carrito persistente), **Subcuentas** (división por persona)
+  - **Modal apertura de mesa**: campos Nombre (opcional, default `"Cliente"`), Número de personas, Mesonero asignado. El teléfono fue eliminado — el botón "Abrir cuenta" solo se bloquea durante `isProcessing`.
+  - **Pickup Tabs** (`PickupTabLocal`): cada pickup es un "tab virtual" con número auto-generado `PK-01`, `PK-02`… (editable), nombre y teléfono opcionales. Sidebar muestra lista de pickups abiertos. Al cambiar de contexto (pickup↔mesa), el carrito se guarda y restaura automáticamente. Al cobrar, el tab completado se elimina y se activa el siguiente si existe.
   - Service charge 10% toggle por venta (estado local `serviceFeeIncluded`)
   - Descuentos: DIVISAS_33, CORTESIA_100, CORTESIA_PERCENT (requiere PIN gerente)
   - Pago único (7 métodos) o mixto (MixedPaymentSelector)
   - PaymentSplit: dividir cuenta por persona en mesa
   - Descargo automático de inventario vía `inventory.service.registerSale()`
+- **Impresión** (`src/lib/print-command.ts` → `printReceipt`):
+  - `ReceiptData.tableLabel?: string` — nombre de mesa impreso bajo el correlativo (ej. `Mesa: Interior 3`)
+  - `ReceiptData.tipAmount?: number` — propina impresa como línea informativa tras el 10% servicio
+  - Descuento siempre visible: DIVISAS_33 imprime `Desc. divisas (33.33%): -$XX` (ya no se oculta con `hideDiscount`)
 - **Estado**: Funcional
 - **Valores hardcodeados** (detallados en Sección 11)
 
@@ -2115,8 +2121,86 @@ Estos archivos son cargados automáticamente en toda sesión de Claude Code:
 
 **Ubicación**: `C:\Users\Usuario\Desktop\SHANKLISH ERP 3.0\.claude\skills\`
 
+### 18.14 Mejoras flujo POS Restaurante — 4 cambios (2026-04-12)
+
+#### Branch: `claude/review-pos-workflow-hEEWh`
+
+---
+
+#### Cambio 1 — Modal apertura de mesa sin campos obligatorios (commit `6122a00`)
+
+**Archivo**: `src/app/dashboard/pos/restaurante/page.tsx`
+
+- Eliminado el campo **Teléfono del cliente** del modal "Abrir cuenta" — estado `openTabPhone` removido por completo junto con su validación y el parámetro `customerPhone` en `openTabAction`.
+- El campo **Nombre del cliente** pasa a ser opcional (label `(opcional)`, ya no `*`). Si está vacío, se usa `"Cliente"` como default.
+- El botón "✓ Abrir cuenta" solo se deshabilita durante `isProcessing`; ya no depende de que haya texto en ningún campo.
+- **Campos que quedan**: Nombre (opcional), Número de personas (spinner), Mesonero asignado (select).
+
+---
+
+#### Cambio 2 — Número de mesa en factura impresa (commit `4c36741`)
+
+**Archivos**: `src/lib/print-command.ts`, `src/app/dashboard/pos/restaurante/page.tsx`
+
+- `ReceiptData` (print-command.ts) recibe nuevo campo `tableLabel?: string`.
+- El HTML térmico imprime una línea `Mesa: [valor]` inmediatamente debajo del correlativo, solo si `tableLabel` está presente.
+- `printReceipt` se llama con `tableLabel: selectedTable?.name` en:
+  - Pago real (`handlePaymentPinConfirm`) — línea ~820
+  - Pre-cuenta (`handlePrintPrecuenta`) — línea ~900
+- El flujo de Pickup no pasa `tableLabel` (no tiene mesa física).
+
+---
+
+#### Cambio 3 — Pickup tipo mesa con tabs persistentes (commit `86d8d5b`)
+
+**Archivo**: `src/app/dashboard/pos/restaurante/page.tsx`
+
+**Interfaz añadida**:
+```typescript
+interface PickupTabLocal {
+  id: string;           // UUID (crypto.randomUUID)
+  pickupNumber: string; // "PK-01", "PK-02"... editable en modal
+  customerName: string; // opcional
+  customerPhone: string; // opcional
+  cart: CartItem[];     // carrito guardado al cambiar de contexto
+}
+```
+
+**Estado nuevo**: `pickupTabs: PickupTabLocal[]`, `activePickupTabId: string | null`, modal fields (`newPickupNumber`, `newPickupName`, `newPickupPhone`).
+
+**Derivado**: `activePickupTab = useMemo(() => pickupTabs.find(t => t.id === activePickupTabId))`.
+
+**Flujo**:
+1. Clic "🛍️ Venta Directa / Pickup" → abre modal con número auto-generado `PK-NN` (editable), nombre y teléfono opcionales.
+2. Confirmar → crea `PickupTabLocal` con cart vacío, lo activa, limpia carrito.
+3. Items se acumulan en `cart` (estado global) como antes.
+4. **Al cambiar de contexto** (pickup→mesa, mesa→pickup, pickup→otro pickup): `saveActivePickupCart(cart)` guarda `cart` en `pickupTabs[activeId].cart` antes de `resetTableState()`.
+5. Sidebar muestra lista de tabs abiertos (`PK-01 · Juan · $12.50`); clic activa el tab y restaura su carrito; `×` descarta el tab.
+6. Botón "COBRAR" idéntico al anterior (`handleCheckoutPickup`). Al éxito: elimina el tab completado de `pickupTabs`, activa el siguiente si existe, sale de pickup mode si no quedan tabs.
+
+**Funciones añadidas**: `openPickupModal()`, `handleCreatePickupTab()`, `handleSelectPickupTab(tabId)`, `handleDiscardPickupTab(tabId)`, `saveActivePickupCart(cart)`.
+
+**No requiere cambios en backend** — `createSalesOrderAction` no cambia; el tab de pickup es puramente frontend.
+
+---
+
+#### Cambio 4 — Factura: descuento divisas visible y línea de propina (commit `b5abd37`)
+
+**Archivos**: `src/lib/print-command.ts`, `src/app/dashboard/pos/restaurante/page.tsx`
+
+**4a — Descuento divisas siempre visible**:
+- Antes: `hideDiscount=true` (DIVISAS_33) suprimía completamente la línea de descuento → factura mostraba subtotal=$20, TOTAL=$13.33 sin explicación.
+- Ahora: siempre se imprime si `discountAmount > 0`. Label: `data.discountReason` si existe, o `'Desc. divisas (33.33%)'` si `hideDiscount=true`, o `'Descuento aplicado'` como fallback.
+- Código: `${discountAmount > 0 ? \`...(data.discountReason || (data.hideDiscount ? 'Desc. divisas (33.33%)' : 'Descuento aplicado'))...\` : ''}`
+
+**4b — Propina en recibo**:
+- `ReceiptData` recibe `tipAmount?: number`.
+- Si `tipAmount > 0`, se imprime línea informativa `Propina: $XX.XX` después del bloque TOTAL/TOTAL A PAGAR.
+- En el pago de mesa (`handlePaymentPinConfirm`): `tipVal` se calcula antes de `printReceipt` y se pasa como `tipAmount`; luego se llama `recordCollectiveTipAction` con el mismo valor (sin cambio funcional).
+- En checkout pickup (`handleCheckoutPickup`): `pickupTipVal = parseFloat(checkoutTip) || 0` se pasa como `tipAmount` en `pickupReceiptData`.
+
 ---
 
 *Actualizado el 2026-04-12 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *44 modelos Prisma · 47 módulos · 48 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37*
