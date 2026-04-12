@@ -754,7 +754,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps) {
     }
 
     return (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
             <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
