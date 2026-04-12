@@ -2008,7 +2008,7 @@ Existían dos funciones de validación de PIN en `pos.actions.ts`. `validateCash
 
 **Regla**: `CASHIER` y `AREA_LEAD` no autorizan operaciones sensibles. Solo pueden identificarse para la trazabilidad de su sesión de caja — y eso solo si usan el mismo PIN que uno de los roles permitidos (actualmente ambas funciones usan los mismos 3 roles).
 
-#### Cambios aplicados (commit `TBD`)
+#### Cambios aplicados (commit `80253d0`)
 
 1. **`pos.actions.ts`** — `validateCashierPinAction`: eliminados `'AREA_LEAD'` y `'CASHIER'` del filtro `role: { in: [...] }`. Ambas funciones usan ahora exactamente los mismos roles (`OWNER`, `ADMIN_MANAGER`, `OPS_MANAGER`). La diferencia es el efecto secundario: solo `validateCashierPinAction` llama a `updateSessionCashier`.
 
@@ -2023,6 +2023,84 @@ Existían dos funciones de validación de PIN en `pos.actions.ts`. `validateCash
 | `pos/mesero/page.tsx` | `validateManagerPinAction` | Autorización subcuentas |
 | `dashboard/sales/page.tsx` | `validateManagerPinAction` | **Anulaciones** (corregido) |
 | (solo si aplica) | `validateCashierPinAction` | Registro de sesión cajera |
+
+### 18.13 Export Excel Arqueo — Formato completo ExcelJS (2026-04-12)
+
+#### Commit `08e6969` — feat(arqueo): Excel de arqueo con formato completo, 24 columnas y estilo oscuro
+
+El botón **EXPORTAR EXCEL** en `/dashboard/ventas` genera un `.xlsx` desde el servidor via `/api/arqueo?date=` sin depender de plantilla externa.
+
+#### Arquitectura del flujo
+
+```
+sales/page.tsx
+  └─ handleExportArqueo()
+       └─ GET /api/arqueo?date=YYYY-MM-DD      (route.ts)
+            ├─ getSalesForArqueoAction(date)    (sales.actions.ts)
+            └─ buildArqueoWorkbookFromTemplate(sales, dateStr)  (arqueo-excel-utils.ts)
+                 └─ devuelve ExcelJS.Buffer → descarga .xlsx
+```
+
+#### Estructura del workbook
+
+**Sección 1 — Resumen (filas 1-14)**: Totales del día por método de pago, auto-calculados. Celdas en blanco para entradas manuales (Capital Inicio, Egresos, BCV).
+
+| Filas | Contenido |
+|-------|-----------|
+| 1 | Título con fecha |
+| 2 | Labels de sub-secciones (Cash $, Cash €, Cash Bs) |
+| 3-4 | Capital Dólares Inicio / Cash $ Ingreso (auto) / Egreso / Cerrado |
+| 5-6 | Capital Euro Inicio / Cash € Ingreso EN$ (auto) / Egreso / Cerrado |
+| 7-8 | Capital Bs Inicio / Cash Bs Ingreso EN$ (auto) / Egreso / Cerrado |
+| 9-10 | Vuelto PM / PM Shanklish EN$ (auto) |
+| 11-12 | PDV Shanklish EN$ (auto) / PDV Superferro EN$ (auto) / Zelle (auto) / Servicio 10% |
+| 13-14 | Total Ingreso $ (auto, verde grande) / PM Nour (auto) / PedidosYA (auto) / BCV manual |
+
+**Sección 2 — Detalle (fila 15+)**: 24 columnas, filas congeladas en fila 15.
+
+```
+A  Item · B Descripción · C Correlativo · D Total Ingreso $ · E Total Gasto $
+F  Cash $ In · G Cash $ Out · H Cash € In · I Cash € Out
+J  Cash Bs In · K Cash Bs Out · L Zelle
+M  Vuelto PM Bs · N Vuelto PM $ · O PM Bs Shanklish · P PM $ Shanklish
+Q  PM Bs Nour · R PM $ Nour · S PDV Shanklish Bs · T PDV Shanklish $
+U  PDV Superferro Bs · V PDV Superferro $ · W Servicio 10% · X Propina Extra
+```
+
+Filas agrupadas en bloques por tipo:
+- `▸ MESAS — RESTAURANTE` (orders con `orderType === 'RESTAURANT'`)
+- `▸ PICKUP / PARA LLEVAR`
+- `▸ DELIVERY`
+- `▸ PEDIDOS YA` (detectado por `orderType === 'PEDIDOSYA'` o `sourceChannel === 'POS_PEDIDOSYA'`)
+
+Cada bloque tiene su **fila de subtotal** en verde oscuro y un separador visual. Al final: **TOTAL GENERAL DEL DÍA** en verde intenso.
+
+#### Paleta de colores (todos ARGB)
+
+| Uso | Color |
+|-----|-------|
+| Fondo título / datos | `FF0D1117` (casi negro) |
+| Sección labels | `FF161B22` |
+| Encabezados columna | `FF1B3A5C` (azul oscuro) |
+| Encabezado de bloque | `FF1A2A3A` |
+| Subtotal de bloque | `FF0A3D2B` (verde oscuro) |
+| Total general | `FF052E16` (verde muy oscuro) |
+| Labels / valores clave | `FFFBBF24` (ámbar) |
+| Totales numéricos | `FF86EFAC` (verde claro) |
+| Celdas entrada manual | `FF21262D` (gris oscuro) |
+
+#### Cambios en ArqueoSaleRow (sales.actions.ts)
+
+- `orderType` expandido: `'RESTAURANT' | 'PICKUP' | 'DELIVERY' | 'PEDIDOSYA'`
+- `paymentBreakdown` añade `cashEur: number` y `cashBs: number`
+- Separación de pagos: `CASH`/`CASH_USD` → `cashUsd`, `CASH_EUR` → `cashEur`, `CASH_BS` → `cashBs`
+- PEDIDOSYA detectado por `orderType === 'PEDIDOSYA' || sourceChannel === 'POS_PEDIDOSYA'`
+
+#### Librerías usadas
+
+- **ExcelJS** `^4.4.0` — única librería activa para generación server-side
+- `xlsx` (`^0.18.5`) sigue en `package.json` pero solo se usa en el fallback cliente `export-arqueo-excel.ts` (no en el flujo principal)
+- El archivo `public/templates/arqueo-plantilla.xlsx` ya no se usa — `buildArqueoWorkbookFromTemplate` genera desde cero siempre
 
 ### 18.6 Skills Instalados en `.claude/skills/`
 
@@ -2041,4 +2119,4 @@ Estos archivos son cargados automáticamente en toda sesión de Claude Code:
 
 *Actualizado el 2026-04-12 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *44 modelos Prisma · 47 módulos · 48 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0*
