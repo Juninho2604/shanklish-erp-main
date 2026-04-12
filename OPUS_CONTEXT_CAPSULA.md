@@ -780,7 +780,7 @@ Proteínas ──→ InventoryMovement (salida source, entrada subproductos) ─
 - **Actions**: `pos.actions.ts` (1470 líneas) → funciones usadas:
   - `getMenuForPOSAction()` — carga menú completo para POS
   - `validateManagerPinAction(pin)` — autoriza descuentos/cortesías
-  - `validateCashierPinAction(pin)` — autoriza cambio de cajera
+  - `validateCashierPinAction(pin)` — trazabilidad de sesión de caja (solo `updateSessionCashier`)
   - `createSalesOrderAction(data)` — crea orden con descargo de inventario
   - `recordCollectiveTipAction(data)` — propina colectiva a mesoneros
   - `openTabAction(data)` — abre mesa/tab
@@ -870,7 +870,7 @@ Proteínas ──→ InventoryMovement (salida source, entrada subproductos) ─
   - `getDailyZReportAction(date?)` — Reporte Z completo del día
   - `voidSalesOrderAction(params)` — anulación con PIN y razón
   - `getEndOfDaySummaryAction(date?)` — resumen de cierre del día
-- **Actions adicionales**: `pos.actions.ts` → `validateCashierPinAction(pin)`
+- **Actions adicionales**: `pos.actions.ts` → `validateManagerPinAction(pin)` (anulaciones)
 - **Modelos**: SalesOrder, SalesOrderItem, SalesOrderPayment, PaymentSplit, OpenTab
 - **Lógica clave**:
   - **Reporte Z**: Agrupa ventas por método de pago, calcula totales Bs/USD, service charge (detectado por splitLabel `+10% serv`), descuentos, anulaciones
@@ -1993,6 +1993,37 @@ Para un PKP de $10: `totalFactura=0`, `totalCobrado=10`, `propina=10`.
 
 **Resultado**: `totalCobrado > totalFacturado` por el monto exacto de todas las propinas colectivas del período. Esto es **comportamiento por diseño** — las propinas no son ventas facturadas, pero sí ingreso recibido. La diferencia entre ambos totales = servicio 10% + propinas. El Z-report los trata de forma separada con `totalTips` explícito.
 
+### 18.12 Separación de responsabilidades — validateManagerPinAction vs validateCashierPinAction (2026-04-12)
+
+#### Contexto
+
+Existían dos funciones de validación de PIN en `pos.actions.ts`. `validateCashierPinAction` tenía `AREA_LEAD` y `CASHIER` en su filtro de roles, lo que permitía a cajeras y jefes de área "autorizar" operaciones que deben ser exclusivamente gerenciales. Además, `sales/page.tsx` (anulaciones) llamaba a `validateCashierPinAction` en lugar de `validateManagerPinAction`.
+
+#### Regla definitiva
+
+| Función | Roles que acceden | Propósito único |
+|---------|------------------|-----------------|
+| `validateManagerPinAction` | `OWNER`, `ADMIN_MANAGER`, `OPS_MANAGER` | Autorizar descuentos, cortesías, pagos, **anulaciones** |
+| `validateCashierPinAction` | `OWNER`, `ADMIN_MANAGER`, `OPS_MANAGER` | Trazabilidad de sesión de caja (`updateSessionCashier`) |
+
+**Regla**: `CASHIER` y `AREA_LEAD` no autorizan operaciones sensibles. Solo pueden identificarse para la trazabilidad de su sesión de caja — y eso solo si usan el mismo PIN que uno de los roles permitidos (actualmente ambas funciones usan los mismos 3 roles).
+
+#### Cambios aplicados (commit `TBD`)
+
+1. **`pos.actions.ts`** — `validateCashierPinAction`: eliminados `'AREA_LEAD'` y `'CASHIER'` del filtro `role: { in: [...] }`. Ambas funciones usan ahora exactamente los mismos roles (`OWNER`, `ADMIN_MANAGER`, `OPS_MANAGER`). La diferencia es el efecto secundario: solo `validateCashierPinAction` llama a `updateSessionCashier`.
+
+2. **`sales/page.tsx`** — `handleVoidPinConfirm` (anulaciones): cambiado de `validateCashierPinAction` a `validateManagerPinAction`. El import correspondiente también actualizado.
+
+#### Mapa completo de uso de PINs en la UI
+
+| Archivo | Función | Flujo |
+|---------|---------|-------|
+| `pos/restaurante/page.tsx` | `validateManagerPinAction` | Cortesía, pago checkout |
+| `pos/delivery/page.tsx` | `validateManagerPinAction` | Descuento / cortesía |
+| `pos/mesero/page.tsx` | `validateManagerPinAction` | Autorización subcuentas |
+| `dashboard/sales/page.tsx` | `validateManagerPinAction` | **Anulaciones** (corregido) |
+| (solo si aplica) | `validateCashierPinAction` | Registro de sesión cajera |
+
 ### 18.6 Skills Instalados en `.claude/skills/`
 
 Estos archivos son cargados automáticamente en toda sesión de Claude Code:
@@ -2008,6 +2039,6 @@ Estos archivos son cargados automáticamente en toda sesión de Claude Code:
 
 ---
 
-*Actualizado el 2026-04-11 — Shanklish ERP / Cápsula SaaS — Documento Completo*
+*Actualizado el 2026-04-12 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *44 modelos Prisma · 47 módulos · 48 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969*

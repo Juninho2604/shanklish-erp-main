@@ -659,8 +659,10 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 }
 
 // ============================================================================
-// VALIDACIÓN DE PIN DE CAJERA (incluye roles de cajera + gerencia)
-// Usado para autorizar anulaciones y operaciones sensibles de caja
+// VALIDACIÓN DE PIN DE CAJERA
+// Exclusivamente para trazabilidad de sesión de caja (updateSessionCashier).
+// NO autoriza anulaciones, cortesías ni descuentos — esos flujos usan
+// validateManagerPinAction (roles OWNER / ADMIN_MANAGER / OPS_MANAGER).
 // ============================================================================
 
 export async function validateCashierPinAction(pin: string): Promise<ActionResult> {
@@ -671,7 +673,7 @@ export async function validateCashierPinAction(pin: string): Promise<ActionResul
 
         const candidates = await prisma.user.findMany({
             where: {
-                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD', 'CASHIER'] },
+                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
                 isActive: true,
                 pin: { not: null },
             },

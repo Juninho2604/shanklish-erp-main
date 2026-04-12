@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSalesHistoryAction, getDailyZReportAction, getEndOfDaySummaryAction, voidSalesOrderAction, type ZReportData, type EndOfDaySummary } from '@/app/actions/sales.actions';
-import { validateCashierPinAction } from '@/app/actions/pos.actions';
+import { validateManagerPinAction } from '@/app/actions/pos.actions';
 import { printReceipt, printEndOfDaySummary } from '@/lib/print-command';
 import { exportZReportToExcel } from '@/lib/export-z-report';
 
@@ -143,7 +143,7 @@ export default function SalesHistoryPage() {
     const handleVoidPinConfirm = async () => {
         setVoidPinError('');
         setVoidLoading(true);
-        const res = await validateCashierPinAction(voidPin);
+        const res = await validateManagerPinAction(voidPin);
         if (res.success && res.data) {
             await executeVoid(res.data.managerId, res.data.managerName);
         } else {
