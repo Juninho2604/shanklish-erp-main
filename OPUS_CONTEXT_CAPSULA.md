@@ -1936,6 +1936,63 @@ PedidosYA: panel derecho `w-80 tablet-land:w-96 xl:w-96`.
 - Cocina no ve subcuentas — comanda normal
 - Pool sin asignar se cobra con el botón principal de la mesa (flow existente)
 
+### 18.11 Bugfixes POS — z-index, carrito compartido, pre-cuenta (2026-04-11)
+
+#### commit 24f7799 — fix(pos): 3 bugs en restaurante/delivery/pedidosya
+
+**Bug 1 — `z-60` → `z-[60]` en todos los modales POS**
+
+`z-60` no existe en la escala Tailwind (va hasta `z-50`; no había entry en `tailwind.config.ts`). Sin z-index efectivo, los modales renderizan en `z-index: auto` y quedan detrás del Sidebar (`z-50`) y bottom nav mobile (`z-50`). El síntoma: clicar "+" Propina abría el modal pero éste era invisible (detrás del Sidebar).
+
+Archivos corregidos:
+| Archivo | Ocurrencias |
+|---------|-------------|
+| `pos/restaurante/page.tsx` | 6 modales (propina, mesa, abrir tab, PIN pago, eliminar ítem, modificador) |
+| `pos/delivery/page.tsx` | 3 (WhatsApp parser, modificador, propina) |
+| `pos/pedidosya/page.tsx` | 1 (modificador) |
+
+commit `77fa94a` — también corregido en `dashboard/usuarios/users-view.tsx` (1 ocurrencia).
+
+**Bug 2 — Carrito compartido entre mesas (`resetTableState`)**
+
+`cart` era un `useState` global nunca limpiado al cambiar de mesa. `setCart([])` solo se llamaba tras `handleSendToTab` o `handleCheckoutPickup`. Resultado: ítems de Mesa A permanecían en carrito al abrir Mesa B y se enviaban a la cuenta equivocada.
+
+Solución: nueva función `resetTableState()` en `restaurante/page.tsx` que limpia:
+```typescript
+setCart([])
+setDiscountType("NONE")
+setAuthorizedManager(null)
+setMixedPaymentsTable([])
+setIsTableMixedMode(false)
+setCortesiaPercent("100")
+setAmountReceived("")
+setSubAccountMode(false)
+setCheckoutTip("")
+```
+Llamada en 3 puntos: selección de mesa, cambio de zona, cierre de modal de mesa (backdrop click).
+
+**Bug 3 — Pre-cuenta mostraba descuento falso**
+
+`handlePrintPrecuenta` usaba `base = activeTab.balanceDue` como subtotal de la pre-cuenta. `balanceDue` disminuye con pagos parciales, por lo que si la mesa había pagado $30 de $100, la pre-cuenta mostraba: ítems=$100, subtotal=$70 → diferencia de $30 aparecía como descuento.
+
+Fix: `base = activeTab.runningTotal` — campo que siempre refleja el total de todos los consumos sin importar pagos intermedios. `runningTotal` ya existía en el tipo `OpenTabSummary` (línea 102 del componente).
+
+Adicionalmente: `discountType` tampoco se reseteaba al cambiar mesa → pre-cuenta de Mesa B heredaba el descuento DIVISAS_33 configurado para Mesa A. Resuelto por `resetTableState()`.
+
+#### Diagnóstico: PKP (Propinas Colectivas) en totalFacturado vs totalCobrado
+
+`recordCollectiveTipAction` crea un `SalesOrder` con `total=0` y `amountPaid=tipAmount`. En `getSalesHistoryAction` (y en `sales/page.tsx` donde se calculan los totales del header):
+
+```typescript
+// sales/page.tsx línea 258-267
+acc.invoiced  += s.totalFactura ?? s.total ?? 0;  // PKP: += 0
+acc.collected += s.totalCobrado ?? s.total ?? 0;  // PKP: += tipAmount
+```
+
+Para un PKP de $10: `totalFactura=0`, `totalCobrado=10`, `propina=10`.
+
+**Resultado**: `totalCobrado > totalFacturado` por el monto exacto de todas las propinas colectivas del período. Esto es **comportamiento por diseño** — las propinas no son ventas facturadas, pero sí ingreso recibido. La diferencia entre ambos totales = servicio 10% + propinas. El Z-report los trata de forma separada con `totalTips` explícito.
+
 ### 18.6 Skills Instalados en `.claude/skills/`
 
 Estos archivos son cargados automáticamente en toda sesión de Claude Code:
@@ -1953,3 +2010,4 @@ Estos archivos son cargados automáticamente en toda sesión de Claude Code:
 
 *Actualizado el 2026-04-11 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *44 modelos Prisma · 47 módulos · 48 actions · 4 API routes · 3 services · 24 componentes*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a*
