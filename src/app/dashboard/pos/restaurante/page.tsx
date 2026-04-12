@@ -436,6 +436,8 @@ export default function POSSportBarPage() {
   const divisasUsdAmountTable = isTableMixedMode
     ? mixedPaymentsTable.filter(p => isDivisasMethod(p.method)).reduce((s, p) => s + p.amountUSD, 0)
     : 0;
+  /** Suma total ingresada en el MixedPaymentSelector de mesa */
+  const totalMixedTablePaid = mixedPaymentsTable.reduce((s, p) => s + p.amountUSD, 0);
 
   const cortesiaPercentNum = Math.min(100, Math.max(0, parseFloat(cortesiaPercent) || 0));
 
@@ -450,7 +452,11 @@ export default function POSSportBarPage() {
       ? activeTab.balanceDue * (1 - cortesiaPercentNum / 100)
       : activeTab.balanceDue
     : 0;
-  const paymentAmountToCharge = roundToWhole(serviceFeeIncluded ? paymentBaseAmount * 1.1 : paymentBaseAmount, paymentMethod);
+  // En modo mixto NO se redondea: el target del MixedPaymentSelector debe ser el monto exacto
+  // (PDV/Bs methods no se redondean; aplicar roundToWhole del single-method causaría underpay/overpay)
+  const paymentAmountToCharge = isTableMixedMode
+    ? (serviceFeeIncluded ? paymentBaseAmount * 1.1 : paymentBaseAmount)
+    : roundToWhole(serviceFeeIncluded ? paymentBaseAmount * 1.1 : paymentBaseAmount, paymentMethod);
 
   // ============================================================================
   // OPEN TAB
@@ -2195,10 +2201,12 @@ export default function POSSportBarPage() {
                       setPaymentPinError("");
                       setShowPaymentPinModal(true);
                     }}
-                    disabled={paidAmount <= 0 || isProcessing}
+                    disabled={isTableMixedMode ? (totalMixedTablePaid <= 0 || isProcessing) : (paidAmount <= 0 || isProcessing)}
                     className="capsula-btn capsula-btn-primary w-full py-5 text-base shadow-xl shadow-primary/10"
                   >
-                    🔐 REGISTRAR PAGO ${paidAmount > 0 ? paidAmount.toFixed(2) : "0.00"}
+                    🔐 REGISTRAR PAGO ${isTableMixedMode
+                      ? (totalMixedTablePaid > 0 ? totalMixedTablePaid.toFixed(2) : "0.00")
+                      : (paidAmount > 0 ? paidAmount.toFixed(2) : "0.00")}
                   </button>
 
                   {/* Paid splits */}
