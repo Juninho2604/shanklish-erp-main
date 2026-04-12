@@ -816,6 +816,8 @@ export default function POSSportBarPage() {
           modifiers: (i.modifiers || []).map((m: any) => m.name),
         }))
       );
+      // Calcular propina antes de imprimir para incluirla en el recibo
+      const tipVal = parseFloat(checkoutTip) || 0;
       if (getPOSConfig().printReceiptOnRestaurant) {
       printReceipt({
         orderNumber: activeTab.tabCode,
@@ -833,10 +835,11 @@ export default function POSSportBarPage() {
             : undefined,
         total: totalAntesServicio,
         serviceFee,
+        tipAmount: tipVal > 0 ? tipVal : undefined,
       });
       }
       // Registrar propina si la cajera la capturó durante el cobro
-      const tipVal = parseFloat(checkoutTip);
+      // (tipVal ya calculado arriba)
       if (tipVal > 0) {
         await recordCollectiveTipAction({
           tipAmount: tipVal,
@@ -1025,6 +1028,7 @@ export default function POSSportBarPage() {
           total: i.lineTotal,
           modifiers: i.modifiers.map((m) => m.name),
         }));
+        const pickupTipVal = parseFloat(checkoutTip) || 0;
         const pickupReceiptData = {
           orderNumber: result.data.orderNumber,
           orderType: "RESTAURANT" as const,
@@ -1038,6 +1042,7 @@ export default function POSSportBarPage() {
           hideDiscount: discountType === "DIVISAS_33",
           total: finalTotal,
           serviceFee: 0,
+          tipAmount: pickupTipVal > 0 ? pickupTipVal : undefined,
         };
         if (getPOSConfig().printReceiptOnRestaurant) {
           printReceipt(pickupReceiptData);

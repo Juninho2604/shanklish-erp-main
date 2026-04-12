@@ -63,6 +63,7 @@ export function printReceipt(data: ReceiptData) {
     const deliveryFeeAmount = data.deliveryFee ?? 0;
     const total = data.total;
     const serviceFee = data.serviceFee ?? 0;
+    const tipAmount = data.tipAmount ?? 0;
     const totalSuggested = total + serviceFee;
 
     // Deduplicar items: combinar entradas con mismo nombre + mismos modificadores
@@ -202,9 +203,9 @@ export function printReceipt(data: ReceiptData) {
             <span>$${deliveryFeeAmount.toFixed(2)}</span>
         </div>
         ` : ''}
-        ${discountAmount > 0 && !data.hideDiscount ? `
+        ${discountAmount > 0 ? `
         <div class="total-row">
-            <span>${data.discountReason || 'Descuento aplicado'}:</span>
+            <span>${data.discountReason || (data.hideDiscount ? 'Desc. divisas (33.33%)' : 'Descuento aplicado')}:</span>
             <span>-$${discountAmount.toFixed(2)}</span>
         </div>
         ` : ''}
@@ -223,6 +224,12 @@ export function printReceipt(data: ReceiptData) {
             <span>$${total.toFixed(2)}</span>
         </div>
         `}
+        ${tipAmount > 0 ? `
+        <div class="total-row" style="margin-top: 6px; font-size: 11px; color: #555;">
+            <span>Propina:</span>
+            <span>$${tipAmount.toFixed(2)}</span>
+        </div>
+        ` : ''}
     </div>
     
     <div class="footer">GRACIAS POR SU COMPRA</div>
