@@ -2028,3 +2028,30 @@ export async function getOpenTabWithSubAccountsAction(openTabId: string): Promis
         return { success: false, message: 'Error cargando la cuenta' };
     }
 }
+
+// ============================================================================
+// ACTION: CONTADOR DIARIO DE PICKUPS
+// ============================================================================
+
+/**
+ * Retorna el siguiente número de pickup del día (PK-01, PK-02…).
+ * Cuenta las órdenes de tipo PICKUP con sourceChannel POS_RESTAURANT
+ * creadas en el rango horario del día de Caracas (04:00–27:59 UTC).
+ */
+export async function getDailyPickupCountAction(): Promise<{ success: boolean; nextNumber: string }> {
+    try {
+        const { start, end } = getCaracasDayRange();
+        const count = await prisma.salesOrder.count({
+            where: {
+                orderType: 'PICKUP',
+                sourceChannel: 'POS_RESTAURANT',
+                createdAt: { gte: start, lte: end },
+            },
+        });
+        const nextNum = (count + 1).toString().padStart(2, '0');
+        return { success: true, nextNumber: `PK-${nextNum}` };
+    } catch (error) {
+        console.error('Error contando pickups del día:', error);
+        return { success: false, nextNumber: 'PK-01' };
+    }
+}

@@ -13,6 +13,7 @@ import {
   recordCollectiveTipAction,
   removeItemFromOpenTabAction,
   validateManagerPinAction,
+  getDailyPickupCountAction,
   type CartItem,
   type PaymentLine,
 } from "@/app/actions/pos.actions";
@@ -650,13 +651,15 @@ export default function POSSportBarPage() {
     );
   };
 
-  /** Abre el modal para crear un nuevo pickup tab */
-  const openPickupModal = () => {
-    const nextNum = (pickupTabs.length + 1).toString().padStart(2, "0");
-    setNewPickupNumber(`PK-${nextNum}`);
+  /** Abre el modal para crear un nuevo pickup tab.
+   *  Consulta el backend para obtener el número de pickup secuencial del día. */
+  const openPickupModal = async () => {
+    setNewPickupNumber("PK-…");   // placeholder mientras carga
     setNewPickupName("");
     setNewPickupPhone("");
     setShowPickupOpenModal(true);
+    const res = await getDailyPickupCountAction();
+    setNewPickupNumber(res.nextNumber);
   };
 
   /** Confirma creación de un nuevo pickup tab */
@@ -2394,15 +2397,14 @@ export default function POSSportBarPage() {
             <div className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-muted-foreground mb-1">
-                  Número de pickup <span className="text-muted-foreground font-normal">(auto-generado, editable)</span>
+                  Número de pickup del día
                 </label>
-                <input
-                  type="text"
-                  value={newPickupNumber}
-                  onChange={(e) => setNewPickupNumber(e.target.value)}
-                  placeholder="PK-01"
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-foreground text-sm focus:border-indigo-400 focus:outline-none font-black tracking-wide"
-                />
+                <div className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-foreground text-sm font-black tracking-wide flex items-center gap-2">
+                  <span className="flex-1">{newPickupNumber}</span>
+                  {newPickupNumber === "PK-…" && (
+                    <span className="text-xs text-muted-foreground animate-pulse">calculando…</span>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-muted-foreground mb-1">
