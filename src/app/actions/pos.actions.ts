@@ -1923,8 +1923,10 @@ export async function paySubAccountAction(data: {
                 },
             });
 
-            // Update OpenTab: deduct from balanceDue
-            const newBalance = Math.max(0, openTab.balanceDue - sub.total);
+            // Update OpenTab: deduct from balanceDue.
+            // balanceDue tracks food items only (no service charge) — see addItemsToOpenTabAction.
+            // sub.total includes serviceCharge, which would over-deduct; use sub.subtotal instead.
+            const newBalance = Math.max(0, openTab.balanceDue - sub.subtotal);
 
             // Tab closes when all subcuentas are PAID AND balance is 0
             const allSubsPaid = openTab.subAccounts.every(

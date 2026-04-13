@@ -6,7 +6,7 @@
  * la UI de asignación y el cobro individual por subcuenta.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
     assignItemToSubAccountAction,
@@ -419,17 +419,23 @@ export function SubAccountPanel({ openTabId, exchangeRate, onClose, onTabUpdated
     // New subcuenta form
     const [newLabel, setNewLabel] = useState('');
 
+    // ── Stable ref for onTabUpdated — prevents infinite loop from unstable parent fn ──
+    // onTabUpdated changes identity on every parent render; putting it in a ref means
+    // loadTab's useCallback deps only contains openTabId, breaking the re-render cycle.
+    const onTabUpdatedRef = useRef(onTabUpdated);
+    useEffect(() => { onTabUpdatedRef.current = onTabUpdated; }, [onTabUpdated]);
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     const loadTab = useCallback(async () => {
         const res = await getOpenTabWithSubAccountsAction(openTabId);
         if (res.success && res.data) {
             setTab(res.data as TabWithSubs);
-            onTabUpdated(res.data);
+            onTabUpdatedRef.current(res.data);
         } else {
             toast.error('Error cargando subcuentas');
         }
-    }, [openTabId, onTabUpdated]);
+    }, [openTabId]); // ← onTabUpdated intentionally omitted — accessed via ref
 
     useEffect(() => { setIsLoading(true); loadTab().finally(() => setIsLoading(false)); }, [loadTab]);
 
@@ -499,7 +505,14 @@ export function SubAccountPanel({ openTabId, exchangeRate, onClose, onTabUpdated
         });
         if (res.success) {
             toast.success(res.message);
-            await loadTab();
+            // Use the updated tab returned by the action — avoids an extra round-trip
+            // and prevents triggering the loadTab → onTabUpdated cycle an extra time.
+            if (res.data) {
+                setTab(res.data as TabWithSubs);
+                onTabUpdatedRef.current(res.data);
+            } else {
+                await loadTab(); // fallback if action didn't return data
+            }
         } else {
             toast.error(res.message);
         }
