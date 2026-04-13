@@ -2708,6 +2708,79 @@ const newBalance = Math.max(0, openTab.balanceDue - sub.subtotal);
 
 ---
 
+### 18.22 Rediseño layout POS Delivery — pantalla dividida (2026-04-13)
+
+#### commit `8162f2e`
+
+**Archivo:** `src/app/dashboard/pos/delivery/page.tsx`
+
+**Motivación:** En monitores de 1920×1080 (LG 24"), el layout anterior tenía los datos del cliente (nombre, teléfono, dirección) en la parte superior del **panel derecho**, mezclados con el carrito y el cobro. La cajera debía hacer scroll para ver todos los elementos. El menú de productos ocupaba el panel izquierdo sin contexto del cliente.
+
+---
+
+**Nuevo layout de dos paneles:**
+
+```
+┌─ PANEL IZQUIERDO (flex-1) ──────────────────┬─ PANEL DERECHO (420/480px) ─┐
+│ [Nombre ──────────── | Teléfono]             │ [🛒 Pedido  ×N ítems]       │
+│ [📍 Dirección exacta de entrega...]          │ [resumen cliente 1 línea]   │
+│ ─────────────────────────────────            │ ─────────────────────        │
+│ [🔍 Buscar producto...]                      │ item 1 ........... $12.00   │
+│ [Cat1] [Cat2] [Cat3] [Cat4]...               │ item 2 ............ $8.00   │
+│                                              │ item 3 ........... $35.00   │
+│ [prod][prod][prod][prod]                     │ ─────────────────────        │
+│ [prod][prod][prod][prod]                     │ Subtotal          $55.00    │
+│ [prod][prod][prod][prod]                     │ Delivery          +$4.50    │
+│                                              │ TOTAL             $59.50    │
+│                                              │ [Normal][Divisa][Cortesía]  │
+│                                              │ [Único ][  Mixto          ] │
+│                                              │ [Cash$][Zelle][PDV Shan.]   │
+│                                              │ [Monto recibido...  USD]    │
+│                                              │ [ CONFIRMAR ORDEN ]         │
+└──────────────────────────────────────────────┴─────────────────────────────┘
+```
+
+---
+
+**Cambios técnicos clave:**
+
+1. **Datos del cliente → panel izquierdo (barra superior compacta):**
+   ```tsx
+   <div className="px-4 py-3 bg-blue-950/40 border-b border-blue-500/20 shrink-0">
+     <div className="grid grid-cols-2 gap-2 mb-2">
+       <input ... placeholder="👤 Nombre del cliente" />
+       <input type="tel" ... placeholder="📞 Teléfono" />
+     </div>
+     <input ... placeholder="📍 Dirección exacta de entrega..." />
+   </div>
+   ```
+   - Botón "Limpiar ✕" aparece cuando hay datos ingresados
+   - `type="tel"` en teléfono para teclado numérico en mobile
+
+2. **Panel derecho → solo carrito + cobro:**
+   - Eliminados los 3 inputs de cliente del panel derecho
+   - Encabezado compacto con contador de ítems (`×N ítems`)
+   - Resumen readonly del cliente en 1 línea (`nombre · teléfono · dirección`) visible cuando hay datos — formato `bg-blue-950/30 border-b border-blue-500/20`
+   - Botón "Vaciar ✕" para limpiar el carrito directamente
+   - Items del carrito más compactos (`rounded-xl px-3 py-2.5` vs `rounded-2xl p-4`)
+   - `flex-1 min-h-0` en la lista del carrito para scroll correcto
+
+3. **Botones de cobro más compactos para 1080p:**
+   - Descuentos en 3 columnas en una sola fila (`grid-cols-3`) en vez de 2 filas
+   - `py-2.5 text-xs` en todos los botones de acción (vs `py-3.5 text-sm` anterior)
+   - Panel de pago usa `maxHeight: '62%'` con `overflow-y-auto` para no ocupar espacio excesivo
+
+4. **Panel derecho más estrecho:** `w-[420px] xl:w-[480px]` (vs `w-[460px] xl:w-[520px]`) — el espacio liberado va al panel del menú.
+
+---
+
+**Resultado operacional:**
+- La cajera ingresa nombre y teléfono **mientras** navega el menú — sin cambiar de panel
+- El carrito y el cobro siempre están visibles en el panel derecho
+- En monitores de 1080p todo cabe sin scroll en el panel de cobro
+
+---
+
 *Actualizado el 2026-04-13 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *44 modelos Prisma · 47 módulos · 49 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 9a23869 93ff5d2 18eb9c3 fddab34 41c1c39 ea2318c 097a71a da496ac d1f82a9 0b2cb4e 786668d a95232e*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 9a23869 93ff5d2 18eb9c3 fddab34 41c1c39 ea2318c 097a71a da496ac d1f82a9 0b2cb4e 786668d a95232e a74209c 8162f2e*
