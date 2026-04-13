@@ -2448,6 +2448,62 @@ Sin este fix, `profitChange` comparaba `operatingProfit` (que descuenta COGS) co
 
 ---
 
-*Actualizado el 2026-04-12 — Shanklish ERP / Cápsula SaaS — Documento Completo*
-*44 modelos Prisma · 47 módulos · 48 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 9a23869 93ff5d2 18eb9c3 merge:improve-finance-sections*
+### 18.18 Bugfixes flujo Pickup — 4 correcciones (2026-04-13)
+
+#### commits `41c1c39` `ea2318c` `097a71a` `da496ac`
+
+---
+
+**FIX 4 — Vuelto no se registra como propina (crítico)**
+
+`handleCreatePickupTab` y `handleSelectPickupTab` ahora llaman `setAmountReceived("")`, `setCheckoutTip("")`, `setIsPickupMixedMode(false)` y `setMixedPaymentsPickup([])` al activar cualquier tab. Antes, `checkoutTip` persistía entre tabs: si la cajera había ingresado "30" en el campo propina de PK-01 y luego cambiaba a PK-02, ese valor viajaba al nuevo cobro y hacía que `change = 0` y el Z-report contara `$30` como propina (`orderTip = change === 0 && amountPaid > total`).
+
+UX del bloque vuelto mejorado: "Vuelto a devolver" es ahora la línea prominente (tamaño grande, arriba). "Propina voluntaria" queda en sección secundaria con label aclarado "solo si el cliente la deja" y botón `×` para borrarla rápido.
+
+---
+
+**FIX 3 — Recibo pickup muestra código PK y nombre del cliente**
+
+`pickupReceiptData` incluye ahora:
+```typescript
+tableLabel: activeTabSnap?.pickupNumber,       // → "PK-02"
+tableLabelTitle: "Pickup",                     // → etiqueta en recibo
+customerName: activeTabSnap?.customerName || pickupCustomerName || "Cliente en Caja",
+```
+`activeTabSnap` es un snapshot del tab activo tomado **antes** del checkout (evita carreras si `pickupTabs` cambia). `lastPickupOrder` también guarda `pickupNumber` para la reimpresión.
+
+`print-command.ts` recibe nuevo campo `tableLabelTitle?: string` (default `'Mesa'`). El HTML imprime `${data.tableLabelTitle ?? 'Mesa'}:` → pickup muestra "Pickup: PK-02", mesas muestran "Mesa: Mesa 5".
+
+---
+
+**FIX 2 — COBRAR requiere monto en métodos de efectivo**
+
+Nueva constante `METHODS_REQUIRING_AMOUNT = Set{CASH_USD, CASH_EUR, ZELLE, CASH_BS}`. PDV_SHANKLISH, PDV_SUPERFERRO y MOVIL_NG quedan excluidos (el terminal procesa el monto exacto).
+
+Botón COBRAR:
+```tsx
+const needsAmount = !isPickupMixedMode && METHODS_REQUIRING_AMOUNT.has(paymentMethod) && paidAmount <= 0;
+disabled={cart.length === 0 || isProcessing || needsAmount}
+```
+Si `needsAmount`, aparece `"⚠️ Ingresa el monto recibido"` encima del botón.
+
+---
+
+**FIX 1 — Número de pickup secuencial del día y no editable**
+
+Nueva Server Action `getDailyPickupCountAction()` en `pos.actions.ts`:
+```typescript
+const count = await prisma.salesOrder.count({
+    where: { orderType: 'PICKUP', sourceChannel: 'POS_RESTAURANT',
+             createdAt: { gte: start, lte: end } },  // rango día Caracas
+});
+return { success: true, nextNumber: `PK-${(count + 1).toString().padStart(2, '0')}` };
+```
+
+`openPickupModal()` es ahora `async`: muestra `"PK-…"` mientras espera la respuesta del servidor, luego actualiza. El campo en el modal cambió de `<input>` editable a `<div>` estático — la cajera ya no puede modificar el número.
+
+---
+
+*Actualizado el 2026-04-13 — Shanklish ERP / Cápsula SaaS — Documento Completo*
+*44 modelos Prisma · 47 módulos · 49 actions · 4 API routes · 3 services · 24 componentes*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 9a23869 93ff5d2 18eb9c3 fddab34 41c1c39 ea2318c 097a71a da496ac*
