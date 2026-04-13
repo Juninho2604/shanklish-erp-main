@@ -2069,6 +2069,10 @@ export async function getDailyPickupCountAction(
             select: { notes: true },
         });
 
+        // DEBUG: Log incoming tab numbers from memory
+        console.log('[PK] openTabNumbers recibidos:', openTabNumbers);
+        console.log('[PK] Órdenes en BD encontradas:', orders.map(o => o.notes));
+
         // Extraer números PK de los notes (patrón "PK-NN")
         const usedNums = new Set<number>();
         for (const o of orders) {
@@ -2082,10 +2086,14 @@ export async function getDailyPickupCountAction(
             if (m) usedNums.add(parseInt(m[1], 10));
         }
 
+        // DEBUG: Log combined set before gap search
+        console.log('[PK] usedNums (BD + memoria):', Array.from(usedNums).sort((a, b) => a - b));
+
         // Encontrar el menor entero positivo no usado (primer hueco)
         let next = 1;
         while (usedNums.has(next)) next++;
 
+        console.log('[PK] nextNumber calculado:', `PK-${next.toString().padStart(2, '0')}`);
         return { success: true, nextNumber: `PK-${next.toString().padStart(2, '0')}` };
     } catch (error) {
         console.error('Error buscando siguiente número PK del día:', error);
