@@ -2270,6 +2270,69 @@ paidAmount: netAmount,  // tanto en TabSubAccount como en PaymentSplit
 
 ---
 
+### 18.24 Fecha caja + Z-report + auditoría OPUS vs código (2026-04-15)
+
+#### Branch: `claude/review-pos-workflow-hEEWh` — commits `08b7ac7` + `2beda42`
+
+---
+
+#### Fix 1 — Control de Caja: fecha seleccionable (`08b7ac7`)
+
+**Problema**: `openCashRegisterAction` usaba siempre `hoy` como `shiftDate`; no había forma de registrar una caja de un día anterior.
+
+**Fix**:
+- `openCashRegisterAction` acepta `shiftDateStr?: string` (formato `YYYY-MM-DD`). Si se omite, usa hoy en zona Caracas (comportamiento anterior).
+- Modal "Abrir Caja" en `caja-view.tsx` añade campo `<input type="date">` pre-rellenado con hoy. Permite registrar cajas de días pasados.
+
+---
+
+#### Fix 2 — Z-report / Cierre del día: tabs abiertos inflaban totales (`08b7ac7`)
+
+**Problema**: `getZReportData` y `getEndOfDaySummaryAction` filtraban `status: notIn CANCELLED` pero incluían mesas OPEN/PARTIALLY_PAID. Para esas mesas sin splits pagados el código asumía `totalCobrado = totalFactura`, contando como cobrado lo que aún estaba pendiente.
+
+**Fix**: Filtro cambiado a `paymentStatus: 'PAID'` en el `findMany` de ambas funciones. Este valor:
+- Incluye todas las órdenes efectivamente cobradas (delivery, pickup, mesas cerradas, propinas colectivas).
+- Excluye anuladas (`paymentStatus: 'REFUNDED'`) y tabs sin cerrar (`PARTIAL`/`PENDING`) automáticamente.
+
+---
+
+#### Fix 3 — Z-report: null-safety en campo `change` (`08b7ac7`)
+
+`o.change === 0` fallaba para registros legacy con `change = null` en BD.
+Cambiado a `(o.change ?? 0) === 0` en ambas funciones Z-report/cierre del día.
+
+---
+
+#### Bugs encontrados en auditoría OPUS vs código real (`2beda42`)
+
+Al comparar el OPUS con el código de la rama se detectaron 3 fixes documentados en la rama `master` que **no estaban aplicados** en esta rama de feature:
+
+| # | Archivo | Bug | Fix aplicado |
+|---|---------|-----|-------------|
+| 1 | `pos.actions.ts` | `paySubAccountAction` deducía `sub.total` (incluye serviceCharge) de `balanceDue`, sobre-deduciendo el saldo | Cambiado a `sub.subtotal` |
+| 2 | `print-command.ts` | Factura térmica pasaba de "Subtotal" a "TOTAL" sin mostrar el subtotal neto tras el descuento | Añadida línea `Subtotal con desc.: $XX.XX` cuando `discountAmount > 0` |
+| 3 | `delivery/page.tsx` | `CurrencyCalculator` recibía `deliveryFee` aunque `finalTotal` ya lo incluye → suma doble en la calculadora Bs | Eliminado prop `deliveryFee` en ambas instancias (header modal + panel inline) |
+
+**Nota**: Estos fixes existían en la rama `master` (commits `a95232e`, `786668d`, `bd19d04`) pero no habían sido portados a esta rama de feature. Ya aplicados en `2beda42`.
+
+---
+
+#### Estado OPUS vs código — verificación completa
+
+| Sección | Claim | Estado |
+|---------|-------|--------|
+| 18.12 — `validateCashierPinAction` sin CASHIER/AREA_LEAD | `role: { in: ['OWNER','ADMIN_MANAGER','OPS_MANAGER'] }` | ✓ Confirmado |
+| 18.14 C1 — `customerPhone` eliminado del modal de mesa | Call a `openTabAction` sin `customerPhone` | ✓ Confirmado |
+| 18.14 C2 — `tableLabel` en factura térmica | `ReceiptData.tableLabel?: string` + línea Mesa: | ✓ Confirmado |
+| 18.14 C4 — `tipAmount` en factura térmica | `ReceiptData.tipAmount?: number` + línea Propina: | ✓ Confirmado |
+| 18.23 A — `refreshLayoutSilently` en restaurante/page | Función presente, `onTabUpdated={refreshLayoutSilently}` | ✓ Confirmado |
+| 18.23 B — `paidAmount: netAmount` en subcuentas | Tanto en `TabSubAccount` como en `PaymentSplit` | ✓ Confirmado |
+| 18.23 B — `balanceDue - sub.subtotal` | **Faltaba → aplicado en 2beda42** | ✓ Corregido |
+| 18.x — "Subtotal con desc." en factura | **Faltaba → aplicado en 2beda42** | ✓ Corregido |
+| 18.x — `deliveryFee` duplicado en CurrencyCalculator | **Faltaba → aplicado en 2beda42** | ✓ Corregido |
+
+---
+
 *Actualizado el 2026-04-15 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *44 modelos Prisma · 47 módulos · 48 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 bb2c42e*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 bb2c42e 2d8a2c2 08b7ac7 2beda42*
