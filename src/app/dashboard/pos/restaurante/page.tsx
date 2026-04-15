@@ -340,6 +340,15 @@ export default function POSSportBarPage() {
     }
   };
 
+  // Lightweight layout refresh used by SubAccountPanel — does NOT set isLoading,
+  // which would unmount the panel and trigger an infinite re-mount loop.
+  const refreshLayoutSilently = async () => {
+    const layoutResult = await getRestaurantLayoutAction();
+    if (layoutResult.success && layoutResult.data) {
+      setLayout(layoutResult.data as SportBarLayout);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -1897,7 +1906,7 @@ export default function POSSportBarPage() {
                   openTabId={activeTab.id}
                   exchangeRate={exchangeRate}
                   onClose={() => setSubAccountMode(false)}
-                  onTabUpdated={() => loadData()}
+                  onTabUpdated={refreshLayoutSilently}
                 />
               ) : (
               <div className="flex-1 overflow-y-auto p-3 space-y-3">

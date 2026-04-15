@@ -1277,7 +1277,10 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                     paymentMethod: data.paymentMethod,
                     status: 'PAID',
                     total: appliedAmount,
-                    paidAmount: data.amount,
+                    // Store net amount (what stays in the register). Using appliedAmount
+                    // instead of data.amount prevents vuelto from being classified as propina
+                    // in Z-report (tabTip = totalCobrado - totalFactura).
+                    paidAmount: appliedAmount,
                     paidAt: new Date(),
                     notes: data.notes
                 }
@@ -1894,13 +1897,19 @@ export async function paySubAccountAction(data: {
         const baseLabel = data.splitLabel || sub.label;
         const splitLabel = data.serviceFeeIncluded ? `${baseLabel} | +10% serv` : baseLabel;
 
+        // Net amount = what stays in the register (bill amount, excluding vuelto).
+        // Capping at the subcuenta bill prevents vuelto from being classified as
+        // propina in Z-report (tabTip = totalCobrado − totalFactura).
+        const expectedAmount = sub.subtotal + (data.serviceFeeIncluded ? sub.serviceCharge : 0);
+        const netAmount = Math.min(data.amount, expectedAmount);
+
         const updatedTab = await prisma.$transaction(async (tx) => {
             // Mark subcuenta as PAID
             await tx.tabSubAccount.update({
                 where: { id: data.subAccountId },
                 data: {
                     status: 'PAID',
-                    paidAmount: data.amount,
+                    paidAmount: netAmount,
                     paymentMethod: data.paymentMethod,
                     paidAt: new Date(),
                 },
@@ -1918,7 +1927,7 @@ export async function paySubAccountAction(data: {
                     subtotal: sub.subtotal,
                     serviceChargeAmount: data.serviceFeeIncluded ? sub.serviceCharge : 0,
                     total: sub.total,
-                    paidAmount: data.amount,
+                    paidAmount: netAmount,
                     paidAt: new Date(),
                 },
             });
