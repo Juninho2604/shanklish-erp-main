@@ -2201,6 +2201,75 @@ interface PickupTabLocal {
 
 ---
 
-*Actualizado el 2026-04-12 — Shanklish ERP / Cápsula SaaS — Documento Completo*
+### 18.23 Bugfixes críticos — subcuentas loop + propina/vuelto (2026-04-15)
+
+#### Branch: `claude/review-pos-workflow-hEEWh` — commit `bb2c42e`
+
+---
+
+#### Bug A — Subcuentas: bucle infinito de carga
+
+**Síntoma**: Al hacer clic en el botón de subcuentas, la pantalla entraba en un bucle de carga infinita; la única salida era "Atrás" en el navegador.
+
+**Causa raíz**:
+- `onTabUpdated={() => loadData()}` en `restaurante/page.tsx` (línea ~1968) llamaba `loadData()`.
+- `loadData()` ejecuta `setIsLoading(true)`.
+- El `if (isLoading)` early-return en línea 1179 desmontaba `SubAccountPanel`.
+- Al re-montar, `useEffect` disparaba `loadTab()` → `onTabUpdatedRef.current()` → `loadData()` → desmonte de nuevo → **bucle**.
+
+**Fix** (`src/app/dashboard/pos/restaurante/page.tsx`):
+```typescript
+// NUEVO: refresco ligero — NO setea isLoading
+const refreshLayoutSilently = async () => {
+  const layoutResult = await getRestaurantLayoutAction();
+  if (layoutResult.success && layoutResult.data) {
+    setLayout(layoutResult.data as SportBarLayout);
+  }
+};
+
+// Antes: onTabUpdated={() => loadData()}
+// Ahora:
+onTabUpdated={refreshLayoutSilently}
+```
+
+`refreshLayoutSilently` actualiza `layout` (el grid de mesas) sin tocar `isLoading`, rompiendo el ciclo de desmonte/remonte.
+
+---
+
+#### Bug B — Z-report: vuelto sumado como propina en mesas/subcuentas
+
+**Síntoma**: El Z-report mostraba propinas que en realidad eran vuelto (cambio) que el cajero devolvió al cliente.
+
+**Causa raíz**:
+- `registerOpenTabPaymentAction` y `paySubAccountAction` guardaban `paidAmount: data.amount` — el monto BRUTO recibido del cliente (incluyendo el vuelto que se devuelve).
+- El Z-report calcula: `tabTip = Σ paidAmount − totalFactura`. Si `paidAmount = $25` para una cuenta de `$22`, `tabTip = $3` → contado como propina aunque sean $3 de vuelto.
+
+**Fix** (`src/app/actions/pos.actions.ts`):
+
+En `registerOpenTabPaymentAction`:
+```typescript
+// Antes: paidAmount: data.amount (monto bruto)
+// Ahora: paidAmount: appliedAmount (neto = lo que queda en caja)
+paidAmount: appliedAmount,  // Math.min(data.amount, effectiveBalance)
+```
+
+En `paySubAccountAction`:
+```typescript
+// Neto = subtotal + (servicio si aplica) — excluye vuelto
+const expectedAmount = sub.subtotal + (data.serviceFeeIncluded ? sub.serviceCharge : 0);
+const netAmount = Math.min(data.amount, expectedAmount);
+// ...
+paidAmount: netAmount,  // tanto en TabSubAccount como en PaymentSplit
+```
+
+**Efecto**: `totalCobrado = Σ paidAmount = totalFactura` cuando no hay propina real → `tabTip = 0`. El badge "PAGADA $XX.XX" en subcuentas muestra el monto neto de la factura.
+
+**Fórmula invariante** (`sales.actions.ts`):
+- Para mesas (tabs): `tabTip = Math.max(0, totalCobrado - totalFactura)` → ahora solo sube si el cliente explícitamente dejó propina extra.
+- Para delivery/pickup no-tab: `orderTip = (o.change === 0 && amountPaid > o.total)` — sin cambios (el campo `change` para estos órdenes sigue siendo el mecanismo correcto).
+
+---
+
+*Actualizado el 2026-04-15 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *44 modelos Prisma · 47 módulos · 48 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37*
+*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 bb2c42e*
