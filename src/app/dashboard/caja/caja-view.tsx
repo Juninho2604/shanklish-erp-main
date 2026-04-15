@@ -70,7 +70,8 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
 
   const canManage = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER'].includes(currentUserRole);
 
-  const [openForm, setOpenForm] = useState({ registerName: 'Caja Restaurante', shiftType: 'DAY', openingCashUsd: '', openingCashBs: '', notes: '' });
+  const todayLocal = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' }); // "YYYY-MM-DD"
+  const [openForm, setOpenForm] = useState({ registerName: 'Caja Restaurante', shiftType: 'DAY', openingCashUsd: '', openingCashBs: '', notes: '', shiftDateStr: todayLocal });
   const [closeForm, setCloseForm] = useState({ closingCashUsd: '', closingCashBs: '', notes: '' });
   const [openDenom, setOpenDenom] = useState<{ json: string; total: number } | null>(null);
   const [closeDenom, setCloseDenom] = useState<{ json: string; total: number } | null>(null);
@@ -145,13 +146,14 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
         openingCashBs: parseFloat(openForm.openingCashBs) || 0,
         notes: openForm.notes,
         openingDenominationsJson: showOpenDenom && openDenom?.json ? openDenom.json : undefined,
+        shiftDateStr: openForm.shiftDateStr || undefined,
       });
       if (result.success) {
         toast.success('Caja abierta');
         setShowOpenForm(false);
         setShowOpenDenom(false);
         setOpenDenom(null);
-        setOpenForm({ registerName: 'Caja Restaurante', shiftType: 'DAY', openingCashUsd: '', openingCashBs: '', notes: '' });
+        setOpenForm({ registerName: 'Caja Restaurante', shiftType: 'DAY', openingCashUsd: '', openingCashBs: '', notes: '', shiftDateStr: todayLocal });
         loadPeriod(selectedMonth, selectedYear);
       } else {
         toast.error(result.error ?? 'Error al abrir caja');
@@ -360,6 +362,12 @@ export function CajaView({ initialRegisters, currentUserRole, currentMonth, curr
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre de Caja *</label>
               <input value={openForm.registerName} onChange={e => setOpenForm(f => ({ ...f, registerName: e.target.value }))}
                 className="input-field w-full" placeholder="Ej: Caja Restaurante" required />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha del Turno</label>
+              <input type="date" value={openForm.shiftDateStr}
+                onChange={e => setOpenForm(f => ({ ...f, shiftDateStr: e.target.value }))}
+                className="input-field w-full" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Turno</label>

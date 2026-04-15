@@ -99,6 +99,8 @@ export async function openCashRegisterAction(input: {
   openingCashBs?: number;
   notes?: string;
   openingDenominationsJson?: string;
+  /** Fecha del turno en formato "YYYY-MM-DD". Si no se provee, usa hoy en zona Caracas. */
+  shiftDateStr?: string;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'No autorizado' };
@@ -109,9 +111,11 @@ export async function openCashRegisterAction(input: {
   if (!input.registerName.trim()) return { success: false, error: 'El nombre de caja es requerido' };
   if (input.openingCashUsd < 0) return { success: false, error: 'El fondo inicial no puede ser negativo' };
 
-  // Obtener fecha del día en zona Caracas
+  // Fecha del turno: usa la provista o deriva de hoy en zona Caracas
   const now = new Date();
-  const shiftDate = new Date(now.toLocaleDateString('en-CA', { timeZone: 'America/Caracas' }) + 'T00:00:00.000Z');
+  const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
+  const dateStr = input.shiftDateStr ?? todayStr;
+  const shiftDate = new Date(dateStr + 'T00:00:00.000Z');
 
   try {
     // Nombre de la cajera que abre (primer operador por defecto)

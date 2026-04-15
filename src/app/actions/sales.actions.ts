@@ -362,7 +362,8 @@ export async function getDailyZReportAction(date?: string): Promise<{ success: b
         const orders = await prisma.salesOrder.findMany({
             where: {
                 createdAt: { gte: startOfDay, lte: endOfDay },
-                status:    { notIn: ['CANCELLED'] },
+                // 'PAID' naturally excludes CANCELLED ('REFUNDED') and open/partial tabs
+                paymentStatus: 'PAID',
             },
             include: {
                 orderPayments: { select: { method: true, amountUSD: true } },
@@ -465,7 +466,7 @@ export async function getDailyZReportAction(date?: string): Promise<{ success: b
             const amountPaid = o.amountPaid || o.total;
             // netReceived = lo que quedó en caja (excluye vuelto devuelto)
             const netReceived = amountPaid - (o.change || 0);
-            const orderTip = (o.change === 0 && amountPaid > o.total)
+            const orderTip = ((o.change ?? 0) === 0 && amountPaid > o.total)
                 ? Math.max(0, amountPaid - o.total) : 0;
             totalTips += orderTip;
             if (orderTip > 0) tipCount++;
@@ -676,7 +677,7 @@ export async function getEndOfDaySummaryAction(date?: string): Promise<{ success
         const { start: startOfDay, end: endOfDay } = getCaracasDayRange(today);
 
         const orders = await prisma.salesOrder.findMany({
-            where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay }, paymentStatus: 'PAID' },
             include: {
                 orderPayments: { select: { method: true, amountUSD: true } },
                 openTab: {
