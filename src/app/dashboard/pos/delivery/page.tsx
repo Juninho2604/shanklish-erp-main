@@ -403,7 +403,7 @@ export default function POSDeliveryPage() {
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="glass-panel p-2 rounded-2xl border-primary/5">
-                        <CurrencyCalculator totalUsd={finalTotal} deliveryFee={discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL} hasServiceFee={false} onRateUpdated={setExchangeRate} />
+                        <CurrencyCalculator totalUsd={finalTotal} hasServiceFee={false} onRateUpdated={setExchangeRate} />
                     </div>
                     <button
                         onClick={() => setShowWhatsAppParser(!showWhatsAppParser)}
@@ -557,7 +557,6 @@ export default function POSDeliveryPage() {
                             <div className="pt-1">
                                 <CurrencyCalculator
                                     totalUsd={finalTotal}
-                                    deliveryFee={discountType === 'DIVISAS_33' && isPagoDivisas ? DELIVERY_FEE_DIVISAS : DELIVERY_FEE_NORMAL}
                                     hasServiceFee={false}
                                     onRateUpdated={setExchangeRate}
                                     inline

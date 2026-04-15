@@ -208,6 +208,10 @@ export function printReceipt(data: ReceiptData) {
             <span>${data.discountReason || (data.hideDiscount ? 'Desc. divisas (33.33%)' : 'Descuento aplicado')}:</span>
             <span>-$${discountAmount.toFixed(2)}</span>
         </div>
+        <div class="total-row">
+            <span>Subtotal con desc.:</span>
+            <span>$${(data.subtotal - discountAmount).toFixed(2)}</span>
+        </div>
         ` : ''}
         ${serviceFee > 0 ? `
         <div class="total-row">
