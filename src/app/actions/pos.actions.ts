@@ -76,12 +76,14 @@ export interface OpenTabInput {
     guestCount?: number;
     assignedWaiterId?: string;
     waiterLabel?: string;
+    waiterProfileId?: string; // Mesonero identificado por PIN (Waiter.id)
     notes?: string;
 }
 
 export interface AddItemsToOpenTabInput {
     openTabId: string;
     items: CartItem[];
+    waiterProfileId?: string; // Mesonero identificado por PIN (Waiter.id)
     notes?: string;
 }
 
@@ -1013,6 +1015,7 @@ export async function openTabAction(data: OpenTabInput): Promise<ActionResult> {
                     notes: data.notes,
                     openedById: session.id,
                     waiterLabel: data.waiterLabel || null, // Guardar label del mesonero (ej: "Mesonero 1")
+                    waiterProfileId: data.waiterProfileId || null,
                 },
                 include: {
                     openedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
@@ -1135,6 +1138,7 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
                     serviceZoneId: openTab.serviceZoneId,
                     tableOrStationId: openTab.tableOrStationId,
                     openTabId: openTab.id,
+                    waiterProfileId: data.waiterProfileId || openTab.waiterProfileId || null,
                     notes: data.notes,
                     createdById: session.activeCashierId ?? session.id,
                     items: {
@@ -1406,12 +1410,14 @@ export async function removeItemFromOpenTabAction({
     itemId,
     cashierPin,
     justification,
+    waiterProfileId,
 }: {
     openTabId: string;
     orderId: string;
     itemId: string;
     cashierPin: string;
     justification: string;
+    waiterProfileId?: string;
 }): Promise<ActionResult> {
     try {
         const session = await getSession();
@@ -1463,6 +1469,16 @@ export async function removeItemFromOpenTabAction({
         const removedAmount = item.lineTotal;
         const authorizerName = `${authorizer.firstName} ${authorizer.lastName}`;
 
+        // Mesonero solicitante (si se pasó waiterProfileId desde el POS Mesero)
+        let requesterLabel = '';
+        if (waiterProfileId) {
+            const waiter = await prisma.waiter.findUnique({
+                where: { id: waiterProfileId },
+                select: { firstName: true, lastName: true },
+            });
+            if (waiter) requesterLabel = ` | Solicitó: ${waiter.firstName} ${waiter.lastName}`;
+        }
+
         await prisma.$transaction(async (tx) => {
             // Eliminar item (modifiers se borran en cascada)
             await tx.salesOrderItem.delete({ where: { id: itemId } });
@@ -1479,7 +1495,7 @@ export async function removeItemFromOpenTabAction({
             const tab = await tx.openTab.findUniqueOrThrow({ where: { id: openTabId } });
             const newRunning = Math.max(0, tab.runningTotal - removedAmount);
             const newBalance = Math.max(0, tab.balanceDue - removedAmount);
-            const noteEntry = `[ELIMINADO: ${item.itemName} x${item.quantity} $${removedAmount.toFixed(2)} | Justif: ${justification.trim()} | Auth: ${authorizerName}]`;
+            const noteEntry = `[ELIMINADO: ${item.itemName} x${item.quantity} $${removedAmount.toFixed(2)} | Justif: ${justification.trim()} | Auth: ${authorizerName}${requesterLabel}]`;
             await tx.openTab.update({
                 where: { id: openTabId },
                 data: {

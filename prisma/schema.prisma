@@ -864,6 +864,10 @@ model SalesOrder {
   openTabId       String?
   openTab         OpenTab? @relation(fields: [openTabId], references: [id])
 
+  // Mesonero (del Waiter model, identificado por PIN en POS Mesero)
+  waiterProfileId String?
+  waiterProfile   Waiter?  @relation(fields: [waiterProfileId], references: [id])
+
   // Snapshot financiero
   exchangeRateId    String?
   exchangeRate      ExchangeRate? @relation(fields: [exchangeRateId], references: [id])
@@ -1507,6 +1511,9 @@ model Waiter {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  openTabs    OpenTab[]
+  salesOrders SalesOrder[]
+
   @@index([branchId, isActive])
 }
 
@@ -1584,6 +1591,8 @@ model OpenTab {
   openedBy        User     @relation("OpenTabOpener", fields: [openedById], references: [id])
   assignedWaiterId String?
   assignedWaiter  User?    @relation("OpenTabAssignee", fields: [assignedWaiterId], references: [id])
+  waiterProfileId String?
+  waiterProfile   Waiter?  @relation(fields: [waiterProfileId], references: [id])
   closedById      String?
   closedBy        User?    @relation("OpenTabCloser", fields: [closedById], references: [id])
 

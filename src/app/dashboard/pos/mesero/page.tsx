@@ -5,10 +5,8 @@ import {
   addItemsToOpenTabAction,
   getMenuForPOSAction,
   getRestaurantLayoutAction,
-  getUsersForTabAction,
   openTabAction,
   removeItemFromOpenTabAction,
-  validateManagerPinAction,
   type CartItem,
 } from "@/app/actions/pos.actions";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
@@ -133,7 +131,6 @@ export default function POSMeseroPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [layout, setLayout] = useState<SportBarLayout | null>(null);
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
-  const [users, setUsers] = useState<UserSummary[]>([]);
   const [productSearch, setProductSearch] = useState("");
 
   // ── Zone / Table selection ─────────────────────────────────────────────────
@@ -145,7 +142,6 @@ export default function POSMeseroPage() {
   const [openTabName, setOpenTabName] = useState("");
   const [openTabPhone, setOpenTabPhone] = useState("");
   const [openTabGuests, setOpenTabGuests] = useState(2);
-  const [openTabWaiter, setOpenTabWaiter] = useState("");
 
   // ── Cart ──────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -214,10 +210,9 @@ export default function POSMeseroPage() {
     setIsLoading(true);
     setLayoutError("");
     try {
-      const [menuResult, layoutResult, usersResult, rate] = await Promise.all([
+      const [menuResult, layoutResult, rate] = await Promise.all([
         getMenuForPOSAction(),
         getRestaurantLayoutAction(),
-        getUsersForTabAction(),
         getExchangeRateValue(),
       ]);
       if (menuResult.success && menuResult.data) {
@@ -230,9 +225,6 @@ export default function POSMeseroPage() {
         setSelectedZoneId((prev) => prev || nextLayout.serviceZones[0]?.id || "");
       } else if (!layoutResult.success) {
         setLayoutError(layoutResult.message || "Error cargando mesas");
-      }
-      if (usersResult.success && usersResult.data) {
-        setUsers(usersResult.data);
       }
       setExchangeRate(rate);
     } finally {
@@ -278,6 +270,7 @@ export default function POSMeseroPage() {
 
   const handleOpenTab = async () => {
     if (!selectedTable) return;
+    if (!activeWaiter) { toast.error("Identifícate con tu PIN antes de abrir una cuenta"); return; }
     if (!openTabName.trim()) { toast.error("El nombre del cliente es obligatorio"); return; }
     if (!openTabPhone.trim()) { toast.error("El teléfono del cliente es obligatorio"); return; }
     setIsProcessing(true);
@@ -287,11 +280,12 @@ export default function POSMeseroPage() {
         customerLabel: openTabName.trim(),
         customerPhone: openTabPhone.trim(),
         guestCount: openTabGuests,
-        waiterLabel: openTabWaiter ? `Mesonero ${openTabWaiter}` : undefined,
+        waiterLabel: `${activeWaiter.firstName} ${activeWaiter.lastName}`,
+        waiterProfileId: activeWaiter.id,
       });
       if (!result.success) { toast.error(result.message); return; }
       setShowOpenTabModal(false);
-      setOpenTabName(""); setOpenTabPhone(""); setOpenTabGuests(2); setOpenTabWaiter("");
+      setOpenTabName(""); setOpenTabPhone(""); setOpenTabGuests(2);
       await loadData();
     } finally {
       setIsProcessing(false);
@@ -371,9 +365,14 @@ export default function POSMeseroPage() {
 
   const handleSendToTab = async () => {
     if (!activeTab || cart.length === 0) return;
+    if (!activeWaiter) { toast.error("Identifícate con tu PIN antes de enviar a cocina"); return; }
     setIsProcessing(true);
     try {
-      const result = await addItemsToOpenTabAction({ openTabId: activeTab.id, items: cart });
+      const result = await addItemsToOpenTabAction({
+        openTabId: activeTab.id,
+        items: cart,
+        waiterProfileId: activeWaiter.id,
+      });
       if (!result.success) { toast.error(result.message); return; }
       if (result.data?.kitchenStatus === "SENT" && getPOSConfig().printComandaOnRestaurant) {
         printKitchenCommand({
@@ -415,6 +414,7 @@ export default function POSMeseroPage() {
         itemId: removeTarget.itemId,
         cashierPin: removePin,
         justification: removeJustification,
+        waiterProfileId: activeWaiter?.id,
       });
       if (!result.success) { setRemoveError(result.message); return; }
       setShowRemoveModal(false);
@@ -875,16 +875,17 @@ export default function POSMeseroPage() {
                   <button onClick={() => setOpenTabGuests(openTabGuests + 1)} className="h-9 w-9 rounded-lg bg-primary text-white font-black transition hover:opacity-90">+</button>
                 </div>
               </div>
-              <select
-                value={openTabWaiter}
-                onChange={(e) => setOpenTabWaiter(e.target.value)}
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none"
-              >
-                <option value="">Mesonero responsable (opcional)</option>
-                {users.filter(u => ["WAITER", "AREA_LEAD"].includes(u.role)).map(u => (
-                  <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-                ))}
-              </select>
+              {activeWaiter && (
+                <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs">
+                  <span className="h-7 w-7 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-black">
+                    {activeWaiter.firstName.charAt(0)}{activeWaiter.lastName.charAt(0)}
+                  </span>
+                  <div>
+                    <div className="font-black text-emerald-300">{activeWaiter.firstName} {activeWaiter.lastName}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Mesonero de la mesa</div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex gap-3">
               <button onClick={() => setShowOpenTabModal(false)} className="capsula-btn capsula-btn-secondary flex-1 py-3">
