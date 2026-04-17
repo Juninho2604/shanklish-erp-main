@@ -538,7 +538,7 @@ export default function POSMeseroPage() {
             Salir
           </button>
           <button
-            onClick={loadData}
+            onClick={() => loadData()}
             className="h-9 w-9 rounded-xl bg-secondary border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all"
             title="Actualizar"
           >
@@ -576,7 +576,7 @@ export default function POSMeseroPage() {
               ))}
             </div>
             {layoutError && (
-              <button onClick={loadData} className="text-xs text-red-400 hover:text-red-300 py-1 text-center w-full">
+              <button onClick={() => loadData()} className="text-xs text-red-400 hover:text-red-300 py-1 text-center w-full">
                 ⚠️ Error · Reintentar
               </button>
             )}
