@@ -1530,6 +1530,10 @@ model TableTransfer {
   fromWaiter           Waiter   @relation("TransferFrom",     fields: [fromWaiterId],   references: [id])
   toWaiterId           String
   toWaiter             Waiter   @relation("TransferTo",       fields: [toWaiterId],     references: [id])
+  fromTableId          String?
+  fromTable            TableOrStation? @relation("TransferFromTable", fields: [fromTableId], references: [id])
+  toTableId            String?
+  toTable              TableOrStation? @relation("TransferToTable",   fields: [toTableId],   references: [id])
   authorizedByWaiterId String?
   authorizedByWaiter   Waiter?  @relation("TransferAuthorizedByWaiter", fields: [authorizedByWaiterId], references: [id])
   authorizedByUserId   String?
@@ -1541,6 +1545,8 @@ model TableTransfer {
   @@index([openTabId])
   @@index([fromWaiterId])
   @@index([toWaiterId])
+  @@index([fromTableId])
+  @@index([toTableId])
   @@index([authorizedByUserId])
 }
 
@@ -1579,8 +1585,10 @@ model TableOrStation {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  openTabs      OpenTab[]
-  salesOrders   SalesOrder[]
+  openTabs            OpenTab[]
+  salesOrders         SalesOrder[]
+  transfersFrom       TableTransfer[] @relation("TransferFromTable")
+  transfersTo         TableTransfer[] @relation("TransferToTable")
 
   @@unique([branchId, code])
   @@index([serviceZoneId, stationType])
