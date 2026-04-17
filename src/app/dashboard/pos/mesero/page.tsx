@@ -7,12 +7,13 @@ import {
   getMenuForPOSAction,
   getRestaurantLayoutAction,
   openTabAction,
-  removeItemFromOpenTabAction,
+  modifyTabItemAction,
   type CartItem,
+  type ModifyTabItemModification,
 } from "@/app/actions/pos.actions";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
 import { moveTabBetweenTablesAction } from "@/app/actions/waiter.actions";
-import { printKitchenCommand } from "@/lib/print-command";
+import { printKitchenCommand, printVoidKitchenCommand, type VoidKitchenCommandData } from "@/lib/print-command";
 import { getPOSConfig } from "@/lib/pos-settings";
 import toast from "react-hot-toast";
 import { PriceDisplay } from "@/components/pos/PriceDisplay";
@@ -159,13 +160,20 @@ export default function POSMeseroPage() {
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemNotes, setItemNotes] = useState("");
 
-  // ── Remove item (con PIN de supervisor) ───────────────────────────────────
+  // ── Modificar ítem enviado (void / ajuste cantidad / reemplazo) ──────────
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{
     orderId: string;
     itemId: string;
     itemName: string;
+    quantity: number;
+    lineTotal: number;
+    modifiers: string[];
   } | null>(null);
+  const [removeModType, setRemoveModType] = useState<"VOID" | "ADJUST_QTY" | "REPLACE">("VOID");
+  const [removeNewQty, setRemoveNewQty] = useState(1);
+  const [removeReplaceItemId, setRemoveReplaceItemId] = useState("");
+  const [removeReplaceSearch, setRemoveReplaceSearch] = useState("");
   const [removePin, setRemovePin] = useState("");
   const [removeJustification, setRemoveJustification] = useState("");
   const [removeError, setRemoveError] = useState("");
@@ -437,27 +445,56 @@ export default function POSMeseroPage() {
   // ============================================================================
 
   const openRemoveModal = (orderId: string, item: OrderItemSummary) => {
-    setRemoveTarget({ orderId, itemId: item.id, itemName: item.itemName });
-    setRemovePin(""); setRemoveJustification(""); setRemoveError("");
+    setRemoveTarget({
+      orderId,
+      itemId: item.id,
+      itemName: item.itemName,
+      quantity: item.quantity,
+      lineTotal: item.lineTotal,
+      modifiers: (item.modifiers ?? []).map((m) => m.name),
+    });
+    setRemoveModType("VOID");
+    setRemoveNewQty(Math.max(1, item.quantity - 1));
+    setRemoveReplaceItemId("");
+    setRemoveReplaceSearch("");
+    setRemovePin("");
+    setRemoveJustification("");
+    setRemoveError("");
     setShowRemoveModal(true);
   };
 
   const handleRemoveItem = async () => {
     if (!removeTarget || !activeTab) return;
-    if (!removeJustification.trim()) { setRemoveError("La justificación es obligatoria"); return; }
+    if (!removeJustification.trim()) { setRemoveError("El motivo es obligatorio"); return; }
+    if (!removePin.trim()) { setRemoveError("Ingresa el PIN de capitán o gerente"); return; }
+    if (removeModType === "ADJUST_QTY" && (removeNewQty < 1 || removeNewQty >= removeTarget.quantity)) {
+      setRemoveError(`La cantidad debe ser entre 1 y ${removeTarget.quantity - 1}`); return;
+    }
+    if (removeModType === "REPLACE" && !removeReplaceItemId) {
+      setRemoveError("Selecciona el producto de reemplazo"); return;
+    }
+
+    const modification: ModifyTabItemModification =
+      removeModType === "VOID"       ? { type: "VOID" } :
+      removeModType === "ADJUST_QTY" ? { type: "ADJUST_QTY", newQuantity: removeNewQty } :
+                                       { type: "REPLACE", newMenuItemId: removeReplaceItemId };
+
     setIsProcessing(true); setRemoveError("");
     try {
-      const result = await removeItemFromOpenTabAction({
+      const result = await modifyTabItemAction({
         openTabId: activeTab.id,
         orderId: removeTarget.orderId,
         itemId: removeTarget.itemId,
-        cashierPin: removePin,
-        justification: removeJustification,
-        waiterProfileId: activeWaiter?.id,
+        captainPin: removePin,
+        reason: removeJustification,
+        modification,
       });
       if (!result.success) { setRemoveError(result.message); return; }
       setShowRemoveModal(false);
-      await loadData();
+      if (result.data?.kitchenPrintData) {
+        printVoidKitchenCommand(result.data.kitchenPrintData as VoidKitchenCommandData);
+      }
+      await loadData(false);
     } finally {
       setIsProcessing(false);
     }
@@ -1352,46 +1389,158 @@ export default function POSMeseroPage() {
       })()}
 
       {/* ══ MODAL: ANULAR ÍTEM (requiere PIN supervisor) ══════════════════ */}
-      {showRemoveModal && removeTarget && (
-        <div className="fixed inset-0 z-50 bg-background/90 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-card glass-panel w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl border border-red-900/30">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 bg-red-500/10 rounded-2xl flex items-center justify-center text-2xl">🔒</div>
+      {showRemoveModal && removeTarget && (() => {
+        const replaceItems = allMenuItems.filter((m) =>
+          m.id !== removeTarget.itemId &&
+          (!removeReplaceSearch.trim() || m.name.toLowerCase().includes(removeReplaceSearch.toLowerCase()))
+        ).slice(0, 30);
+        return (
+          <div className="fixed inset-0 z-50 bg-background/90 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-card glass-panel w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl border border-red-900/30 max-h-[92vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 bg-red-500/10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">✏️</div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-black text-sm text-red-400">Modificar ítem enviado</h3>
+                  <p className="text-xs text-muted-foreground truncate">
+                    <span className="font-bold text-foreground">{removeTarget.quantity}×</span> {removeTarget.itemName}
+                    <span className="ml-2 text-muted-foreground">${removeTarget.lineTotal.toFixed(2)}</span>
+                  </p>
+                </div>
+                <button onClick={() => setShowRemoveModal(false)} className="h-8 w-8 rounded-full hover:bg-red-500/10 text-muted-foreground hover:text-red-400 text-xl flex items-center justify-center flex-shrink-0">×</button>
+              </div>
+
+              {/* Opciones de modificación */}
+              <div className="grid grid-cols-3 gap-2">
+                {(["VOID", "ADJUST_QTY", "REPLACE"] as const).map((t) => {
+                  const labels = { VOID: "❌ Cancelar", ADJUST_QTY: "✏️ Ajustar", REPLACE: "🔄 Cambiar" };
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setRemoveModType(t)}
+                      className={`py-2.5 rounded-xl text-xs font-black border transition ${
+                        removeModType === t
+                          ? "bg-red-600 border-red-500 text-white"
+                          : "bg-secondary border-border hover:border-red-500/40 hover:text-red-400"
+                      }`}
+                    >
+                      {labels[t]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Ajustar cantidad */}
+              {removeModType === "ADJUST_QTY" && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">
+                    Nueva cantidad (actual: {removeTarget.quantity})
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setRemoveNewQty((q) => Math.max(1, q - 1))}
+                      className="h-10 w-10 rounded-xl bg-secondary border border-border text-lg font-black hover:border-red-500/40"
+                    >−</button>
+                    <span className="flex-1 text-center text-2xl font-black">{removeNewQty}</span>
+                    <button
+                      onClick={() => setRemoveNewQty((q) => Math.min(removeTarget.quantity - 1, q + 1))}
+                      className="h-10 w-10 rounded-xl bg-secondary border border-border text-lg font-black hover:border-sky-500/40"
+                    >+</button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1 text-center">
+                    Se anularán {removeTarget.quantity - removeNewQty} unidad(es) y se reimprimirá la comanda
+                  </p>
+                </div>
+              )}
+
+              {/* Cambiar por otro ítem */}
+              {removeModType === "REPLACE" && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block">
+                    Producto de reemplazo
+                  </label>
+                  <input
+                    value={removeReplaceSearch}
+                    onChange={(e) => setRemoveReplaceSearch(e.target.value)}
+                    placeholder="Buscar producto..."
+                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-bold focus:border-sky-500 focus:outline-none"
+                  />
+                  <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                    {replaceItems.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => setRemoveReplaceItemId(m.id)}
+                        className={`w-full flex justify-between items-center px-3 py-2 rounded-lg text-xs font-bold transition border ${
+                          removeReplaceItemId === m.id
+                            ? "bg-sky-600 border-sky-500 text-white"
+                            : "bg-secondary border-border hover:border-sky-500/40"
+                        }`}
+                      >
+                        <span className="truncate">{m.name}</span>
+                        <span className="ml-2 shrink-0 opacity-70">${m.price?.toFixed(2)}</span>
+                      </button>
+                    ))}
+                    {replaceItems.length === 0 && (
+                      <p className="text-xs text-muted-foreground px-2 py-1">Sin resultados</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Motivo */}
               <div>
-                <h3 className="font-black text-base text-red-400">Anular ítem</h3>
-                <p className="text-xs text-muted-foreground">{removeTarget.itemName}</p>
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">
+                  Motivo (obligatorio)
+                </label>
+                <textarea
+                  value={removeJustification}
+                  onChange={(e) => setRemoveJustification(e.target.value)}
+                  placeholder="Ej: error del cliente, cambio de pedido..."
+                  className="w-full bg-secondary border border-border rounded-xl p-3 text-sm font-bold focus:border-red-500 focus:outline-none resize-none h-14"
+                />
+              </div>
+
+              {/* PIN */}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">
+                  PIN de capitán o gerente
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="••••"
+                  value={removePin}
+                  onChange={(e) => setRemovePin(e.target.value)}
+                  className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-red-500 focus:outline-none"
+                />
+              </div>
+
+              {removeError && (
+                <p className="text-red-400 text-xs font-bold bg-red-950/30 border border-red-900/30 rounded-xl px-3 py-2">
+                  {removeError}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button onClick={() => setShowRemoveModal(false)} className="capsula-btn capsula-btn-secondary flex-1 py-3">
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleRemoveItem}
+                  disabled={isProcessing || !removeJustification.trim() || !removePin.trim()}
+                  className="flex-[2] py-3 bg-red-600 hover:bg-red-500 rounded-xl font-black text-sm transition disabled:opacity-40"
+                >
+                  {isProcessing ? "Procesando..." : (
+                    removeModType === "VOID"       ? "❌ Confirmar anulación" :
+                    removeModType === "ADJUST_QTY" ? "✏️ Ajustar cantidad" :
+                                                     "🔄 Confirmar cambio"
+                  )}
+                </button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground bg-red-950/30 border border-red-900/30 rounded-xl p-3">
-              Para anular un ítem ya enviado se requiere <b className="text-red-400">PIN de supervisor</b> y una justificación. Esto queda registrado en el log de auditoría.
-            </p>
-            <textarea
-              value={removeJustification}
-              onChange={(e) => setRemoveJustification(e.target.value)}
-              placeholder="Justificación obligatoria (ej: error del cliente, cambio de pedido...)"
-              className="w-full bg-secondary border border-border rounded-xl p-3 text-sm font-bold focus:border-red-500 focus:outline-none resize-none h-20"
-            />
-            <input
-              type="password"
-              placeholder="PIN de supervisor (opcional si tienes permiso)"
-              value={removePin}
-              onChange={(e) => setRemovePin(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-red-500 focus:outline-none"
-            />
-            {removeError && <p className="text-red-400 text-xs font-bold">{removeError}</p>}
-            <div className="flex gap-3">
-              <button onClick={() => setShowRemoveModal(false)} className="capsula-btn capsula-btn-secondary flex-1 py-3">Cancelar</button>
-              <button
-                onClick={handleRemoveItem}
-                disabled={isProcessing || !removeJustification.trim()}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-black text-sm transition disabled:opacity-40"
-              >
-                {isProcessing ? "Anulando..." : "Confirmar anulación"}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
