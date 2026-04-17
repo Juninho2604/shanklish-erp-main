@@ -11,7 +11,7 @@ import {
   type CartItem,
 } from "@/app/actions/pos.actions";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
-import { getActiveWaitersAction, transferTableAction } from "@/app/actions/waiter.actions";
+import { moveTabBetweenTablesAction } from "@/app/actions/waiter.actions";
 import { printKitchenCommand } from "@/lib/print-command";
 import { getPOSConfig } from "@/lib/pos-settings";
 import toast from "react-hot-toast";
@@ -182,10 +182,9 @@ export default function POSMeseroPage() {
   // ── Mostrar cuenta al cliente ─────────────────────────────────────────────
   const [showBillModal, setShowBillModal] = useState(false);
 
-  // ── Transferir mesa (solo capitanes) ──────────────────────────────────────
+  // ── Mover tab entre mesas físicas (solo capitanes) ────────────────────────
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferWaiters, setTransferWaiters] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
-  const [transferToWaiterId, setTransferToWaiterId] = useState("");
+  const [transferToTableId, setTransferToTableId] = useState("");
   const [transferReason, setTransferReason] = useState("");
   const [transferCaptainPin, setTransferCaptainPin] = useState("");
   const [transferError, setTransferError] = useState("");
@@ -468,36 +467,32 @@ export default function POSMeseroPage() {
   // TRANSFERIR MESA (solo capitanes)
   // ============================================================================
 
-  const openTransferModal = async () => {
+  const openTransferModal = () => {
     if (!activeWaiter || !activeTab) return;
-    setTransferToWaiterId("");
+    setTransferToTableId("");
     setTransferReason("");
     setTransferCaptainPin("");
     setTransferError("");
-    const res = await getActiveWaitersAction();
-    if (res.success) {
-      setTransferWaiters((res.data as { id: string; firstName: string; lastName: string }[]).filter((w) => w.id !== activeWaiter.id));
-    }
     setShowTransferModal(true);
   };
 
-  const handleTransfer = async () => {
-    if (!activeWaiter || !activeTab) return;
-    if (!transferToWaiterId) { setTransferError("Selecciona el mesonero destino"); return; }
+  const handleTableTransfer = async () => {
+    if (!activeTab) return;
+    if (!transferToTableId) { setTransferError("Selecciona la mesa destino"); return; }
     if (!transferCaptainPin.trim()) { setTransferError("Ingresa el PIN de capitán o gerente"); return; }
     setIsProcessing(true); setTransferError("");
     try {
-      const result = await transferTableAction({
+      const result = await moveTabBetweenTablesAction({
         openTabId: activeTab.id,
-        fromWaiterId: activeWaiter.id,
-        toWaiterId: transferToWaiterId,
+        toTableId: transferToTableId,
         captainPin: transferCaptainPin,
         reason: transferReason.trim() || undefined,
       });
       if (!result.success) { setTransferError(result.message); return; }
       toast.success(result.message);
       setShowTransferModal(false);
-      await loadData();
+      setSelectedTableId(transferToTableId);
+      await loadData(false);
     } finally {
       setIsProcessing(false);
     }
@@ -1237,41 +1232,72 @@ export default function POSMeseroPage() {
         </div>
       )}
 
-      {/* ══ MODAL: TRANSFERIR MESA (solo capitanes) ══════════════════════ */}
-      {showTransferModal && activeTab && canUseCaptainFeatures && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card glass-panel w-full max-w-md rounded-3xl p-6 space-y-4 shadow-2xl border border-sky-900/30">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 bg-sky-500/10 rounded-2xl flex items-center justify-center text-2xl">↔</div>
-              <div>
-                <h3 className="font-black text-base text-sky-400">Transferir mesa</h3>
-                <p className="text-xs text-muted-foreground">{selectedTable?.name} · {activeTab.customerLabel}</p>
-              </div>
-              <button
-                onClick={() => setShowTransferModal(false)}
-                className="ml-auto h-9 w-9 rounded-full hover:bg-red-500/10 hover:text-red-400 transition text-2xl flex items-center justify-center text-muted-foreground"
-              >
-                ×
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">
-                  Mesonero destino
-                </label>
-                <select
-                  value={transferToWaiterId}
-                  onChange={(e) => setTransferToWaiterId(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-sky-500 focus:outline-none"
+      {/* ══ MODAL: MOVER TAB A OTRA MESA (solo capitanes) ═══════════════════ */}
+      {showTransferModal && activeTab && canUseCaptainFeatures && (() => {
+        const availableTables = layout?.serviceZones.flatMap((z) =>
+          z.tablesOrStations.filter(
+            (t) => t.currentStatus === "AVAILABLE" && t.id !== selectedTableId,
+          ).map((t) => ({ ...t, zoneName: z.name }))
+        ) ?? [];
+        return (
+          <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-card glass-panel w-full max-w-lg rounded-3xl p-6 space-y-4 shadow-2xl border border-sky-900/30 max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 bg-sky-500/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">↔</div>
+                <div>
+                  <h3 className="font-black text-base text-sky-400">Mover mesa</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedTable?.name}
+                    {activeTab.customerLabel ? ` · ${activeTab.customerLabel}` : ""}
+                    {" → "}
+                    <span className={transferToTableId ? "text-sky-400 font-bold" : "text-muted-foreground"}>
+                      {transferToTableId
+                        ? (availableTables.find((t) => t.id === transferToTableId)?.name ?? "...")
+                        : "selecciona destino"}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowTransferModal(false)}
+                  className="ml-auto h-9 w-9 rounded-full hover:bg-red-500/10 hover:text-red-400 transition text-2xl flex items-center justify-center text-muted-foreground flex-shrink-0"
                 >
-                  <option value="">— Seleccionar mesonero —</option>
-                  {transferWaiters.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.firstName} {w.lastName}
-                    </option>
-                  ))}
-                </select>
+                  ×
+                </button>
               </div>
+
+              {/* Grid de mesas disponibles */}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2 block">
+                  Mesa destino (disponibles)
+                </label>
+                {availableTables.length === 0 ? (
+                  <p className="text-xs text-muted-foreground bg-secondary rounded-xl px-4 py-3">
+                    No hay mesas disponibles en este momento.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 max-h-52 overflow-y-auto pr-1">
+                    {availableTables.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => setTransferToTableId(t.id)}
+                        className={`rounded-xl py-3 px-2 text-xs font-black transition border flex flex-col items-center gap-0.5 ${
+                          transferToTableId === t.id
+                            ? "bg-sky-600 border-sky-500 text-white"
+                            : "bg-secondary border-border hover:border-sky-500/50 hover:text-sky-400"
+                        }`}
+                      >
+                        <span className="text-sm">{t.name}</span>
+                        <span className={`text-[9px] font-normal ${transferToTableId === t.id ? "text-sky-200" : "text-muted-foreground"}`}>
+                          {t.zoneName}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Motivo */}
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">
                   Motivo (opcional)
@@ -1279,13 +1305,15 @@ export default function POSMeseroPage() {
                 <textarea
                   value={transferReason}
                   onChange={(e) => setTransferReason(e.target.value)}
-                  placeholder="Ej: Cambio de turno, petición del cliente..."
-                  className="w-full bg-secondary border border-border rounded-xl p-3 text-sm font-bold focus:border-sky-500 focus:outline-none resize-none h-16"
+                  placeholder="Ej: Petición del cliente, cambio de zona..."
+                  className="w-full bg-secondary border border-border rounded-xl p-3 text-sm font-bold focus:border-sky-500 focus:outline-none resize-none h-14"
                 />
               </div>
+
+              {/* PIN */}
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">
-                  PIN de capitán o gerente (confirmación)
+                  PIN de capitán o gerente
                 </label>
                 <input
                   type="password"
@@ -1296,30 +1324,32 @@ export default function POSMeseroPage() {
                   className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-sky-500 focus:outline-none"
                 />
               </div>
-            </div>
-            {transferError && (
-              <p className="text-red-400 text-xs font-bold bg-red-950/30 border border-red-900/30 rounded-xl px-3 py-2">
-                {transferError}
-              </p>
-            )}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowTransferModal(false)}
-                className="capsula-btn capsula-btn-secondary flex-1 py-3"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleTransfer}
-                disabled={isProcessing || !transferToWaiterId || !transferCaptainPin.trim()}
-                className="flex-[2] py-3 bg-sky-600 hover:bg-sky-500 rounded-xl font-black text-sm transition disabled:opacity-40"
-              >
-                {isProcessing ? "Transfiriendo..." : "↔ Confirmar transferencia"}
-              </button>
+
+              {transferError && (
+                <p className="text-red-400 text-xs font-bold bg-red-950/30 border border-red-900/30 rounded-xl px-3 py-2">
+                  {transferError}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowTransferModal(false)}
+                  className="capsula-btn capsula-btn-secondary flex-1 py-3"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleTableTransfer}
+                  disabled={isProcessing || !transferToTableId || !transferCaptainPin.trim()}
+                  className="flex-[2] py-3 bg-sky-600 hover:bg-sky-500 rounded-xl font-black text-sm transition disabled:opacity-40"
+                >
+                  {isProcessing ? "Moviendo..." : "↔ Confirmar movimiento"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ══ MODAL: ANULAR ÍTEM (requiere PIN supervisor) ══════════════════ */}
       {showRemoveModal && removeTarget && (
