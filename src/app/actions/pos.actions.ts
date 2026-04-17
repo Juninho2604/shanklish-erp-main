@@ -226,7 +226,10 @@ async function ensureRestaurantSetup() {
                                     paymentSplits: true,
                                     orders: {
                                         include: {
-                                            items: { include: { modifiers: true } },
+                                            items: {
+                                                where: { voidedAt: null },
+                                                include: { modifiers: true },
+                                            },
                                             createdBy: { select: { firstName: true, lastName: true } }
                                         },
                                         orderBy: { createdAt: 'desc' }
@@ -266,6 +269,9 @@ async function resolveSalesAreaForBranch(branchId?: string) {
 
 const DELIVERY_FEE_NORMAL = 4.5;
 const DELIVERY_FEE_DIVISAS = 3;
+
+/** Redondea a 2 decimales. */
+function round2(n: number): number { return Math.round(n * 100) / 100; }
 
 /** Redondea a 2 decimales: ≥0.5 sube, <0.5 baja. Aplica antes de guardar en BD. */
 function roundCents(n: number): number {
@@ -1401,7 +1407,99 @@ export async function closeOpenTabAction(openTabId: string): Promise<ActionResul
 }
 
 // ============================================================================
-// ELIMINAR ITEM DE CUENTA ABIERTA (requiere PIN de cajera + justificación)
+// AUTORIZACIÓN DUAL: WAITER CAPITÁN  O  USER GERENTE
+// Resuelve el PIN ingresado contra ambos pools. Devuelve quién autorizó.
+// ============================================================================
+
+type VoidAuth =
+    | { type: 'CAPTAIN'; name: string; waiterId: string; userId: null }
+    | { type: 'MANAGER'; name: string; waiterId: null; userId: string };
+
+async function resolveVoidAuthPin(pin: string, branchId: string): Promise<VoidAuth | null> {
+    const trimmed = pin.trim();
+
+    // Pool 1 — Waiter capitán activo en la sucursal
+    const captains = await prisma.waiter.findMany({
+        where: { branchId, isActive: true, isCaptain: true, pin: { not: null } },
+        select: { id: true, firstName: true, lastName: true, pin: true },
+    });
+    for (const c of captains) {
+        if (c.pin && await verifyPin(trimmed, c.pin)) {
+            return { type: 'CAPTAIN', name: `${c.firstName} ${c.lastName}`, waiterId: c.id, userId: null };
+        }
+    }
+
+    // Pool 2 — User gerente / dueño activo
+    const managers = await prisma.user.findMany({
+        where: { role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'] }, isActive: true, pin: { not: null } },
+        select: { id: true, firstName: true, lastName: true, pin: true },
+    });
+    for (const m of managers) {
+        if (m.pin && await verifyPin(trimmed, m.pin)) {
+            return { type: 'MANAGER', name: `${m.firstName} ${m.lastName}`, waiterId: null, userId: m.id };
+        }
+    }
+    return null;
+}
+
+// ============================================================================
+// VOID INTERNO COMPARTIDO
+// Marca el item como void en la transacción y ajusta totales del tab/orden.
+// NO hace commit — debe llamarse dentro de prisma.$transaction.
+// ============================================================================
+
+async function voidItemInTx(
+    tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+    item: {
+        id: string; orderId: string; itemName: string;
+        quantity: number; lineTotal: number;
+    },
+    openTabId: string,
+    reason: string,
+    auth: VoidAuth,
+) {
+    // Soft delete: marcar como void
+    await tx.salesOrderItem.update({
+        where: { id: item.id },
+        data: {
+            voidedAt: new Date(),
+            voidReason: reason.trim(),
+            voidedByWaiterId: auth.type === 'CAPTAIN' ? auth.waiterId : null,
+            voidedByUserId:   auth.type === 'MANAGER' ? auth.userId   : null,
+        },
+    });
+
+    // Limpiar asignaciones de subcuenta
+    await tx.subAccountItem.deleteMany({ where: { salesOrderItemId: item.id } });
+
+    // Recalcular total de la orden (solo ítems NO void)
+    const remaining = await tx.salesOrderItem.findMany({
+        where: { orderId: item.orderId, voidedAt: null },
+    });
+    const newOrderTotal = remaining.reduce((s, i) => s + i.lineTotal, 0);
+    await tx.salesOrder.update({
+        where: { id: item.orderId },
+        data: { subtotal: newOrderTotal, total: newOrderTotal },
+    });
+
+    // Recalcular totales del tab
+    const tab = await tx.openTab.findUniqueOrThrow({ where: { id: openTabId } });
+    const noteEntry = `[VOID: ${item.itemName} x${item.quantity} $${item.lineTotal.toFixed(2)} | ${reason.trim()} | Auth: ${auth.name}]`;
+    await tx.openTab.update({
+        where: { id: openTabId },
+        data: {
+            runningSubtotal: Math.max(0, tab.runningSubtotal - item.lineTotal),
+            runningTotal:    Math.max(0, tab.runningTotal    - item.lineTotal),
+            balanceDue:      Math.max(0, tab.balanceDue      - item.lineTotal),
+            notes:           ((tab.notes || '') + ' ' + noteEntry).trim().slice(0, 1000),
+            version:         { increment: 1 },
+        },
+    });
+}
+
+// ============================================================================
+// ELIMINAR ITEM DE CUENTA ABIERTA — soft delete, dual PIN
+// Mantenido por compatibilidad. PASO 3 usará modifyTabItemAction.
 // ============================================================================
 
 export async function removeItemFromOpenTabAction({
@@ -1422,101 +1520,292 @@ export async function removeItemFromOpenTabAction({
     try {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
+        if (!justification?.trim()) return { success: false, message: 'La justificación es obligatoria' };
+        if (!cashierPin || cashierPin.trim().length < 4) return { success: false, message: 'PIN inválido' };
 
-        if (!justification?.trim()) {
-            return { success: false, message: 'Debe ingresar una justificación para eliminar el item' };
-        }
+        const branch = await prisma.branch.findFirst({ where: { isActive: true } });
+        if (!branch) return { success: false, message: 'Sin sucursal activa' };
 
-        // Validar PIN contra cualquier usuario con rol autorizado
-        if (!cashierPin || cashierPin.length < 4) {
-            return { success: false, message: 'PIN debe tener al menos 4 dígitos' };
-        }
+        const auth = await resolveVoidAuthPin(cashierPin, branch.id);
+        if (!auth) return { success: false, message: 'PIN incorrecto o sin permisos' };
 
-        const authCandidates = await prisma.user.findMany({
-            where: {
-                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'] },
-                isActive: true,
-                pin: { not: null },
-            },
-            select: { id: true, firstName: true, lastName: true, role: true, pin: true },
-        });
-
-        let authorizer: { id: string; firstName: string; lastName: string; role: string } | null = null;
-        for (const candidate of authCandidates) {
-            if (candidate.pin && await verifyPin(cashierPin, candidate.pin)) {
-                authorizer = candidate;
-                break;
-            }
-        }
-
-        if (!authorizer) {
-            return { success: false, message: 'PIN incorrecto o sin permisos de cajera' };
-        }
-
-        // Cargar el item con su orden
         const item = await prisma.salesOrderItem.findUnique({
             where: { id: itemId },
-            include: { order: true }
+            include: {
+                order: { include: { tableOrStation: true } },
+                modifiers: true,
+            },
         });
-        if (!item) return { success: false, message: 'Item no encontrado' };
-        if (item.order.openTabId !== openTabId) {
-            return { success: false, message: 'El item no pertenece a esta cuenta' };
-        }
-        if (!['OPEN', 'PARTIALLY_PAID'].includes(item.order.paymentStatus ?? '')) {
-            // Allow removal even if status is PENDING (not paid yet)
-        }
+        if (!item) return { success: false, message: 'Ítem no encontrado' };
+        if (item.voidedAt) return { success: false, message: 'El ítem ya fue anulado' };
+        if (item.order.openTabId !== openTabId) return { success: false, message: 'El ítem no pertenece a esta cuenta' };
 
-        const removedAmount = item.lineTotal;
-        const authorizerName = `${authorizer.firstName} ${authorizer.lastName}`;
-
-        // Mesonero solicitante (si se pasó waiterProfileId desde el POS Mesero)
+        // Mesonero solicitante para el log
         let requesterLabel = '';
         if (waiterProfileId) {
-            const waiter = await prisma.waiter.findUnique({
-                where: { id: waiterProfileId },
-                select: { firstName: true, lastName: true },
-            });
-            if (waiter) requesterLabel = ` | Solicitó: ${waiter.firstName} ${waiter.lastName}`;
+            const w = await prisma.waiter.findUnique({ where: { id: waiterProfileId }, select: { firstName: true, lastName: true } });
+            if (w) requesterLabel = ` | Mesonero: ${w.firstName} ${w.lastName}`;
         }
+        const reasonFull = justification.trim() + requesterLabel;
 
         await prisma.$transaction(async (tx) => {
-            // Eliminar item (modifiers se borran en cascada)
-            await tx.salesOrderItem.delete({ where: { id: itemId } });
-
-            // Recalcular totales de la orden
-            const remaining = await tx.salesOrderItem.findMany({ where: { orderId: item.orderId } });
-            const newOrderTotal = remaining.reduce((s, i) => s + i.lineTotal, 0);
-            await tx.salesOrder.update({
-                where: { id: item.orderId },
-                data: { subtotal: newOrderTotal, total: newOrderTotal }
-            });
-
-            // Recalcular totales del tab
-            const tab = await tx.openTab.findUniqueOrThrow({ where: { id: openTabId } });
-            const newRunning = Math.max(0, tab.runningTotal - removedAmount);
-            const newBalance = Math.max(0, tab.balanceDue - removedAmount);
-            const noteEntry = `[ELIMINADO: ${item.itemName} x${item.quantity} $${removedAmount.toFixed(2)} | Justif: ${justification.trim()} | Auth: ${authorizerName}${requesterLabel}]`;
-            await tx.openTab.update({
-                where: { id: openTabId },
-                data: {
-                    runningSubtotal: Math.max(0, tab.runningSubtotal - removedAmount),
-                    runningTotal: newRunning,
-                    balanceDue: newBalance,
-                    notes: ((tab.notes || '') + ' ' + noteEntry).trim().slice(0, 1000),
-                    version: { increment: 1 }
-                }
-            });
+            await voidItemInTx(tx, item, openTabId, reasonFull, auth);
         });
 
         revalidatePath('/dashboard/pos/restaurante');
+        revalidatePath('/dashboard/pos/mesero');
         return {
             success: true,
-            message: `"${item.itemName}" eliminado. Autorizó: ${authorizerName}`,
-            data: { authorizerName, removedAmount }
+            message: `"${item.itemName}" anulado. Autorizó: ${auth.name}`,
+            data: {
+                authorizerName: auth.name,
+                removedAmount: item.lineTotal,
+                kitchenPrintData: {
+                    orderNumber: item.order.orderNumber,
+                    tableName: item.order.tableOrStation?.name ?? '',
+                    waiterLabel: waiterProfileId ? requesterLabel.replace(' | Mesonero: ', '') : undefined,
+                    modificationType: 'VOID' as const,
+                    voidedItem: {
+                        name: item.itemName,
+                        quantity: item.quantity,
+                        modifiers: item.modifiers.map(m => m.name),
+                    },
+                },
+            },
         };
     } catch (error) {
-        console.error('Error removing item from tab:', error);
-        return { success: false, message: 'Error eliminando item de la cuenta' };
+        console.error('removeItemFromOpenTabAction error:', error);
+        return { success: false, message: 'Error anulando el ítem' };
+    }
+}
+
+// ============================================================================
+// MODIFICAR ÍTEM DE CUENTA ABIERTA
+// Soporta: VOID (anular), ADJUST_QTY (ajustar cantidad), REPLACE (cambiar ítem).
+// Dual PIN: capitán Waiter O gerente User.
+// ============================================================================
+
+export type ModifyTabItemModification =
+    | { type: 'VOID' }
+    | { type: 'ADJUST_QTY'; newQuantity: number }
+    | { type: 'REPLACE'; newMenuItemId: string; newQuantity?: number };
+
+export async function modifyTabItemAction({
+    openTabId,
+    orderId,
+    itemId,
+    captainPin,
+    reason,
+    modification,
+}: {
+    openTabId: string;
+    orderId: string;
+    itemId: string;
+    captainPin: string;
+    reason: string;
+    modification: ModifyTabItemModification;
+}): Promise<ActionResult> {
+    try {
+        if (!reason?.trim()) return { success: false, message: 'El motivo es obligatorio' };
+        if (!captainPin || captainPin.trim().length < 4) return { success: false, message: 'PIN inválido' };
+
+        const branch = await prisma.branch.findFirst({ where: { isActive: true } });
+        if (!branch) return { success: false, message: 'Sin sucursal activa' };
+
+        const auth = await resolveVoidAuthPin(captainPin, branch.id);
+        if (!auth) return { success: false, message: 'PIN de capitán o gerente incorrecto' };
+
+        // Cargar el ítem original con sus relaciones
+        const item = await prisma.salesOrderItem.findUnique({
+            where: { id: itemId },
+            include: {
+                order: {
+                    include: {
+                        tableOrStation: { select: { name: true } },
+                        waiterProfile:  { select: { firstName: true, lastName: true } },
+                    },
+                },
+                modifiers: true,
+            },
+        });
+        if (!item) return { success: false, message: 'Ítem no encontrado' };
+        if (item.voidedAt) return { success: false, message: 'El ítem ya fue anulado' };
+        if (item.orderId !== orderId) return { success: false, message: 'El ítem no pertenece a esta orden' };
+        if (item.order.openTabId !== openTabId) return { success: false, message: 'El ítem no pertenece a esta cuenta' };
+
+        if (modification.type === 'ADJUST_QTY') {
+            const { newQuantity } = modification;
+            if (!Number.isInteger(newQuantity) || newQuantity < 1) {
+                return { success: false, message: 'La cantidad debe ser al menos 1' };
+            }
+            if (newQuantity >= item.quantity) {
+                return { success: false, message: `La cantidad nueva (${newQuantity}) debe ser menor a la actual (${item.quantity})` };
+            }
+        }
+
+        // Construir el label del mesonero para la comanda
+        const waiterLabel = item.order.waiterProfile
+            ? `${item.order.waiterProfile.firstName} ${item.order.waiterProfile.lastName}`
+            : undefined;
+
+        let newItemForPrint: { name: string; quantity: number; modifiers: string[] } | undefined;
+
+        await prisma.$transaction(async (tx) => {
+            if (modification.type === 'VOID') {
+                await voidItemInTx(tx, item, openTabId, reason, auth);
+            }
+
+            else if (modification.type === 'ADJUST_QTY') {
+                const { newQuantity } = modification;
+                const newLineTotal = round2(item.unitPrice * newQuantity);
+                const deltaAmount  = item.lineTotal - newLineTotal; // cuánto se reduce
+
+                // Void original
+                await voidItemInTx(tx, item, openTabId, reason, auth);
+
+                // Crear ítem de reemplazo con cantidad reducida
+                const newItem = await tx.salesOrderItem.create({
+                    data: {
+                        orderId:   item.orderId,
+                        menuItemId: item.menuItemId,
+                        itemName:  item.itemName,
+                        unitPrice: item.unitPrice,
+                        quantity:  newQuantity,
+                        lineTotal: newLineTotal,
+                        notes:     item.notes,
+                        modifiers: {
+                            create: item.modifiers.map(m => ({
+                                name: m.name,
+                                priceAdjustment: m.priceAdjustment,
+                                modifierId: m.modifierId,
+                            })),
+                        },
+                    },
+                });
+
+                // Marcar el original como reemplazado por el nuevo
+                await tx.salesOrderItem.update({
+                    where: { id: item.id },
+                    data: { replacedByItemId: newItem.id },
+                });
+
+                // voidItemInTx ya ajustó totales; pero creamos un ítem nuevo que suma,
+                // así que necesitamos corregir sumando el newLineTotal
+                const orderAfterVoid = await tx.salesOrderItem.findMany({
+                    where: { orderId: item.orderId, voidedAt: null },
+                });
+                const correctedOrderTotal = orderAfterVoid.reduce((s, i) => s + i.lineTotal, 0);
+                await tx.salesOrder.update({
+                    where: { id: item.orderId },
+                    data: { subtotal: correctedOrderTotal, total: correctedOrderTotal },
+                });
+
+                const tab = await tx.openTab.findUniqueOrThrow({ where: { id: openTabId } });
+                await tx.openTab.update({
+                    where: { id: openTabId },
+                    data: {
+                        runningSubtotal: Math.max(0, tab.runningSubtotal + newLineTotal),
+                        runningTotal:    Math.max(0, tab.runningTotal    + newLineTotal),
+                        balanceDue:      Math.max(0, tab.balanceDue      + newLineTotal),
+                    },
+                });
+
+                newItemForPrint = {
+                    name: newItem.itemName,
+                    quantity: newItem.quantity,
+                    modifiers: item.modifiers.map(m => m.name),
+                };
+                void deltaAmount; // used implicitly via voidItemInTx + correction above
+            }
+
+            else if (modification.type === 'REPLACE') {
+                const { newMenuItemId, newQuantity = 1 } = modification;
+
+                // Cargar el nuevo MenuItem
+                const newMenuItem = await tx.menuItem.findUnique({
+                    where: { id: newMenuItemId },
+                    select: { id: true, name: true, price: true },
+                });
+                if (!newMenuItem) throw new Error('Producto de reemplazo no encontrado');
+
+                const newLineTotal = round2(newMenuItem.price * newQuantity);
+
+                // Void original
+                await voidItemInTx(tx, item, openTabId, reason, auth);
+
+                // Crear ítem de reemplazo
+                const newItem = await tx.salesOrderItem.create({
+                    data: {
+                        orderId:   item.orderId,
+                        menuItemId: newMenuItem.id,
+                        itemName:  newMenuItem.name,
+                        unitPrice: newMenuItem.price,
+                        quantity:  newQuantity,
+                        lineTotal: newLineTotal,
+                    },
+                });
+
+                // Marcar el original como reemplazado
+                await tx.salesOrderItem.update({
+                    where: { id: item.id },
+                    data: { replacedByItemId: newItem.id },
+                });
+
+                // Corregir totales (void restó, nuevo suma)
+                const orderItems = await tx.salesOrderItem.findMany({
+                    where: { orderId: item.orderId, voidedAt: null },
+                });
+                const newOrderTotal = orderItems.reduce((s, i) => s + i.lineTotal, 0);
+                await tx.salesOrder.update({
+                    where: { id: item.orderId },
+                    data: { subtotal: newOrderTotal, total: newOrderTotal },
+                });
+
+                const tab = await tx.openTab.findUniqueOrThrow({ where: { id: openTabId } });
+                await tx.openTab.update({
+                    where: { id: openTabId },
+                    data: {
+                        runningSubtotal: Math.max(0, tab.runningSubtotal + newLineTotal),
+                        runningTotal:    Math.max(0, tab.runningTotal    + newLineTotal),
+                        balanceDue:      Math.max(0, tab.balanceDue      + newLineTotal),
+                    },
+                });
+
+                newItemForPrint = { name: newMenuItem.name, quantity: newQuantity, modifiers: [] };
+            }
+        });
+
+        revalidatePath('/dashboard/pos/restaurante');
+        revalidatePath('/dashboard/pos/mesero');
+
+        const modLabel = modification.type === 'VOID' ? 'Anulado'
+            : modification.type === 'ADJUST_QTY' ? 'Cantidad ajustada'
+            : 'Reemplazado';
+
+        return {
+            success: true,
+            message: `${modLabel}: "${item.itemName}". Autorizó: ${auth.name}`,
+            data: {
+                modificationType: modification.type,
+                authorizerName: auth.name,
+                kitchenPrintData: {
+                    orderNumber: item.order.orderNumber,
+                    tableName:   item.order.tableOrStation?.name ?? '',
+                    waiterLabel,
+                    modificationType: modification.type,
+                    voidedItem: {
+                        name: item.itemName,
+                        quantity: item.quantity,
+                        modifiers: item.modifiers.map(m => m.name),
+                    },
+                    newItem: newItemForPrint,
+                },
+            },
+        };
+    } catch (error) {
+        console.error('modifyTabItemAction error:', error);
+        const msg = error instanceof Error ? error.message : 'Error modificando el ítem';
+        return { success: false, message: msg };
     }
 }
 

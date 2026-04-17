@@ -51,7 +51,8 @@ model User {
   salesOrders    SalesOrder[] @relation("SalesOrderCreator")
   authorizedOrders     SalesOrder[]    @relation("SalesOrderAuthorizer")
   authorizedTransfers  TableTransfer[] @relation("TransferAuthorizedByUser")
-  voidedOrders   SalesOrder[] @relation("SalesOrderVoider")
+  voidedOrders   SalesOrder[]     @relation("SalesOrderVoider")
+  voidedItems    SalesOrderItem[] @relation("ItemVoidedByUser")
   openedTabs       OpenTab[]    @relation("OpenTabOpener")
   assignedTabs     OpenTab[]    @relation("OpenTabAssignee")
   closedTabs       OpenTab[]    @relation("OpenTabCloser")
@@ -930,7 +931,18 @@ model SalesOrderItem {
   costTotal       Float?
   marginPerUnit   Float?
   marginPercent   Float?
-  
+
+  // Soft delete / void tracking
+  voidedAt         DateTime?
+  voidReason       String?
+  voidedByWaiterId String?
+  voidedByWaiter   Waiter?         @relation("ItemVoidedByWaiter", fields: [voidedByWaiterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  voidedByUserId   String?
+  voidedByUser     User?           @relation("ItemVoidedByUser",   fields: [voidedByUserId],   references: [id], onDelete: SetNull, onUpdate: Cascade)
+  replacedByItemId String?
+  replacedByItem   SalesOrderItem?  @relation("ItemReplacement", fields: [replacedByItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  replacements     SalesOrderItem[] @relation("ItemReplacement")
+
   // Modificadores seleccionados
   modifiers       SalesOrderItemModifier[]
   // Asignaciones a subcuentas
@@ -938,6 +950,9 @@ model SalesOrderItem {
 
   @@index([orderId])
   @@index([menuItemId])
+  @@index([voidedAt])
+  @@index([voidedByWaiterId])
+  @@index([voidedByUserId])
 }
 
 model SalesOrderItemModifier {
@@ -1515,6 +1530,7 @@ model Waiter {
 
   openTabs    OpenTab[]
   salesOrders SalesOrder[]
+  voidedItems SalesOrderItem[] @relation("ItemVoidedByWaiter")
   transfersFrom       TableTransfer[] @relation("TransferFrom")
   transfersTo         TableTransfer[] @relation("TransferTo")
   transfersAuthorized TableTransfer[] @relation("TransferAuthorizedByWaiter")
