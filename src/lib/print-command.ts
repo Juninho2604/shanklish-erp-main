@@ -463,6 +463,126 @@ export function printKitchenCommand(data: any, station: 'kitchen' | 'bar' = 'kit
     }, 300);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COMANDA DE MODIFICACIÓN / ANULACIÓN (va a cocina)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface VoidKitchenCommandData {
+    orderNumber:      string;
+    tableName:        string;
+    authorizerName:   string;
+    waiterLabel?:     string;
+    modificationType: 'VOID' | 'ADJUST_QTY' | 'REPLACE';
+    voidedItem:  { name: string; quantity: number; modifiers: string[] };
+    newItem?:    { name: string; quantity: number; modifiers: string[] };
+}
+
+export function printVoidKitchenCommand(data: VoidKitchenCommandData, station: 'kitchen' | 'bar' = 'kitchen') {
+    const time = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
+    const orderNum = data.orderNumber.split('-').pop();
+    const stationLabel = station === 'bar' ? '-- BARRA --' : '-- COCINA --';
+
+    const modLabel =
+        data.modificationType === 'VOID'       ? '❌ CANCELADO'  :
+        data.modificationType === 'ADJUST_QTY' ? '✏️ AJUSTE'     :
+                                                  '🔄 REEMPLAZO';
+
+    const voidedMods  = data.voidedItem.modifiers.length > 0
+        ? `<div style="font-size:13px;font-style:italic;margin-top:3px;">+ ${data.voidedItem.modifiers.join('<br>+ ')}</div>`
+        : '';
+    const newMods = data.newItem && data.newItem.modifiers.length > 0
+        ? `<div style="font-size:13px;font-style:italic;margin-top:3px;">+ ${data.newItem.modifiers.join('<br>+ ')}</div>`
+        : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MOD ${data.orderNumber}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    width: 80mm; background: white; color: black;
+    font-size: 14px; padding: 3mm 2mm 0 2mm;
+  }
+  .sep    { text-align:center; font-size:13px; margin:5px 0; letter-spacing:1px; }
+  .title  { text-align:center; font-size:16px; font-weight:900; letter-spacing:3px; margin:4px 0; }
+  .warn   { text-align:center; font-size:22px; font-weight:900; margin:4px 0; letter-spacing:2px; }
+  .num    { text-align:center; font-size:52px; font-weight:900; line-height:1; margin:4px 0; }
+  .meta   { text-align:center; font-size:13px; font-weight:bold; margin:2px 0; }
+  .auth   { text-align:center; font-size:13px; margin:2px 0; }
+  .block  { border: 2px solid #000; margin: 6px 2px; padding: 6px; }
+  .block-label { font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+  .item-row { display:flex; align-items:flex-start; gap:6px; margin-top:3px; }
+  .qty-box  { background:#000; color:#fff; font-size:20px; font-weight:900; padding:2px 8px; min-width:36px; text-align:center; flex-shrink:0; }
+  .qty-box.light { background:#fff; color:#000; border:2px solid #000; }
+  .iname  { font-size:17px; font-weight:900; line-height:1.2; }
+  .tail   { text-align:center; font-size:13px; margin-top:6px; letter-spacing:1px; }
+  .corr   { text-align:center; font-size:11px; margin-top:2px; }
+  @media print {
+    @page { margin:0mm 2mm; size:80mm auto; }
+    body  { padding:2mm 2mm 0 2mm; }
+  }
+</style>
+</head>
+<body>
+  <div class="sep">================================</div>
+  <div class="title">${stationLabel}</div>
+  <div class="warn">⚠️ MODIFICACIÓN ⚠️</div>
+  <div class="num">#${orderNum}</div>
+  <div class="sep">================================</div>
+  <div class="meta">${data.tableName || 'Mesa'} · ${time}</div>
+  <div class="auth">Autor: <b>${data.authorizerName}</b></div>
+  ${data.waiterLabel ? `<div class="auth">🧑‍🍽️ ${data.waiterLabel}</div>` : ''}
+  <div class="sep">--------------------------------</div>
+
+  <!-- Ítem cancelado/ajustado -->
+  <div class="block">
+    <div class="block-label" style="color:#000;">❌ ${modLabel}</div>
+    <div class="item-row">
+      <div class="qty-box">${data.voidedItem.quantity}</div>
+      <div>
+        <div class="iname">${data.voidedItem.name}</div>
+        ${voidedMods}
+      </div>
+    </div>
+  </div>
+
+  ${data.newItem ? `
+  <!-- Ítem nuevo -->
+  <div class="block">
+    <div class="block-label">✅ ${data.modificationType === 'ADJUST_QTY' ? 'NUEVA CANTIDAD' : 'NUEVO ÍTEM'}</div>
+    <div class="item-row">
+      <div class="qty-box light">${data.newItem.quantity}</div>
+      <div>
+        <div class="iname">${data.newItem.name}</div>
+        ${newMods}
+      </div>
+    </div>
+  </div>
+  ` : ''}
+
+  <div class="tail">================================</div>
+  <div class="corr">${data.orderNumber}</div>
+  <br><br><br><br><br><br>
+</body>
+</html>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;visibility:hidden;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open('text/html', 'replace');
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+        try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } catch {}
+        setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 2000);
+    }, 300);
+}
+
 /**
  * IMPRESIÓN RESUMEN DE CIERRE DEL DÍA
  */
