@@ -154,7 +154,8 @@ shanklish-erp-main/
 |--------|-------------|-----------|
 | **ServiceZone** | branchId + name (unique), zoneType (DINING/BAR/TERRACE/VIP), sortOrder | Zona de servicio del local |
 | **TableOrStation** | branchId + code (unique), serviceZoneId, stationType (TABLE/BAR_SEAT/VIP_ROOM), capacity, currentStatus | Mesa o estación física |
-| **Waiter** | branchId, firstName, lastName, isActive | Mesonero del restaurante |
+| **Waiter** | branchId, firstName, lastName, pin (PBKDF2 hash), isCaptain, isActive | Mesonero del restaurante. `pin` permite identificación sin sesión en POS Mesero. `isCaptain` habilita subcuentas y autorizaciones de transferencia |
+| **TableTransfer** | openTabId, fromWaiterId, toWaiterId, authorizedById, reason, transferredAt | Historial de transferencias de mesa. `authorizedById` = capitán que validó con su PIN |
 
 ### 2.8 Compras (4 modelos)
 
@@ -432,11 +433,11 @@ Roles con acceso a **todos** los módulos de operaciones:
 
 Roles con acceso **restringido**:
 - CHEF → dashboard, estadísticas, inventario, conteo, auditorías, transferencias, recetas, producción, compras, proteínas, sku_studio, asistente
-- AREA_LEAD → dashboard, estadísticas, inventario diario/general, conteo, auditorías, transferencias, producción, compras, proteínas
-- CASHIER → estadísticas, pos_restaurant, pos_delivery, pedidosya, sales_history, barra_display, pos_config, reservations, queue, tasa_cambio, caja *(módulos visibles filtrados además por `allowedModules`)*
+- AREA_LEAD → dashboard, estadísticas, inventario diario/general, conteo, auditorías, transferencias, producción, compras, proteínas, **pos_restaurant** (Fase 4)
+- CASHIER → estadísticas, pos_restaurant, **pos_waiter** (Fase 4), pos_delivery, pedidosya, sales_history, barra_display, pos_config, reservations, queue, tasa_cambio, caja *(módulos visibles filtrados además por `allowedModules`)*
 - KITCHEN_CHEF → estadísticas, kitchen_display, barra_display
 - WAITER → estadísticas, pos_waiter
-- HR_MANAGER → dashboard, users
+- HR_MANAGER → dashboard, users, mesoneros
 - AUDITOR → dashboard, estadísticas, inventario (todo lectura), transfers, recipes, production, costs, margen, purchases, sales_history, intercompany, users, finanzas, gastos, caja, cuentas_pagar
 
 ### 4.4 Funciones Clave del Registry
@@ -2781,6 +2782,138 @@ const newBalance = Math.max(0, openTab.balanceDue - sub.subtotal);
 
 ---
 
-*Actualizado el 2026-04-13 — Shanklish ERP / Cápsula SaaS — Documento Completo*
-*44 modelos Prisma · 47 módulos · 49 actions · 4 API routes · 3 services · 24 componentes*
-*Commits sesión: e5340a1 9fc4954 d269c74 24f7799 77fa94a 08e6969 80253d0 6122a00 4c36741 86d8d5b b5abd37 9a23869 93ff5d2 18eb9c3 fddab34 41c1c39 ea2318c 097a71a da496ac d1f82a9 0b2cb4e 786668d a95232e a74209c 8162f2e*
+---
+
+### 18.23 Sistema de Mesoneros con PIN — FASES 1-4 (2026-04-17)
+
+#### Commits: `[fase1-4 session commits]`
+
+**Objetivo**: Identificación individual de mesoneros en POS Mesero por PIN numérico, con historial de transferencias de mesa y control por capitanes.
+
+---
+
+#### Modelos Prisma nuevos/modificados
+
+**`Waiter`** — campos añadidos:
+- `pin String?` — hash PBKDF2-SHA256 formato `saltHex:hashHex`, 100k iteraciones. Almacena nunca en claro.
+- `isCaptain Boolean @default(false)` — habilita subcuentas y autorización de transferencias
+
+**`TableTransfer`** — modelo nuevo:
+```prisma
+model TableTransfer {
+  id             String   @id @default(cuid())
+  openTabId      String
+  openTab        OpenTab  @relation(fields: [openTabId], references: [id], onDelete: Cascade)
+  fromWaiterId   String
+  fromWaiter     Waiter   @relation("TransferFrom",       fields: [fromWaiterId],   references: [id])
+  toWaiterId     String
+  toWaiter       Waiter   @relation("TransferTo",         fields: [toWaiterId],     references: [id])
+  authorizedById String
+  authorizedBy   Waiter   @relation("TransferAuthorizer", fields: [authorizedById], references: [id])
+  reason         String?
+  transferredAt  DateTime @default(now())
+  @@index([openTabId])
+  @@index([fromWaiterId])
+  @@index([toWaiterId])
+}
+```
+
+**`OpenTab`** — campo añadido: `waiterProfileId String?` → Waiter (FK, SET NULL)
+**`SalesOrder`** — campo añadido: `waiterProfileId String?` → Waiter (FK, SET NULL)
+
+---
+
+#### Flujo de identificación por PIN
+
+1. POS Mesero carga → lee `sessionStorage["pos-mesero-active-waiter"]`
+2. Si vacío → renderiza `<WaiterIdentification>` (teclado numérico, lista de mesoneros con PIN)
+3. El mesonero ingresa su PIN → `validateWaiterPinAction(pin)` (sin sesión de usuario requerida)
+4. Action busca candidatos activos con `pin != null` en el branch, ejecuta `verifyPin()` en loop
+5. Match → devuelve `{ waiterId, firstName, lastName, isCaptain }` → se guarda en sessionStorage
+6. POS recarga normalmente con identidad del mesonero activo
+
+**Persistencia**: `sessionStorage` (se pierde al cerrar la pestaña — correcto para turno de trabajo)
+
+---
+
+#### Server Actions — `waiter.actions.ts`
+
+| Action | Descripción |
+|--------|-------------|
+| `getWaitersAction()` | Lista con `hasPin: boolean` (PIN nunca expuesto) |
+| `getActiveWaitersAction()` | Solo activos, mismo formato |
+| `createWaiterAction(data)` | Crea mesonero. Solo OWNER/ADMIN_MANAGER/OPS_MANAGER pueden asignar PIN |
+| `updateWaiterAction(id, data)` | PIN: undefined=no tocar, null/''=borrar, string=hashear+guardar |
+| `validateWaiterPinAction(pin)` | Sin sesión. Devuelve waiterId + nombre + isCaptain |
+| `transferTableAction({openTabId, fromWaiterId, toWaiterId, captainPin, reason})` | Requiere PIN de capitán activo. Crea TableTransfer + actualiza OpenTab.waiterProfileId en transacción |
+
+**`PIN_MANAGER_ROLES`**: `new Set(['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'])` — únicos que pueden asignar/cambiar PINs en UI de mesoneros. HR_MANAGER gestiona mesoneros pero NO puede asignar PINs.
+
+---
+
+#### Componentes POS
+
+**`src/components/pos/WaiterIdentification.tsx`**:
+- Pantalla de bloqueo con teclado numérico 3×4
+- Lista de mesoneros activos con PIN (`hasPin: true`)
+- Soporte teclado físico (`keydown`)
+- Display de 6 puntos animados
+- Paleta de colores de avatar determinista por ID de mesonero
+
+**`src/app/dashboard/pos/mesero/page.tsx`** — cambios Fase 2-4:
+- Gate: si `!activeWaiter` → renderiza `<WaiterIdentification>`
+- Mesa libre → modal "Abrir cuenta" centrado z-[60] directo (sin botón inferior)
+- "🧾 Mostrar cuenta al cliente" → bill modal z-[70] con subtotal, servicio 10%, total USD, divisas 33%, Bs con tasa
+- Subcuentas y "↔ Transferir mesa" visibles solo cuando `activeWaiter.isCaptain`
+- `waiterProfileId: activeWaiter.id` propagado a `openTabAction`, `addItemsToOpenTabAction`, `removeItemFromOpenTabAction`
+
+---
+
+#### UI Gestión de Mesoneros — `src/app/dashboard/mesoneros/`
+
+**`page.tsx`** (Server Component): verifica sesión + rol, pasa `currentUserRole` al cliente
+**`mesoneros-view.tsx`** (Client Component):
+- Lista de mesoneros con badge "🔒 PIN" / "Sin PIN" y "⭐ Capitán"
+- Formulario con campo PIN (visible solo para `PIN_MANAGER_ROLES`)
+- Checkbox "Borrar PIN" para limpiar hash existente
+- Toggle isCaptain disponible para todos los roles con acceso al módulo
+
+---
+
+#### Capitanes activos
+
+Los capitanes son mesoneros con `isCaptain = true` y PIN configurado. Autorizan:
+- Transferencias de mesa (PIN requerido en modal "↔ Transferir mesa")
+- Subcuentas / división de cuenta
+
+**Capitanes actuales** (configurar en /dashboard/mesoneros):
+- **Yair** — mesonero con isCaptain=true (también con acceso a POS Restaurante como AREA_LEAD)
+- **Julhian** (antes Alexis) — mesonero con isCaptain=true
+
+---
+
+#### Usuarios — cambios FASE 4
+
+| Cambio | Detalle |
+|--------|---------|
+| **Nuevo usuario** `mesonero@shanklish.com` | Rol CASHIER, `allowedModules = '["pos_waiter"]'`, contraseña temporal `Mesonero2024!` (plaintext legacy — actualizar via admin UI) |
+| **Yair** `yair@shanklish.com` | Rol AREA_LEAD. Ahora tiene acceso a `pos_restaurant` vía MODULE_ROLE_ACCESS |
+| **Alexis → Julhian** | Email cambiado: `alexis@shanklish.com` → `julhian@shanklish.com` |
+
+---
+
+#### Migraciones SQL (cronológico)
+
+| Archivo | Contenido |
+|---------|-----------|
+| `20260417000000_add_waiter_pin` | `ALTER TABLE "Waiter" ADD COLUMN "pin" TEXT` |
+| `20260417010000_add_waiter_profile_to_tabs_and_orders` | `waiterProfileId` en OpenTab y SalesOrder (FK SET NULL) |
+| `20260417020000_add_waiter_is_captain` | `ALTER TABLE "Waiter" ADD COLUMN "isCaptain" BOOLEAN NOT NULL DEFAULT false` |
+| `20260417030000_add_table_transfer` | CREATE TABLE TableTransfer con 4 FKs nombradas |
+| `20260417040000_data_fase4` | INSERT mesonero@shanklish.com · UPDATE alexis→julhian email |
+
+---
+
+*Actualizado el 2026-04-17 — Shanklish ERP / Cápsula SaaS — Documento Completo*
+*46 modelos Prisma · 47 módulos · 51 actions · 4 API routes · 3 services · 25 componentes*
+*Commits sesión (Fase 1-4): 9f486e2 cf25df0 ca0609c + fase4*
