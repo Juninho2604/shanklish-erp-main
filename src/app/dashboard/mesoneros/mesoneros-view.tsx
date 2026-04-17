@@ -16,6 +16,7 @@ interface Waiter {
     lastName: string;
     isActive: boolean;
     hasPin: boolean;
+    isCaptain: boolean;
     createdAt: Date | string;
 }
 
@@ -31,6 +32,7 @@ export function MesonerosView({ currentUserRole }: { currentUserRole: string }) 
     const [lastName, setLastName] = useState('');
     const [pin, setPin] = useState('');
     const [clearPin, setClearPin] = useState(false);
+    const [isCaptain, setIsCaptain] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     const load = async () => {
@@ -48,6 +50,7 @@ export function MesonerosView({ currentUserRole }: { currentUserRole: string }) 
         setLastName('');
         setPin('');
         setClearPin(false);
+        setIsCaptain(false);
         setShowForm(true);
     };
 
@@ -57,6 +60,7 @@ export function MesonerosView({ currentUserRole }: { currentUserRole: string }) 
         setLastName(w.lastName);
         setPin('');
         setClearPin(false);
+        setIsCaptain(w.isCaptain);
         setShowForm(true);
     };
 
@@ -85,12 +89,14 @@ export function MesonerosView({ currentUserRole }: { currentUserRole: string }) 
                 res = await updateWaiterAction(editingId, {
                     firstName,
                     lastName,
+                    isCaptain,
                     ...(pinPayload !== undefined ? { pin: pinPayload } : {}),
                 });
             } else {
                 res = await createWaiterAction({
                     firstName,
                     lastName,
+                    isCaptain,
                     ...(canManagePin && pinTrimmed ? { pin: pinTrimmed } : {}),
                 });
             }
@@ -181,6 +187,11 @@ export function MesonerosView({ currentUserRole }: { currentUserRole: string }) 
                                     ) : (
                                         <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
                                             Sin PIN
+                                        </span>
+                                    )}
+                                    {w.isCaptain && (
+                                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900/30 dark:text-sky-400">
+                                            ⭐ Capitán
                                         </span>
                                     )}
                                 </div>
@@ -276,6 +287,20 @@ export function MesonerosView({ currentUserRole }: { currentUserRole: string }) 
                                     className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-gray-900 text-sm focus:border-amber-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                                 />
                             </div>
+                            {/* Toggle Capitán — siempre visible para roles con acceso */}
+                            <label className="flex items-center justify-between rounded-xl border border-gray-300 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800/50">
+                                <div>
+                                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">⭐ Capitán</span>
+                                    <p className="text-[11px] text-gray-400">Puede dividir cuentas y transferir mesas</p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={isCaptain}
+                                    onChange={e => setIsCaptain(e.target.checked)}
+                                    className="h-4 w-4 rounded accent-sky-500"
+                                />
+                            </label>
+
                             {canManagePin && (
                             <div>
                                 <label className="flex items-center justify-between text-xs font-bold text-gray-500 mb-1">

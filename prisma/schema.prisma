@@ -1504,12 +1504,13 @@ model Waiter {
   id        String   @id @default(cuid())
   branchId  String
   branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  firstName String
-  lastName  String
-  pin       String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  firstName  String
+  lastName   String
+  pin        String?
+  isActive   Boolean  @default(true)
+  isCaptain  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   openTabs    OpenTab[]
   salesOrders SalesOrder[]

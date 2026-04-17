@@ -813,12 +813,14 @@ export default function POSMeseroPage() {
                   >
                     🧾 Mostrar cuenta al cliente
                   </button>
-                  <button
-                    onClick={() => setSubAccountMode(true)}
-                    className="mt-2 w-full py-2 rounded-xl text-xs font-black bg-secondary hover:bg-amber-500/20 hover:text-amber-400 text-foreground/70 transition"
-                  >
-                    ÷ Dividir cuenta (subcuentas)
-                  </button>
+                  {activeWaiter?.isCaptain && (
+                    <button
+                      onClick={() => setSubAccountMode(true)}
+                      className="mt-2 w-full py-2 rounded-xl text-xs font-black bg-secondary hover:bg-amber-500/20 hover:text-amber-400 text-foreground/70 transition"
+                    >
+                      ÷ Dividir cuenta (subcuentas)
+                    </button>
+                  )}
                 </div>
               </>
             )}

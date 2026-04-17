@@ -74,7 +74,7 @@ export async function getActiveWaitersAction() {
     }
 }
 
-export async function createWaiterAction(data: { firstName: string; lastName: string; pin?: string }) {
+export async function createWaiterAction(data: { firstName: string; lastName: string; pin?: string; isCaptain?: boolean }) {
     try {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
@@ -91,6 +91,7 @@ export async function createWaiterAction(data: { firstName: string; lastName: st
                 firstName: data.firstName.trim(),
                 lastName: data.lastName.trim(),
                 pin: pinHash,
+                isCaptain: data.isCaptain ?? false,
             },
         });
         return { success: true, message: 'Mesonero creado', data: publicWaiter(waiter) };
@@ -100,16 +101,17 @@ export async function createWaiterAction(data: { firstName: string; lastName: st
     }
 }
 
-export async function updateWaiterAction(id: string, data: { firstName: string; lastName: string; pin?: string | null }) {
+export async function updateWaiterAction(id: string, data: { firstName: string; lastName: string; pin?: string | null; isCaptain?: boolean }) {
     try {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
         if (data.pin !== undefined && !PIN_MANAGER_ROLES.has(session.role)) {
             return { success: false, message: 'No tienes permisos para cambiar el PIN' };
         }
-        const updateData: { firstName: string; lastName: string; pin?: string | null } = {
+        const updateData: { firstName: string; lastName: string; pin?: string | null; isCaptain?: boolean } = {
             firstName: data.firstName.trim(),
             lastName: data.lastName.trim(),
+            ...(data.isCaptain !== undefined ? { isCaptain: data.isCaptain } : {}),
         };
         // Reglas:
         //  - pin === undefined → no tocar
@@ -160,7 +162,7 @@ export async function deleteWaiterAction(id: string) {
 export async function validateWaiterPinAction(pin: string): Promise<{
     success: boolean;
     message: string;
-    data?: { waiterId: string; firstName: string; lastName: string };
+    data?: { waiterId: string; firstName: string; lastName: string; isCaptain: boolean };
 }> {
     try {
         if (!pin || !/^\d{4,6}$/.test(pin.trim())) {
@@ -170,14 +172,14 @@ export async function validateWaiterPinAction(pin: string): Promise<{
         if (!branch) return { success: false, message: 'Sin sucursal activa' };
         const candidates = await prisma.waiter.findMany({
             where: { branchId: branch.id, isActive: true, pin: { not: null } },
-            select: { id: true, firstName: true, lastName: true, pin: true },
+            select: { id: true, firstName: true, lastName: true, isCaptain: true, pin: true },
         });
         for (const w of candidates) {
             if (w.pin && await verifyPin(pin.trim(), w.pin)) {
                 return {
                     success: true,
                     message: 'PIN válido',
-                    data: { waiterId: w.id, firstName: w.firstName, lastName: w.lastName },
+                    data: { waiterId: w.id, firstName: w.firstName, lastName: w.lastName, isCaptain: w.isCaptain },
                 };
             }
         }

@@ -10,6 +10,7 @@ export interface ActiveWaiter {
     id: string;
     firstName: string;
     lastName: string;
+    isCaptain: boolean;
 }
 
 interface WaiterSummary {
@@ -89,6 +90,7 @@ export function WaiterIdentification({
                     id: res.data.waiterId,
                     firstName: res.data.firstName,
                     lastName: res.data.lastName,
+                    isCaptain: res.data.isCaptain,
                 });
             } else {
                 setError(res.message || "PIN incorrecto");
