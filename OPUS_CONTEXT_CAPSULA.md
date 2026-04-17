@@ -2914,6 +2914,93 @@ Los capitanes son mesoneros con `isCaptain = true` y PIN configurado. Autorizan:
 
 ---
 
+### 18.24 Fix: mesonero@shanklish.com no debe ver POS Restaurante (2026-04-17)
+
+**Problema diagnosticado (3 capas):**
+
+1. **BD correcta** — `allowedModules = '["pos_waiter"]'` ya estaba en producción. Verificado con `scripts/fix-mesonero-modules.ts`.
+2. **MODULE_ROLE_ACCESS** — `pos_restaurant` incluía `CASHIER` en su array de roles, dando acceso por rol antes de que `allowedModules` pudiera bloquearlo.
+3. **Redirección hardcodeada** — `dashboard/page.tsx` redirigía todo CASHIER a `/dashboard/pos/restaurante` sin consultar `allowedModules`.
+
+---
+
+#### FIX 1 — `src/lib/constants/modules-registry.ts`
+
+**`MODULE_ROLE_ACCESS['pos_restaurant']`:** eliminado `CASHIER` del array de roles.
+
+```typescript
+// ANTES
+pos_restaurant: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER', 'AREA_LEAD'],
+// DESPUÉS
+pos_restaurant: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'],
+```
+
+**`getVisibleModules()`:** rediseñada — `allowedModules` es la **única autoridad** cuando está definido (reemplaza al rol, no se combina).
+
+```typescript
+// ANTES: dos filtros independientes (rol AND allowedModules)
+.filter(m => allowedRoles.includes(userRole))
+.filter(m => !userFilter || userFilter.has(m.id))
+
+// DESPUÉS: allowedModules reemplaza al rol cuando está presente
+.filter(m => {
+  if (m.id === 'module_config') return userRole === 'OWNER';
+  if (userFilter) return userFilter.has(m.id);   // override total
+  const allowedRoles = MODULE_ROLE_ACCESS[m.id];
+  if (!allowedRoles) return true;
+  return allowedRoles.includes(userRole);
+})
+```
+
+**Por qué importa:** con la lógica anterior, eliminar CASHIER de `pos_restaurant` también habría bloqueado a Elizabeth, Estefani, Gianni, cajera1 y cajera2, que tienen `pos_restaurant` en su `allowedModules`. Con el nuevo diseño, `allowedModules` garantiza acceso sin depender del rol.
+
+**Estado de cajeras verificado antes del cambio:**
+
+| Email | allowedModules relevantes |
+|-------|--------------------------|
+| elizabeth@shanklish.com | `pos_restaurant` ✅ |
+| estefani@shanklish.com | `pos_restaurant` ✅ |
+| gianni@shanklish.com | `pos_restaurant` ✅ |
+| cajera1@shanklish.com | `pos_restaurant` ✅ |
+| cajera2@shanklish.com | `pos_restaurant` ✅ |
+| **mesonero@shanklish.com** | solo `pos_waiter` — sin pos_restaurant ✅ |
+
+---
+
+#### FIX 2 — `src/app/dashboard/page.tsx`
+
+**Antes:** redirección hardcodeada ignorando `allowedModules`:
+```typescript
+if (session?.role === 'CASHIER') {
+    redirect('/dashboard/pos/restaurante');
+}
+```
+
+**Después:** consulta BD + `getVisibleModules()` → redirige al primer módulo visible real:
+```typescript
+if (session?.role === 'CASHIER' || session?.role === 'WAITER') {
+    // leer allowedModules desde BD
+    const dbUser = await prisma.user.findUnique({ where: { id: session.id }, select: { allowedModules: true } });
+    if (dbUser?.allowedModules) userAllowedModules = JSON.parse(dbUser.allowedModules);
+    const enabledIds = await getEnabledModulesFromDB();
+    const visible = getVisibleModules(session.role, enabledIds, userAllowedModules);
+    redirect(visible[0]?.href ?? '/dashboard/pos/restaurante');
+}
+```
+
+`mesonero@shanklish.com` → `visible[0]` = POS Mesero → redirige a `/dashboard/pos/mesero`.
+
+---
+
+#### Commits de esta sesión
+
+| Hash | Descripción |
+|------|-------------|
+| `474cde5` | fix(auth): allowedModules overrides role — remove CASHIER from pos_restaurant |
+| `899d3c2` | fix(auth): redirigir al primer módulo visible en lugar de hardcode pos_restaurant |
+
+---
+
 *Actualizado el 2026-04-17 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *46 modelos Prisma · 47 módulos · 51 actions · 4 API routes · 3 services · 25 componentes*
-*Commits sesión (Fase 1-4): 9f486e2 cf25df0 ca0609c + fase4*
+*Commits sesión (Fase 1-4): 9f486e2 cf25df0 ca0609c + fase4 · Sesión 18.24: 474cde5 899d3c2*
