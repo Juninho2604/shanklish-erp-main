@@ -30,8 +30,11 @@ const USERS = [
     { firstName: 'Oscar', lastName: 'Jefe Area', email: 'oscar@shanklish.com', role: 'JEFE_AREA' },
     { firstName: 'Ramiro', lastName: 'Jefe Area', email: 'ramiro@shanklish.com', role: 'JEFE_AREA' },
     { firstName: 'Hadkin', lastName: 'Jefe Area', email: 'hadkin@shanklish.com', role: 'JEFE_AREA' },
-    { firstName: 'Alexis', lastName: 'Jefe Area', email: 'alexis@shanklish.com', role: 'JEFE_AREA' },
+    { firstName: 'Alexis', lastName: 'Jefe Area', email: 'julhian@shanklish.com', role: 'JEFE_AREA' },
     { firstName: 'Yair', lastName: 'Jefe Area', email: 'yair@shanklish.com', role: 'JEFE_AREA' },
+
+    // Nivel 8: POS Mesero (acceso único a pos_waiter)
+    { firstName: 'Mesonero', lastName: 'POS', email: 'mesonero@shanklish.com', role: 'CASHIER' },
 ];
 
 async function main() {
@@ -47,13 +50,20 @@ async function main() {
         });
 
         if (!exists) {
+            const extraData: Record<string, unknown> = {};
+            if (u.email === 'mesonero@shanklish.com') {
+                extraData.allowedModules = '["pos_waiter"]';
+                extraData.passwordHash = 'Mesonero2024!';
+            } else {
+                extraData.passwordHash = 'shanklish123';
+            }
             await prisma.user.create({
                 data: {
                     email: u.email,
                     firstName: u.firstName,
                     lastName: u.lastName,
                     role: u.role,
-                    passwordHash: 'shanklish123', // Password temporal simple
+                    ...extraData,
                 }
             });
             console.log(`✅ Creado: ${u.firstName} (${u.role})`);
