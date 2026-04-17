@@ -15,6 +15,7 @@ interface Waiter {
     firstName: string;
     lastName: string;
     isActive: boolean;
+    hasPin: boolean;
     createdAt: Date | string;
 }
 
@@ -25,6 +26,8 @@ export default function MesonerosPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
+    const [pin, setPin] = useState('');
+    const [clearPin, setClearPin] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     const load = async () => {
@@ -40,6 +43,8 @@ export default function MesonerosPage() {
         setEditingId(null);
         setFirstName('');
         setLastName('');
+        setPin('');
+        setClearPin(false);
         setShowForm(true);
     };
 
@@ -47,6 +52,8 @@ export default function MesonerosPage() {
         setEditingId(w.id);
         setFirstName(w.firstName);
         setLastName(w.lastName);
+        setPin('');
+        setClearPin(false);
         setShowForm(true);
     };
 
@@ -55,11 +62,29 @@ export default function MesonerosPage() {
             toast.error('Nombre y apellido son obligatorios');
             return;
         }
+        const pinTrimmed = pin.trim();
+        if (pinTrimmed && !/^\d{4,6}$/.test(pinTrimmed)) {
+            toast.error('El PIN debe ser numérico de 4 a 6 dígitos');
+            return;
+        }
         setIsSaving(true);
         try {
-            const res = editingId
-                ? await updateWaiterAction(editingId, { firstName, lastName })
-                : await createWaiterAction({ firstName, lastName });
+            let res;
+            if (editingId) {
+                // pin: undefined → no tocar · '' → borrar (si clearPin) · string → hashear nuevo
+                const pinPayload = clearPin ? '' : pinTrimmed ? pinTrimmed : undefined;
+                res = await updateWaiterAction(editingId, {
+                    firstName,
+                    lastName,
+                    ...(pinPayload !== undefined ? { pin: pinPayload } : {}),
+                });
+            } else {
+                res = await createWaiterAction({
+                    firstName,
+                    lastName,
+                    ...(pinTrimmed ? { pin: pinTrimmed } : {}),
+                });
+            }
             if (res.success) {
                 toast.success(res.message);
                 setShowForm(false);
@@ -136,9 +161,20 @@ export default function MesonerosPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-gray-900 dark:text-white">{w.firstName} {w.lastName}</p>
-                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                    Activo
-                                </span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                        Activo
+                                    </span>
+                                    {w.hasPin ? (
+                                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                            🔒 PIN
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                                            Sin PIN
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 <button
@@ -228,9 +264,45 @@ export default function MesonerosPage() {
                                     value={lastName}
                                     onChange={e => setLastName(e.target.value)}
                                     placeholder="Ej: López"
-                                    onKeyDown={e => e.key === 'Enter' && handleSave()}
                                     className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-gray-900 text-sm focus:border-amber-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                                 />
+                            </div>
+                            <div>
+                                <label className="flex items-center justify-between text-xs font-bold text-gray-500 mb-1">
+                                    <span>
+                                        PIN <span className="text-gray-400 font-normal">(4-6 dígitos · opcional)</span>
+                                    </span>
+                                    {editingId && (
+                                        <label className="flex items-center gap-1 text-[11px] font-medium text-red-500 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={clearPin}
+                                                onChange={e => { setClearPin(e.target.checked); if (e.target.checked) setPin(''); }}
+                                                className="h-3 w-3"
+                                            />
+                                            Borrar PIN
+                                        </label>
+                                    )}
+                                </label>
+                                <input
+                                    type="password"
+                                    inputMode="numeric"
+                                    autoComplete="new-password"
+                                    maxLength={6}
+                                    value={pin}
+                                    onChange={e => {
+                                        const onlyDigits = e.target.value.replace(/\D/g, '');
+                                        setPin(onlyDigits);
+                                        if (onlyDigits) setClearPin(false);
+                                    }}
+                                    disabled={clearPin}
+                                    placeholder={editingId ? '(dejar vacío para no cambiar)' : 'Ej: 1234'}
+                                    onKeyDown={e => e.key === 'Enter' && handleSave()}
+                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-gray-900 text-sm tracking-[0.4em] focus:border-amber-500 focus:outline-none disabled:opacity-50 disabled:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:disabled:bg-gray-900"
+                                />
+                                <p className="mt-1 text-[11px] text-gray-400">
+                                    El PIN permite al mesonero identificarse en el POS Mesero.
+                                </p>
                             </div>
                         </div>
                         <div className="flex gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">
