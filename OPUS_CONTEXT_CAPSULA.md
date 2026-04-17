@@ -3014,6 +3014,156 @@ Actualización directa en RDS. Ambos usuarios son `AREA_LEAD`. Se añadieron `po
 
 ---
 
+### 18.26 Sistema de transferencia de mesa física (2026-04-17)
+
+Implementado flujo completo para mover un OpenTab entre mesas físicas sin cerrar ni reabrir la cuenta.
+
+#### Schema — `TableTransfer` extendido
+
+```prisma
+model TableTransfer {
+  // ...campos existentes (fromWaiterId/toWaiterId para trazabilidad del mesonero)...
+  fromTableId  String?   // FK → TableOrStation (nullable, retrocompatible)
+  toTableId    String?   // FK → TableOrStation
+}
+```
+Migración: `20260417080000_add_table_fields_to_table_transfer`
+
+#### Action — `moveTabBetweenTablesAction` (`waiter.actions.ts`)
+
+```typescript
+moveTabBetweenTablesAction({
+  openTabId: string,   // tab a mover
+  toTableId: string,   // mesa destino (debe estar AVAILABLE)
+  captainPin: string,  // PIN dual: Waiter capitán O User gerente
+  reason?: string,
+})
+```
+
+**Validaciones:** mesa destino `AVAILABLE`, sin OpenTab activo conflictivo, misma sucursal.  
+**Transacción atómica:** `openTab.tableOrStationId = toTableId` + mesa origen → `AVAILABLE` + mesa destino → `OCCUPIED` + registro `TableTransfer` con `from/toTableId`.  
+**PIN dual:** `resolveAuthPin` — Waiter `isCaptain:true` O User con rol `OWNER/ADMIN_MANAGER/OPS_MANAGER`.
+
+#### UI — Modal en `mesero/page.tsx`
+
+- Botón "↔ Transferir mesa" visible para capitanes (`canUseCaptainFeatures`)
+- Grid 4 columnas con todas las mesas `AVAILABLE` del layout (con zona como subtítulo)
+- Header muestra `Mesa A → Mesa B` en tiempo real al seleccionar
+- Al éxito: `loadData(false)` (refresh silencioso) + `setSelectedTableId(toTableId)` para seguir viendo el tab
+
+#### Commits
+
+| Hash | Descripción |
+|------|-------------|
+| `99435c7` | feat(db): add fromTableId/toTableId to TableTransfer |
+| `ba1aa2e` | feat(actions): moveTabBetweenTablesAction |
+| `0b77982` | feat(ui): replace waiter-transfer modal with table-move modal |
+
+---
+
+### 18.27 Sistema de modificación de ítems enviados a cocina (2026-04-17)
+
+Implementado sistema completo de soft delete y modificación de ítems ya enviados, con comanda de notificación a cocina y PIN dual.
+
+#### Schema — `SalesOrderItem` extendido
+
+```prisma
+model SalesOrderItem {
+  // ...campos existentes...
+
+  // Soft delete / void tracking
+  voidedAt         DateTime?
+  voidReason       String?
+  voidedByWaiterId String?   // FK → Waiter (capitán que autorizó)
+  voidedByWaiter   Waiter?   @relation("ItemVoidedByWaiter", ...)
+  voidedByUserId   String?   // FK → User (gerente que autorizó)
+  voidedByUser     User?     @relation("ItemVoidedByUser", ...)
+  replacedByItemId String?   // auto-relación: apunta al ítem de reemplazo
+  replacedByItem   SalesOrderItem?  @relation("ItemReplacement", ...)
+  replacements     SalesOrderItem[] @relation("ItemReplacement")
+}
+```
+Migración: `20260417090000_add_item_void_tracking`
+
+Los ítems con `voidedAt != null` se filtran en `ensureRestaurantSetup` (`where: { voidedAt: null }`) para no aparecer en el layout ni en los totales de la UI.
+
+#### Action — `modifyTabItemAction` (`pos.actions.ts`)
+
+```typescript
+modifyTabItemAction({
+  openTabId: string,
+  orderId: string,
+  itemId: string,
+  captainPin: string,   // PIN dual: Waiter capitán O User gerente
+  reason: string,       // obligatorio
+  modification:
+    | { type: 'VOID' }
+    | { type: 'ADJUST_QTY'; newQuantity: number }   // newQuantity < item.quantity
+    | { type: 'REPLACE'; newMenuItemId: string; newQuantity?: number }
+})
+```
+
+**Modos de modificación:**
+
+| Modo | Qué hace |
+|------|----------|
+| `VOID` | Soft delete del ítem: `voidedAt = now`, limpia SubAccountItems, recalcula totales orden + tab |
+| `ADJUST_QTY` | Void del original + crea nuevo ítem con mismos datos pero `newQuantity`. Corrige totales para net delta |
+| `REPLACE` | Void del original + crea nuevo ítem con nuevo `menuItemId`/`itemName`/`unitPrice`. Corrige totales |
+
+En `ADJUST_QTY` y `REPLACE` el original queda con `replacedByItemId` apuntando al nuevo ítem (trazabilidad).
+
+**PIN dual:** helper `resolveVoidAuthPin` — Waiter `isCaptain:true` O User con rol `OWNER/ADMIN_MANAGER/OPS_MANAGER/AREA_LEAD`.
+
+**Devuelve `kitchenPrintData`** para que el cliente llame `printVoidKitchenCommand` inmediatamente.
+
+#### Action legacy — `removeItemFromOpenTabAction`
+
+Reescrita para usar soft delete + dual PIN (backward compat para integraciones externas). Ya no hace hard delete.
+
+#### Función de impresión — `printVoidKitchenCommand` (`print-command.ts`)
+
+```typescript
+printVoidKitchenCommand(data: VoidKitchenCommandData, station?: 'kitchen' | 'bar')
+
+interface VoidKitchenCommandData {
+  orderNumber: string;
+  tableName: string;
+  authorizerName: string;
+  waiterLabel?: string;
+  modificationType: 'VOID' | 'ADJUST_QTY' | 'REPLACE';
+  voidedItem:  { name: string; quantity: number; modifiers: string[] };
+  newItem?:    { name: string; quantity: number; modifiers: string[] };
+}
+```
+
+Imprime comanda 80mm con:
+- Encabezado `⚠️ MODIFICACIÓN ⚠️` + número de orden grande
+- Bloque ❌ CANCELADO con qty-box negro (ítem anulado)
+- Bloque ✅ NUEVA CANTIDAD / NUEVO ÍTEM con qty-box blanco (si hay reemplazo)
+- Usa iframe oculto (no interrumpe la pantalla activa)
+
+#### UI — Modal unificado en `mesero/page.tsx` y `restaurante/page.tsx`
+
+Al tocar `✕` (mesero, hover) o `🗑️` (restaurante) en un ítem enviado:
+
+1. **3 botones de opción:** ❌ Cancelar · ✏️ Ajustar · 🔄 Cambiar
+2. **Si ADJUST_QTY:** spinner numérico (mín 1, máx `quantity-1`)
+3. **Si REPLACE:** input de búsqueda + lista scrollable de ítems del menú
+4. **Motivo** (textarea, obligatorio)
+5. **PIN de capitán o gerente** (input password)
+6. **Al confirmar:** llama `modifyTabItemAction` → si éxito, imprime comanda de modificación → `loadData(false)` (refresh silencioso)
+
+#### Commits
+
+| Hash | Descripción |
+|------|-------------|
+| `bb934f3` | feat(paso1): void tracking on SalesOrderItem + modifyTabItemAction |
+| `7c71413` | feat(paso2): printVoidKitchenCommand for kitchen void/modification receipts |
+| `a2661c9` | feat(paso3): replace void modal with 3-option modify modal in mesero + restaurante |
+
+---
+
 *Actualizado el 2026-04-17 — Shanklish ERP / Cápsula SaaS — Documento Completo*
-*46 modelos Prisma · 47 módulos · 51 actions · 4 API routes · 3 services · 25 componentes*
-*Commits sesión (Fase 1-4): 9f486e2 cf25df0 ca0609c + fase4 · Sesión 18.24: 474cde5 899d3c2*
+*46 modelos Prisma · 47 módulos · 52 actions · 4 API routes · 3 services · 25 componentes*
+*Commits sesión 18.26-18.27: 99435c7 ba1aa2e 0b77982 bb934f3 7c71413 a2661c9*
