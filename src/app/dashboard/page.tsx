@@ -1,19 +1,34 @@
 import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
 import { getDashboardStatsAction } from '@/app/actions/dashboard.actions';
 import { getFinancialSummaryAction } from '@/app/actions/finance.actions';
+import { getEnabledModulesFromDB } from '@/app/actions/system-config.actions';
+import { getVisibleModules } from '@/lib/constants/modules-registry';
 import { formatNumber, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import prisma from '@/server/db';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
     const session = await getSession();
 
-    // Redirección para Cajeras
-    if (session?.role === 'CASHIER') {
-        // Rol unificado: módulos visibles controlados por allowedModules
-        redirect('/dashboard/pos/restaurante');
+    // Redirigir al primer módulo visible del usuario (respeta allowedModules individuales)
+    if (session?.role === 'CASHIER' || session?.role === 'WAITER') {
+        let userAllowedModules: string[] | null = null;
+        if (session.id) {
+            const dbUser = await prisma.user.findUnique({
+                where: { id: session.id },
+                select: { allowedModules: true },
+            });
+            if (dbUser?.allowedModules) {
+                try { userAllowedModules = JSON.parse(dbUser.allowedModules); } catch { /* ignore */ }
+            }
+        }
+        const enabledIds = await getEnabledModulesFromDB();
+        const visible = getVisibleModules(session.role, enabledIds, userAllowedModules);
+        const first = visible[0];
+        redirect(first?.href ?? '/dashboard/pos/restaurante');
     }
     const showCosts = hasPermission(session?.role, PERMISSIONS.VIEW_COSTS);
 
