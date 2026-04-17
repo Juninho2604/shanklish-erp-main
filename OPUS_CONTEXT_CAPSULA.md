@@ -3001,6 +3001,19 @@ if (session?.role === 'CASHIER' || session?.role === 'WAITER') {
 
 ---
 
+### 18.25 BD: allowedModules de Yair y Julhian ampliados (2026-04-17)
+
+Actualización directa en RDS. Ambos usuarios son `AREA_LEAD`. Se añadieron `pos_waiter` y `mesoneros` a sus `allowedModules` existentes sin quitar nada.
+
+| Usuario | allowedModules resultante |
+|---------|--------------------------|
+| yair@shanklish.com | `["pos_restaurant","inventory_daily","inventory","estadisticas","transfers","pos_waiter","mesoneros"]` |
+| julhian@shanklish.com | `["inventory","inventory_daily","transfers","pos_restaurant","pos_waiter","mesoneros"]` |
+
+`pos_restaurant` ya lo tenían — no se duplicó. Script ejecutado: `scripts/_update_yair_julhian_tmp.ts` (temporal, eliminado post-ejecución).
+
+---
+
 *Actualizado el 2026-04-17 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *46 modelos Prisma · 47 módulos · 51 actions · 4 API routes · 3 services · 25 componentes*
 *Commits sesión (Fase 1-4): 9f486e2 cf25df0 ca0609c + fase4 · Sesión 18.24: 474cde5 899d3c2*
