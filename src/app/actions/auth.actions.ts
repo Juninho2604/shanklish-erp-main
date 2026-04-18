@@ -16,6 +16,7 @@ export async function loginAction(prevState: any, formData: FormData) {
     try {
         const user = await prisma.user.findUnique({
             where: { email },
+            select: { id: true, email: true, firstName: true, lastName: true, role: true, passwordHash: true, isActive: true, allowedModules: true, grantedPerms: true, revokedPerms: true },
         });
 
         if (!user) {
@@ -38,6 +39,7 @@ export async function loginAction(prevState: any, formData: FormData) {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
+            allowedModules: user.allowedModules ?? null,
             grantedPerms: user.grantedPerms ?? null,
             revokedPerms: user.revokedPerms ?? null,
         });

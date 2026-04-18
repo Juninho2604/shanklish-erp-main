@@ -264,7 +264,7 @@ export async function transferTableAction({
                     openTabId,
                     fromWaiterId,
                     toWaiterId,
-                    authorizedById: authorizedCaptainId!,
+                    authorizedByUserId: authorizedCaptainId!,
                     reason: reason?.trim() || null,
                 },
             });

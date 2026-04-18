@@ -2,7 +2,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { DashboardShell } from '@/components/layout/DashboardShell';
 import { getSession } from '@/lib/auth';
 import { getEnabledModulesFromDB } from '@/app/actions/system-config.actions';
-import prisma from '@/server/db';
+import { visibleModules } from '@/lib/permissions/has-permission';
 
 export default async function DashboardLayout({
     children,
@@ -14,21 +14,16 @@ export default async function DashboardLayout({
     // Leer módulos habilitados desde BD (una sola vez por request, en el servidor)
     const enabledModuleIds = await getEnabledModulesFromDB();
 
-    // Leer módulos permitidos del usuario actual (null = sin restricción extra)
-    let userAllowedModules: string[] | null = null;
-    if (session?.id) {
-        const dbUser = await prisma.user.findUnique({
-            where: { id: session.id },
-            select: { allowedModules: true },
-        });
-        if (dbUser?.allowedModules) {
-            try {
-                userAllowedModules = JSON.parse(dbUser.allowedModules);
-            } catch {
-                userAllowedModules = null;
-            }
-        }
-    }
+    // visibleModules aplica las 4 capas: allowedModules (JWT) ∪ módulos de grantedPerms.
+    // allowedModules viaja en el JWT (set en login) — si el admin lo cambia, re-login es suficiente.
+    const userAllowedModules = session
+        ? visibleModules({
+              role: session.role,
+              allowedModules: session.allowedModules ?? null,
+              grantedPerms: session.grantedPerms ?? null,
+              revokedPerms: session.revokedPerms ?? null,
+          })
+        : null;
 
     const sidebar = (
         <Sidebar initialUser={session} enabledModuleIds={enabledModuleIds} userAllowedModules={userAllowedModules} />

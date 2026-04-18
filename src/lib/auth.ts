@@ -13,6 +13,8 @@ export interface SessionPayload {
     role: string;
     /** ID del usuario cuyo PIN fue validado como cajera activa en este terminal */
     activeCashierId?: string;
+    /** Espejo de allowedModules en BD — viaja en JWT para que sidebar lo lea sin query extra */
+    allowedModules?: string | null;
     /** JSON array de PERM keys adicionales concedidos al usuario */
     grantedPerms?: string | null;
     /** JSON array de PERM keys revocados del rol base del usuario */
