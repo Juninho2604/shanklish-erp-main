@@ -1,9 +1,11 @@
 'use server';
 
 import { prisma } from '@/server/db'; // Correct path from previous files
-import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { revalidatePath } from 'next/cache';
+import { checkActionPermission } from '@/lib/permissions/action-guard';
+import { PERM } from '@/lib/constants/permissions-registry';
 
 // ============================================================================
 // HELPERS DE HASHING DE PIN  (movidos desde pos.actions.ts)
@@ -51,17 +53,8 @@ export async function hashPin(pin: string): Promise<string> {
  * Obtiene la lista de todos los usuarios
  */
 export async function getUsers() {
-    const session = await getSession();
-
-    // Validar sesión
-    if (!session) {
-        throw new Error('No autorizado');
-    }
-
-    // Validar permisos (Solo Gerentes o superior pueden ver lista de usuarios para config)
-    if (!hasPermission(session.role, PERMISSIONS.VIEW_USERS)) {
-        throw new Error('No tienes permisos para ver la lista de usuarios');
-    }
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) throw new Error(guard.message);
 
     const users = await prisma.user.findMany({
         orderBy: {
@@ -89,15 +82,8 @@ export async function getUsers() {
  * Actualiza el rol de un usuario
  */
 export async function updateUserRole(userId: string, newRole: string) {
-    const session = await getSession();
-
-    if (!session) {
-        return { success: false, message: 'No autenticado' };
-    }
-
-    if (!hasPermission(session.role, PERMISSIONS.CONFIGURE_ROLES)) {
-        return { success: false, message: 'No tienes permisos para cambiar roles' };
-    }
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
     // Evitar que se cambie su propio rol para no quedarse fuera inadvertidamente,
     // o al menos advertir (aquí lo permitimos pero el frontend podría validarlo)
@@ -120,15 +106,8 @@ export async function updateUserRole(userId: string, newRole: string) {
  * Activar/Desactivar usuarios (Bonus)
  */
 export async function toggleUserStatus(userId: string, isActive: boolean) {
-    const session = await getSession();
-
-    if (!session) {
-        return { success: false, message: 'No autenticado' };
-    }
-
-    if (!hasPermission(session.role, PERMISSIONS.CONFIGURE_ROLES)) {
-        return { success: false, message: 'No tienes permisos para gestionar usuarios' };
-    }
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
     try {
         await prisma.user.update({
@@ -196,15 +175,8 @@ export async function changePasswordAction(currentPassword: string, newPassword:
  * [] o [ids] = solo esos módulos (además de las restricciones de rol)
  */
 export async function updateUserModules(userId: string, allowedModules: string[] | null) {
-    const session = await getSession();
-
-    if (!session) {
-        return { success: false, message: 'No autenticado' };
-    }
-
-    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
-        return { success: false, message: 'No tienes permisos para gestionar módulos de usuario' };
-    }
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
     try {
         await prisma.user.update({
@@ -227,17 +199,10 @@ export async function updateUserModules(userId: string, allowedModules: string[]
  * El PIN se hashea automáticamente con PBKDF2-SHA256 antes de guardarse.
  */
 export async function updateUserPin(userId: string, rawPin: string) {
-    const session = await getSession();
+    const guard = await checkActionPermission(PERM.MANAGE_PINS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
-    if (!session) {
-        return { success: false, message: 'No autenticado' };
-    }
-
-    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
-        return { success: false, message: 'No tienes permisos para asignar PINs' };
-    }
-
-    if (session.id === userId) {
+    if (guard.user.id === userId) {
         return { success: false, message: 'No puedes modificar tu propio PIN desde aquí' };
     }
 
@@ -270,15 +235,8 @@ export async function updateUserPerms(
     grantedPerms: string[] | null,
     revokedPerms: string[] | null,
 ) {
-    const session = await getSession();
-
-    if (!session) {
-        return { success: false, message: 'No autenticado' };
-    }
-
-    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
-        return { success: false, message: 'No tienes permisos para gestionar permisos de usuario' };
-    }
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
     try {
         await prisma.user.update({
@@ -309,15 +267,8 @@ export async function createUserAction(data: {
     password: string;
     role: string;
 }) {
-    const session = await getSession();
-
-    if (!session) {
-        return { success: false, message: 'No autenticado' };
-    }
-
-    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
-        return { success: false, message: 'Sin permisos para crear usuarios' };
-    }
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
     const email = data.email.trim().toLowerCase();
     const firstName = data.firstName.trim();
@@ -389,11 +340,8 @@ export async function updateUserNameAction(
     userId: string,
     data: { firstName: string; lastName: string; email: string },
 ) {
-    const session = await getSession();
-    if (!session) return { success: false, message: 'No autenticado' };
-    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
-        return { success: false, message: 'Sin permisos para editar usuarios' };
-    }
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
     const firstName = data.firstName.trim();
     const lastName = data.lastName.trim();
@@ -422,17 +370,10 @@ export async function updateUserNameAction(
  * No puede resetear la propia contraseña por esta vía (usar changePasswordAction).
  */
 export async function adminResetPasswordAction(userId: string, newPassword: string) {
-    const session = await getSession();
+    const guard = await checkActionPermission(PERM.MANAGE_USERS);
+    if (!guard.ok) return { success: false, message: guard.message };
 
-    if (!session) {
-        return { success: false, message: 'No autenticado' };
-    }
-
-    if (!['OWNER', 'ADMIN_MANAGER'].includes(session.role)) {
-        return { success: false, message: 'Solo OWNER o Admin Manager pueden resetear contraseñas' };
-    }
-
-    if (session.id === userId) {
+    if (guard.user.id === userId) {
         return { success: false, message: 'Para cambiar tu propia contraseña usa la sección de perfil' };
     }
 

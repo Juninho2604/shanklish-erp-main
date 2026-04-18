@@ -3,6 +3,8 @@
 import prisma from '@/server/db';
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
+import { checkActionPermission } from '@/lib/permissions/action-guard';
+import { PERM } from '@/lib/constants/permissions-registry';
 
 // ============================================================================
 // OBTENER INVENTARIO DIARIO (Sincronizado con Transferencias y Producciones)
@@ -480,16 +482,16 @@ export async function syncSalesFromOrdersAction(dailyId: string): Promise<{ succ
 // CERRAR DÍA
 // ============================================================================
 export async function closeDailyInventoryAction(dailyId: string) {
-    try {
-        const session = await getSession();
-        if (!session) return { success: false, message: 'No autorizado' };
+    const guard = await checkActionPermission(PERM.CLOSE_DAILY_INV);
+    if (!guard.ok) return { success: false, message: guard.message };
 
+    try {
         await prisma.dailyInventory.update({
             where: { id: dailyId },
             data: {
                 status: 'CLOSED',
                 closedAt: new Date(),
-                closedById: session.id
+                closedById: guard.user.id
             }
         });
 
