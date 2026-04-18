@@ -1,53 +1,44 @@
 /**
- * Guard para Server Actions y API routes.
+ * Guard para API route handlers (src/app/api/[...]/route.ts).
  *
- * Adaptado al auth custom con `jose` de `src/lib/auth.ts` (getSession()).
- * La sesión NO incluye allowedModules — lo leemos de la BD en cada request
- * para garantizar consistencia tras cambios en el panel admin.
+ * Devuelve { user, error: NextResponse | null } — el caller retorna `error`
+ * directamente si no es null.
  *
- * Uso en Server Action:
- *   export async function anularOrdenAction(orderId: string) {
- *     const guard = await requirePermission(PERM.VOID_ORDER);
- *     if (!guard.ok) return { success: false, message: guard.message };
- *     // ... lógica con guard.user
- *   }
- *
- * Uso en API route (app/api):
+ * Uso en API route:
  *   export async function POST(req: Request) {
- *     const guard = await requirePermission(PERM.VOID_ORDER);
- *     if (!guard.ok) return new Response(guard.message, { status: guard.status });
- *     // ...
+ *     const { user, error } = await requirePermission(PERM.VOID_ORDER);
+ *     if (error) return error;
+ *     // ... lógica con user
  *   }
+ *
+ * Para Server Actions usar action-guard.ts (checkActionPermission).
  */
 
+import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import prisma from '@/server/db';
 import type { PermKey } from '@/lib/constants/permissions-registry';
 import { hasPermission, type PermUser } from './has-permission';
 
-export type GuardResult =
-    | { ok: true; user: PermUser & { id: string; email: string } }
-    | { ok: false; status: 401 | 403; message: string };
+type ApiUser = PermUser & { id: string; email: string };
 
-/**
- * Valida sesión + permiso. No lanza — devuelve un resultado discriminado.
- *
- * Devuelve 401 si no hay sesión, 403 si la sesión no tiene el permiso solicitado.
- */
-export async function requirePermission(permission: PermKey): Promise<GuardResult> {
+export type ApiGuardResult =
+    | { user: ApiUser; error: null }
+    | { user: null; error: NextResponse };
+
+export async function requirePermission(permission: PermKey): Promise<ApiGuardResult> {
     const session = await getSession();
     if (!session?.id) {
-        return { ok: false, status: 401, message: 'No autorizado' };
+        return { user: null, error: NextResponse.json({ error: 'No autorizado' }, { status: 401 }) };
     }
 
-    // allowedModules no viaja en el JWT (podría quedar stale); leerlo de la BD.
     const dbUser = await prisma.user.findUnique({
         where: { id: session.id },
         select: { id: true, email: true, role: true, allowedModules: true, isActive: true },
     });
 
     if (!dbUser || !dbUser.isActive) {
-        return { ok: false, status: 401, message: 'Usuario no válido' };
+        return { user: null, error: NextResponse.json({ error: 'Usuario no válido' }, { status: 401 }) };
     }
 
     const permUser: PermUser = {
@@ -58,11 +49,13 @@ export async function requirePermission(permission: PermKey): Promise<GuardResul
     };
 
     if (!hasPermission(permUser, permission)) {
-        return { ok: false, status: 403, message: `Sin permiso: ${permission}` };
+        return {
+            user: null,
+            error: NextResponse.json({ error: `Sin permiso: ${permission}` }, { status: 403 }),
+        };
     }
 
     return {
-        ok: true,
         user: {
             id: dbUser.id,
             email: dbUser.email,
@@ -71,19 +64,23 @@ export async function requirePermission(permission: PermKey): Promise<GuardResul
             grantedPerms: session.grantedPerms ?? null,
             revokedPerms: session.revokedPerms ?? null,
         },
+        error: null,
     };
 }
 
-/**
- * Variante que requiere CUALQUIERA de varios permisos. Útil cuando una
- * acción puede autorizarse por más de un perm (p.ej. VOID_ORDER o APPROVE_DISCOUNT).
- */
-export async function requireAnyPermission(permissions: PermKey[]): Promise<GuardResult> {
+export async function requireAnyPermission(permissions: PermKey[]): Promise<ApiGuardResult> {
+    let lastError: NextResponse | null = null;
     for (const p of permissions) {
         const r = await requirePermission(p);
-        if (r.ok) return r;
-        // Si la primera falla por 401, propagar — no tiene sentido seguir probando
-        if (r.status === 401) return r;
+        if (!r.error) return r;
+        lastError = r.error;
+        if (r.error.status === 401) return r;
     }
-    return { ok: false, status: 403, message: `Sin ninguno de los permisos: ${permissions.join(', ')}` };
+    return {
+        user: null,
+        error: lastError ?? NextResponse.json(
+            { error: `Sin ninguno de los permisos: ${permissions.join(', ')}` },
+            { status: 403 },
+        ),
+    };
 }

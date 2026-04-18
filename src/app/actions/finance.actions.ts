@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/server/db';
-import { requirePermission } from '@/lib/permissions/api-guard';
+import { checkActionPermission } from '@/lib/permissions/action-guard';
 import { PERM } from '@/lib/constants/permissions-registry';
 
 export interface FinancialSummary {
@@ -59,7 +59,7 @@ export async function getFinancialSummaryAction(month?: number, year?: number): 
   data?: FinancialSummary;
   error?: string;
 }> {
-  const guard = await requirePermission(PERM.VIEW_FINANCES);
+  const guard = await checkActionPermission(PERM.VIEW_FINANCES);
   if (!guard.ok) return { success: false, error: guard.message };
 
   const now = new Date();
@@ -291,7 +291,7 @@ export async function getMonthlyTrendAction(months = 6): Promise<{
   data?: { label: string; sales: number; cogs: number; expenses: number; profit: number }[];
   error?: string;
 }> {
-  const guard = await requirePermission(PERM.VIEW_FINANCES);
+  const guard = await checkActionPermission(PERM.VIEW_FINANCES);
   if (!guard.ok) return { success: false, error: guard.message };
 
   try {
@@ -338,7 +338,7 @@ export async function getDailySalesAction(month: number, year: number): Promise<
   data?: { day: number; total: number; orders: number }[];
   error?: string;
 }> {
-  const guard = await requirePermission(PERM.VIEW_FINANCES);
+  const guard = await checkActionPermission(PERM.VIEW_FINANCES);
   if (!guard.ok) return { success: false, error: guard.message };
 
   const startDate = new Date(year, month - 1, 1);
