@@ -3,6 +3,7 @@ import { DashboardShell } from '@/components/layout/DashboardShell';
 import { getSession } from '@/lib/auth';
 import { getEnabledModulesFromDB } from '@/app/actions/system-config.actions';
 import { visibleModules } from '@/lib/permissions/has-permission';
+import prisma from '@/server/db';
 
 export default async function DashboardLayout({
     children,
@@ -15,15 +16,26 @@ export default async function DashboardLayout({
     const enabledModuleIds = await getEnabledModulesFromDB();
 
     // visibleModules aplica las 4 capas: allowedModules (JWT) ∪ módulos de grantedPerms.
-    // allowedModules viaja en el JWT (set en login) — si el admin lo cambia, re-login es suficiente.
-    const userAllowedModules = session
-        ? visibleModules({
-              role: session.role,
-              allowedModules: session.allowedModules ?? null,
-              grantedPerms: session.grantedPerms ?? null,
-              revokedPerms: session.revokedPerms ?? null,
-          })
-        : null;
+    // Fallback defensivo: JWTs emitidos ANTES del Prompt 2 no tienen `allowedModules`
+    // (campo undefined). En ese caso consultamos BD para evitar mostrar de más al
+    // usuario hasta que cierre sesión y vuelva a entrar.
+    let userAllowedModules: string[] | null = null;
+    if (session) {
+        let allowedModules = session.allowedModules;
+        if (allowedModules === undefined && session.id) {
+            const dbUser = await prisma.user.findUnique({
+                where: { id: session.id },
+                select: { allowedModules: true },
+            });
+            allowedModules = dbUser?.allowedModules ?? null;
+        }
+        userAllowedModules = visibleModules({
+            role: session.role,
+            allowedModules: allowedModules ?? null,
+            grantedPerms: session.grantedPerms ?? null,
+            revokedPerms: session.revokedPerms ?? null,
+        });
+    }
 
     const sidebar = (
         <Sidebar initialUser={session} enabledModuleIds={enabledModuleIds} userAllowedModules={userAllowedModules} />
