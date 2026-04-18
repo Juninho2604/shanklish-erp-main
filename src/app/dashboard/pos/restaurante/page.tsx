@@ -431,7 +431,7 @@ export default function POSSportBarPage() {
     : rawAmount;
   // Divisas methods: CASH, CASH_USD, CASH_EUR, ZELLE get 33.33% discount
   const roundToWhole = (amount: number, method: string): number =>
-    (method === 'CASH_USD' || method === 'ZELLE' || method === 'CASH_BS') ? Math.round(amount) : amount;
+    (method === 'CASH_USD' || method === 'ZELLE') ? Math.round(amount) : amount;
   const isDivisasMethod = (m: string) => m === "CASH" || m === "CASH_USD" || m === "CASH_EUR" || m === "ZELLE";
   // isPagoDivisas: used by TABLE mode (registerOpenTabPaymentAction)
   const isPagoDivisas = isDivisasMethod(paymentMethod);
@@ -2220,7 +2220,7 @@ export default function POSSportBarPage() {
                       value={amountReceived}
                       onChange={(e) => setAmountReceived(e.target.value)}
                       placeholder={isBsPayMethod && exchangeRate
-                        ? `Bs ${(paymentAmountToCharge * exchangeRate).toFixed(0)}`
+                        ? `Bs ${(paymentAmountToCharge * exchangeRate).toFixed(2)}`
                         : `$${paymentAmountToCharge.toFixed(2)}`}
                       className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-foreground text-sm focus:border-amber-500 focus:outline-none pr-14"
                     />
