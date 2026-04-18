@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
-import { getSession } from '@/lib/auth';
 import { getCaracasDayRange } from '@/lib/datetime';
+import { requirePermission } from '@/lib/permissions/api-guard';
+import { PERM } from '@/lib/constants/permissions-registry';
 
 export interface SalesFilter {
     startDate?: Date;
@@ -60,6 +61,9 @@ export interface ZReportData {
  *              y no se aplica límite de registros.
  */
 export async function getSalesHistoryAction(date?: string) {
+    const guard = await requirePermission(PERM.EXPORT_SALES);
+    if (!guard.ok) return { success: false, message: guard.message, orders: [] };
+
     try {
         // Calcular rango del día en timezone Caracas
         const queryDate = date ? new Date(date + 'T12:00:00') : new Date();
@@ -215,6 +219,9 @@ export interface ArqueoSaleRow {
 }
 
 export async function getSalesForArqueoAction(date: Date): Promise<{ success: boolean; data?: ArqueoSaleRow[]; message?: string }> {
+    const guard = await requirePermission(PERM.EXPORT_SALES);
+    if (!guard.ok) return { success: false, message: guard.message };
+
     try {
         // Usar rango en timezone Caracas (UTC-4) para capturar el día completo
         const { start: startOfDay, end: endOfDay } = getCaracasDayRange(date);
@@ -525,9 +532,11 @@ export async function voidSalesOrderAction(params: {
     authorizedById: string;
     authorizedByName: string;
 }): Promise<{ success: boolean; message: string }> {
+    const guard = await requirePermission(PERM.VOID_ORDER);
+    if (!guard.ok) return { success: false, message: guard.message };
+
     try {
-        const session = await getSession();
-        if (!session) return { success: false, message: 'No autorizado' };
+        const { user } = guard;
 
         // 1. Obtener orden con items + modificadores
         const order = await prisma.salesOrder.findUnique({
@@ -563,7 +572,7 @@ export async function voidSalesOrderAction(params: {
                         unit: ingredient.unit as any,
                         notes: `Anulación ${order.orderNumber}: ${label}`,
                         reason: `Anulado por ${params.authorizedByName}: ${params.voidReason}`,
-                        createdById: session.id,
+                        createdById: user.id,
                     }
                 });
                 await prisma.inventoryLocation.upsert({

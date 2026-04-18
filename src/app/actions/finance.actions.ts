@@ -1,7 +1,8 @@
 'use server';
 
 import { prisma } from '@/server/db';
-import { getSession } from '@/lib/auth';
+import { requirePermission } from '@/lib/permissions/api-guard';
+import { PERM } from '@/lib/constants/permissions-registry';
 
 export interface FinancialSummary {
   period: { month: number; year: number; label: string };
@@ -58,11 +59,8 @@ export async function getFinancialSummaryAction(month?: number, year?: number): 
   data?: FinancialSummary;
   error?: string;
 }> {
-  const session = await getSession();
-  if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'AUDITOR'].includes(session.role)) {
-    return { success: false, error: 'Sin permisos para ver el resumen financiero' };
-  }
+  const guard = await requirePermission(PERM.VIEW_FINANCES);
+  if (!guard.ok) return { success: false, error: guard.message };
 
   const now = new Date();
   const m = month ?? (now.getMonth() + 1);
@@ -293,11 +291,8 @@ export async function getMonthlyTrendAction(months = 6): Promise<{
   data?: { label: string; sales: number; cogs: number; expenses: number; profit: number }[];
   error?: string;
 }> {
-  const session = await getSession();
-  if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'AUDITOR'].includes(session.role)) {
-    return { success: false, error: 'Sin permisos' };
-  }
+  const guard = await requirePermission(PERM.VIEW_FINANCES);
+  if (!guard.ok) return { success: false, error: guard.message };
 
   try {
     const results: { label: string; sales: number; cogs: number; expenses: number; profit: number }[] = [];
@@ -343,11 +338,8 @@ export async function getDailySalesAction(month: number, year: number): Promise<
   data?: { day: number; total: number; orders: number }[];
   error?: string;
 }> {
-  const session = await getSession();
-  if (!session) return { success: false, error: 'No autorizado' };
-  if (!['OWNER', 'ADMIN_MANAGER', 'AUDITOR'].includes(session.role)) {
-    return { success: false, error: 'Sin permisos' };
-  }
+  const guard = await requirePermission(PERM.VIEW_FINANCES);
+  if (!guard.ok) return { success: false, error: guard.message };
 
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
