@@ -155,7 +155,7 @@ shanklish-erp-main/
 | **ServiceZone** | branchId + name (unique), zoneType (DINING/BAR/TERRACE/VIP), sortOrder | Zona de servicio del local |
 | **TableOrStation** | branchId + code (unique), serviceZoneId, stationType (TABLE/BAR_SEAT/VIP_ROOM), capacity, currentStatus | Mesa o estación física |
 | **Waiter** | branchId, firstName, lastName, pin (PBKDF2 hash), isCaptain, isActive | Mesonero del restaurante. `pin` permite identificación sin sesión en POS Mesero. `isCaptain` habilita subcuentas y autorizaciones de transferencia |
-| **TableTransfer** | openTabId, fromWaiterId, toWaiterId, authorizedById, reason, transferredAt | Historial de transferencias de mesa. `authorizedById` = capitán que validó con su PIN |
+| **TableTransfer** | openTabId, fromWaiterId, toWaiterId, authorizedByWaiterId?, authorizedByUserId?, authorizedNote?, fromTableId?, toTableId?, reason, transferredAt | Historial de transferencias de mesonero y de mesa física. PIN dual: capitán Waiter O gerente User |
 
 ### 2.8 Compras (4 modelos)
 
@@ -3164,6 +3164,224 @@ Al tocar `✕` (mesero, hover) o `🗑️` (restaurante) en un ítem enviado:
 
 ---
 
-*Actualizado el 2026-04-17 — Shanklish ERP / Cápsula SaaS — Documento Completo*
+### 18.28 Dual PIN auth en transferencia de mesa (2026-04-18)
+
+Antes, `transferTableAction` solo aceptaba PIN de Waiter capitán. Ahora acepta **también PIN de User gerente** (OWNER/ADMIN_MANAGER/OPS_MANAGER).
+
+#### Schema — `TableTransfer` actualizado
+
+```prisma
+model TableTransfer {
+  // ...campos existentes...
+  authorizedByWaiterId String?  // capitán Waiter (era authorizedById — renombrado)
+  authorizedByWaiter   Waiter?  @relation("TransferAuthorizedByWaiter", ...)
+  authorizedByUserId   String?  // gerente User (nuevo)
+  authorizedByUser     User?    @relation("TransferAuthorizedByUser", ...)
+  authorizedNote       String?  // "Capitán: Nombre" o "Gerente: Nombre"
+}
+```
+
+Migración: `20260417050000_dual_auth_table_transfer`
+- DROP CONSTRAINT fk antiguo (`authorizedById`) → RENAME a `authorizedByWaiterId`
+- DROP NOT NULL · ADD `authorizedByUserId` TEXT · ADD `authorizedNote` TEXT
+- Restaura FKs con `ON DELETE SET NULL` · ADD INDEX en `authorizedByUserId`
+
+#### Helper `resolveAuthPin` — `waiter.actions.ts`
+
+```typescript
+type AuthResult =
+    | { type: 'CAPTAIN'; name: string; waiterId: string }
+    | { type: 'MANAGER'; name: string; userId: string };
+
+async function resolveAuthPin(pin: string, branchId: string): Promise<AuthResult | null>
+```
+
+Prioridad 1: busca Waiters `isCaptain=true, isActive=true, pin≠null` en el branchId.
+Prioridad 2: busca Users con role `OWNER/ADMIN_MANAGER/OPS_MANAGER`, `isActive=true, pin≠null` (cualquier sucursal).
+
+#### `transferTableAction` actualizado
+
+Ahora guarda `authorizedByWaiterId` O `authorizedByUserId` según el tipo de auth, y `authorizedNote = "Capitán: Nombre"` / `"Gerente: Nombre"` para auditoría.
+
+#### `canUseCaptainFeatures` en POS Mesero
+
+```typescript
+const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+const canUseCaptainFeatures = activeWaiter?.isCaptain || MANAGER_ROLES.includes(currentUser?.role ?? '');
+```
+
+Reemplaza `activeWaiter?.isCaptain` en los dos condicionales del render (subcuentas + modal de transferencia). Los gerentes que usan el POS Mesero ahora ven los mismos controles que un capitán.
+
+---
+
+### 18.29 Fix: bucle infinito de carga en POS Restaurante y POS Mesero (2026-04-18)
+
+#### Causa raíz
+
+`SubAccountPanel.loadTab()` → llama `onTabUpdated()` → llama `loadData()` → `setIsLoading(true)` → condicional `if (isLoading) return <Spinner>` **desmonta** `SubAccountPanel` → al terminar la carga se **remonta** → `useEffect([loadTab])` se dispara → bucle infinito.
+
+#### Fix
+
+```typescript
+// ANTES
+const loadData = async () => {
+    setIsLoading(true);
+    ...
+    finally { setIsLoading(false); }
+};
+onTabUpdated={() => loadData()}
+
+// DESPUÉS
+const loadData = async (showSpinner = true) => {
+    if (showSpinner) setIsLoading(true);
+    ...
+    finally { if (showSpinner) setIsLoading(false); }
+};
+onTabUpdated={() => loadData(false)}   // refresh silencioso — no toca isLoading
+```
+
+Aplicado a: `restaurante/page.tsx` y `mesero/page.tsx`.
+
+También se corrigió el botón de retry que usaba `onClick={loadData}` — TypeScript rechazaba el `MouseEvent` como argumento de `showSpinner`. Cambiado a `onClick={() => loadData()}` en 3 lugares.
+
+---
+
+### 18.30 Menú jerárquico en POS Mesero (2026-04-18)
+
+El POS Mesero tenía grilla plana de productos. Se replicó el sistema de navegación jerárquico del POS Restaurante.
+
+#### Nuevos campos de estado
+
+```typescript
+const [selectedSubcategory, setSelectedSubcategory] = useState("");
+const [selectedGroup, setSelectedGroup] = useState("");
+```
+
+#### Extensión de interface `MenuItem`
+
+```typescript
+interface MenuItem {
+  // ...campos existentes...
+  posGroup?: string | null;
+  posSubcategory?: string | null;
+}
+```
+
+#### Memos derivados
+
+```typescript
+// Items dentro de la subcategoría seleccionada (o todos si no hay filtro)
+const subcatFilteredItems = useMemo(() => {
+    if (!selectedSubcategory) return menuItems;
+    return menuItems.filter((i) => i.posSubcategory === selectedSubcategory);
+}, [menuItems, selectedSubcategory]);
+
+// Chips de subcategoría únicos del catálogo de la categoría activa
+const subcategories = useMemo(() => {
+    return Array.from(new Set(menuItems.map((i) => i.posSubcategory).filter(Boolean)));
+}, [menuItems]);
+
+// Tiles de grupo únicos dentro de subcatFilteredItems
+const groupsInView = useMemo(() => {
+    return Array.from(new Set(subcatFilteredItems.map((i) => i.posGroup).filter(Boolean)));
+}, [subcatFilteredItems]);
+```
+
+#### Lógica de renderizado (3 capas)
+
+1. **Chips de subcategoría** — barra horizontal scrolleable. Al seleccionar, resetea `selectedGroup`.
+2. **Tiles de grupo** (`posGroup ≠ null`) — `groupsInView.map(group => ...)` con min-max precio y count. Al tocar → `setSelectedGroup(group)`.
+3. **Botón "← Volver"** — visible cuando `selectedGroup` activo; muestra ítems del grupo (variantes de tamaño).
+4. **Items sueltos** — `subcatFilteredItems.filter(i => !i.posGroup)` — rendered como grilla directa.
+5. **Búsqueda** — `productSearch` activa busca en todos los items del menú (`allMenuItems`).
+
+Grid: `grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 tablet-land:grid-cols-4 xl:grid-cols-4`. Tema emerald-500.
+
+El `useEffect([selectedCategory])` resetea `selectedSubcategory` y `selectedGroup` al cambiar categoría.
+
+---
+
+### 18.31 Restricción de módulos para mesonero@shanklish.com (2026-04-18)
+
+Migración `20260417060000_restrict_mesonero_to_pos_waiter`:
+
+```sql
+UPDATE "User"
+SET "allowedModules" = '["pos_waiter"]', "updatedAt" = NOW()
+WHERE "email" = 'mesonero@shanklish.com';
+```
+
+**Por qué no bastaba solo con esto**: ver sección 18.24 — la lógica de `getVisibleModules` y la redirección del dashboard también debían ser corregidas para que `allowedModules` tuviera efecto real.
+
+**Script de diagnóstico**: `scripts/fix-mesonero-modules.ts` — verifica y aplica el fix desde la máquina local con `DATABASE_URL` cargado. También reporta `posGroup` de todos los items Shakifel.
+
+---
+
+### 18.32 Fix: posGroup de variantes Shakifel Mixto (2026-04-18)
+
+#### Diagnóstico
+
+El filtro de categoría en el POS Mesero usa `categoryId` (via `categories.find(c => c.id === selectedCategory)`), no el nombre de la categoría. Los items `SHAWARMA SHAKIFEL MIXTO 350G` y `500G` estaban en la categoría correcta (Shawarmas) pero con `posGroup = NULL`, causando que se renderizaran como ítems sueltos en lugar de agruparse bajo un tile "Shakifel Mixto".
+
+#### Fix
+
+Migración `20260417070000_normalize_shakifel_mixto_posgroup`:
+
+```sql
+UPDATE "MenuItem"
+SET
+    "posGroup"       = 'Shakifel Mixto',
+    "posSubcategory" = COALESCE("posSubcategory", 'Shawarmas')
+WHERE
+    LOWER("name") LIKE '%shakifel%mixto%'
+    AND "isActive" = true;
+```
+
+Idempotente. Aplica a todas las variantes de gramaje (250G, 350G, 500G) para que queden bajo un único tile colapsado en el menú.
+
+---
+
+### 18.33 Fix: redondeo incorrecto en pagos con Efectivo Bs (2026-04-18)
+
+#### Bug
+
+La función `roundToWhole` en `restaurante/page.tsx` incluía `CASH_BS` junto con `CASH_USD` y `ZELLE`:
+
+```typescript
+// BUGGY — redondeaba $31.50 → $32 para Bs también
+const roundToWhole = (amount: number, method: string): number =>
+    (method === 'CASH_USD' || method === 'ZELLE' || method === 'CASH_BS') ? Math.round(amount) : amount;
+```
+
+Efecto: el total $31.50 se redondeaba a $32 en USD, y el equivalente en Bs se calculaba sobre $32 (15.368 Bs en lugar de los correctos 15.128 Bs). El botón COBRAR también mostraba `$32.00` en lugar de `$31.50`.
+
+#### Fix — dos cambios en `restaurante/page.tsx`
+
+```typescript
+// 1. Quitar CASH_BS del redondeo — solo USD y Zelle se redondean a entero
+const roundToWhole = (amount: number, method: string): number =>
+    (method === 'CASH_USD' || method === 'ZELLE') ? Math.round(amount) : amount;
+
+// 2. Placeholder Bs en modo mesa — mostrar con 2 decimales (no 0)
+// ANTES: `Bs ${(paymentAmountToCharge * exchangeRate).toFixed(0)}`
+// DESPUÉS:
+`Bs ${(paymentAmountToCharge * exchangeRate).toFixed(2)}`
+```
+
+**Regla de negocio**: Solo CASH_USD y ZELLE se redondean a dólar entero (quien paga con billete no da centavos). Bolívares (efectivo, PDV, móvil) deben cobrarse con la cifra exacta.
+
+---
+
+### Migraciones recientes (2026-04-18)
+
+| Migración | Contenido |
+|-----------|-----------|
+| `20260417050000_dual_auth_table_transfer` | Renombra `authorizedById` → `authorizedByWaiterId`, agrega `authorizedByUserId` + `authorizedNote`, FKs SET NULL |
+| `20260417060000_restrict_mesonero_to_pos_waiter` | UPDATE allowedModules para mesonero@shanklish.com |
+| `20260417070000_normalize_shakifel_mixto_posgroup` | UPDATE posGroup = 'Shakifel Mixto' para variantes Shakifel Mixto |
+
+---
+
+*Actualizado el 2026-04-18 — Shanklish ERP / Cápsula SaaS — Documento Completo*
 *46 modelos Prisma · 47 módulos · 52 actions · 4 API routes · 3 services · 25 componentes*
-*Commits sesión 18.26-18.27: 99435c7 ba1aa2e 0b77982 bb934f3 7c71413 a2661c9*
+*Commits sesión 18.28-18.33: 4abcafa b38b563 42b3054 ac099e0 70a78ee 275717c 1fcd876 4851e5e*
