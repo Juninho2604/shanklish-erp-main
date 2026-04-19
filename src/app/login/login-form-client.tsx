@@ -11,17 +11,27 @@ function SubmitButton() {
     return (
         <button
             type="submit"
-            className="w-full rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-3 font-semibold text-white shadow-lg transition-transform hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
             disabled={pending}
+            className="group relative w-full overflow-hidden rounded-xl px-4 py-3.5 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{
+                background: pending
+                    ? '#E85A3A'
+                    : 'linear-gradient(135deg, #FF6B4A 0%, #E85A3A 100%)',
+                boxShadow: pending ? 'none' : '0 4px 14px rgba(255, 107, 74, 0.35)',
+            }}
         >
-            {pending ? (
-                <span className="flex items-center justify-center gap-2">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Validando...
-                </span>
-            ) : (
-                'Iniciar Sesión'
-            )}
+            {/* Hover shimmer */}
+            <span className="absolute inset-0 -translate-x-full skew-x-12 bg-white/10 transition-transform duration-500 group-hover:translate-x-full" />
+            <span className="relative flex items-center justify-center gap-2">
+                {pending ? (
+                    <>
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                        Validando...
+                    </>
+                ) : (
+                    'Iniciar Sesión'
+                )}
+            </span>
         </button>
     );
 }
@@ -46,50 +56,79 @@ export default function LoginForm() {
     };
 
     return (
-        <form action={handleSubmit} className="space-y-6">
-            <div>
-                <label htmlFor="email" className="block text-sm font-bold text-gray-900 dark:text-gray-200 uppercase tracking-tight">
+        <form action={handleSubmit} className="space-y-5">
+            {/* Email */}
+            <div className="space-y-1.5">
+                <label
+                    htmlFor="email"
+                    className="block text-xs font-semibold uppercase tracking-widest text-gray-500"
+                >
                     Correo Electrónico
                 </label>
-                <div className="mt-1">
-                    <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="usuario@shanklish.com"
-                        className="block w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 dark:text-white dark:bg-gray-800 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-amber-500 sm:text-sm"
-                    />
-                </div>
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="correo@ejemplo.com"
+                    className="block w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-150 outline-none"
+                    style={{
+                        '--tw-ring-color': '#FF6B4A',
+                    } as React.CSSProperties}
+                    onFocus={e => {
+                        e.target.style.borderColor = '#FF6B4A';
+                        e.target.style.boxShadow = '0 0 0 3px rgba(255, 107, 74, 0.12)';
+                        e.target.style.background = '#fff';
+                    }}
+                    onBlur={e => {
+                        e.target.style.borderColor = '';
+                        e.target.style.boxShadow = '';
+                        e.target.style.background = '';
+                    }}
+                />
             </div>
 
-            <div>
-                <label htmlFor="password" className="block text-sm font-bold text-gray-900 dark:text-gray-200 uppercase tracking-tight">
+            {/* Password */}
+            <div className="space-y-1.5">
+                <label
+                    htmlFor="password"
+                    className="block text-xs font-semibold uppercase tracking-widest text-gray-500"
+                >
                     Contraseña
                 </label>
-                <div className="mt-1">
-                    <input
-                        id="password"
-                        name="password"
-                        type="password"
-                        autoComplete="current-password"
-                        required
-                        placeholder="••••••••"
-                        className="block w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-950 dark:text-white dark:bg-gray-800 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-amber-500 sm:text-sm"
-                    />
-                </div>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    placeholder="••••••••"
+                    className="block w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-150 outline-none"
+                    onFocus={e => {
+                        e.target.style.borderColor = '#FF6B4A';
+                        e.target.style.boxShadow = '0 0 0 3px rgba(255, 107, 74, 0.12)';
+                        e.target.style.background = '#fff';
+                    }}
+                    onBlur={e => {
+                        e.target.style.borderColor = '';
+                        e.target.style.boxShadow = '';
+                        e.target.style.background = '';
+                    }}
+                />
             </div>
 
+            {/* Error */}
             {error && (
-                <div className="animate-in fade-in rounded-lg bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
-                    ⚠️ {error}
+                <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    <span className="mt-px shrink-0">⚠️</span>
+                    <span>{error}</span>
                 </div>
             )}
 
             <SubmitButton />
         </form>
     );
-}
+}
