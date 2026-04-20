@@ -3803,17 +3803,34 @@ Primer workflow de GitHub Actions del branch, definido en `.github/workflows/ci.
 
 CI operativo de forma estable a partir de `19b85f6`. Fase 2.F cerrada.
 
-### 19.11 Fases pendientes
+### 19.11 Fases pendientes (orden actualizado 2026-04-19)
 
-**2.D — admin UI de módulos**. Portación del panel de toggling de módulos bajo `src/app/dashboard/config/modulos/`. Riesgo medio: el componente hoy en shanklish ya tiene lógica de permisos acoplada, y cualquier archivo que importe de `src/lib/permissions/` activa veto automático a portar la versión de capsula (si la trae más avanzada o más simple). El prompt correspondiente previsiblemente seguirá el formato clasificatorio de 2.C.3.b (tabla `archivo | clasificación | dependencias`).
+El orden de fases cambió el 2026-04-19 — ver §19.13 para el razonamiento.
+Orden de ejecución vigente:
 
-**2.E — seed bootstrap CÁPSULA**. Reescritura de `prisma/seed.ts` para dejar la DB lista para un deploy desde cero con los dos tenants iniciales (Shanklish Caracas y Table Pong). Postpuesto intencionalmente a cerca de Fase 4 porque el shape exacto de la tabla `Tenant` y sus foreign keys a `User`, `InventoryItem`, etc., se decide en Fase 3 y aún no está definido. Un seed prematuro se re-trabaja dos veces.
-
-**Fase 3 — documentación de multi-tenancy (sin implementación)**. Escribir el diseño formal de cómo Cápsula se convierte en SaaS real: esquema `Tenant`, estrategia de aislamiento (shared schema con `tenantId` vs. schema-per-tenant), flujo de bootstrap de tenant nuevo, migración `0000_init` (ver §19.12), políticas de branding por tenant usando `useBranding`. Cero código escrito; producto: un `MULTI_TENANCY_DESIGN.md` que la Fase 4 ejecuta. Ver §14 de este doc para el contexto de diseño ya capturado.
-
-**Fase 4 — cutover al repo `capsula-erp`**. Dos caminos bajo evaluación: force-push del branch consolidado sobre `master` de `capsula-erp` (limpio pero destructivo del histórico de capsula), o archivar `capsula-erp` como legacy y abrir un repo nuevo `capsula` con `shanklish-erp-main` consolidado como punto de partida. La decisión se toma cuando 2.D y 2.E estén cerradas. Renaming de secrets SSH `SSH_*` → `CONTABO_*` si se reusan los existentes en GitHub.
-
-**Fase 5 — cutover producción AWS RDS → Contabo**. Migración de Shanklish Caracas desde AWS RDS (hosting actual de prod) a Contabo, reconvirtiendo Shanklish en el primer `tenant` de la base multi-tenant. Ventana de mantenimiento necesaria — no se puede hacer en caliente. El orden esperado es: snapshot RDS → restore en Contabo → `prisma migrate deploy` hasta paridad → script de re-etiquetado (`tenantId = 'shanklish-caracas'` en todos los registros) → switch de DNS/conexión en la app → monitoreo 48 h.
+- **Fase 4 — Cutover repo (INMEDIATA)**. Force-push de
+  `capsula/consolidation` → `capsula-erp/main`. Preview deploy en
+  Vercel para validación. Tag `pre-cutover-2026-04-19` del estado
+  previo de capsula-erp para rollback recuperable.
+- **Fase 5.a — Switch Vercel producción (INMEDIATA)**. Cambiar el
+  proyecto Vercel del cliente Shanklish Caracas para que apunte a
+  `capsula-erp` en vez de `shanklish-erp-main`. La DB sigue siendo
+  la misma AWS RDS de producción, sin migración. Las env vars se
+  copian 1-a-1 antes del switch. Downtime estimado: ~30 segundos
+  durante el redeploy de Vercel.
+- **Fase 2.D — Admin UI módulos (POST-CUTOVER)**. Se ejecuta
+  directamente en `capsula-erp` como feature normal, no como
+  portación. Scope: `src/app/dashboard/config/modulos/`. Riesgo
+  previsto medio por interacción con permisos 4-capa.
+- **Fase 2.E — Seed bootstrap (POST-CUTOVER)**. Se ejecuta cerca
+  del momento en que se agregue un segundo tenant real (Table Pong
+  o similar), cuando el shape de tenant esté definido.
+- **Fase 3 — Documentación multi-tenancy**. Documento `docs/MULTITENANCY.md`.
+  No bloquea nada, se hace cuando haya banda.
+- **Fase 5.b — Migración AWS RDS → Contabo (POSPUESTA)**. Ventana
+  de mantenimiento de 2-4h. Se dispara cuando se necesite agregar
+  un tenant real o cuando el costo de AWS RDS justifique el cambio.
+  BASELINE-001 (§19.12) debe resolverse antes o durante esta fase.
 
 ### 19.12 Deuda técnica identificada durante la consolidación
 
@@ -3839,6 +3856,35 @@ prisma migrate diff \
 ```
 
 marcar como `--applied` en las DBs existentes (Contabo, AWS RDS) con `prisma migrate resolve --applied 00000000000000_init`, verificar que `_prisma_migrations` quede consistente, y cambiar el CI de vuelta a `prisma migrate deploy`. Operación de bajo riesgo si se hace aislada y con backup previo.
+
+### 19.13 Decisión estratégica — reorden de fases (2026-04-19)
+
+El plan original de consolidación tenía como último paso antes del
+cutover completar 2.D (admin UI módulos) y 2.E (seed bootstrap).
+
+A mitad de la Fase 2, tras cerrar 2.A, 2.B, 2.C.1, 2.C.2, 2.C.3.a,
+2.C.3.b, 2.F y 2.DOCS, se reevaluó el orden. Hallazgos:
+
+- El objetivo real del proyecto es **cortar el trabajo doble en dos
+  repos**, no completar una portación visual perfecta. 2.D y 2.E no
+  avanzan ese objetivo — solo refinan el UI de un módulo que ya
+  funciona en shanklish.
+- El branch `capsula/consolidation` en `95ba60e` ya cumple las
+  condiciones de producción: tests verdes (27/27), CI verde, permisos
+  4-capa intactos, branding aplicado, layouts reconciliados, deploy
+  stub listo. No hay riesgo técnico en promover.
+- Hacer 2.D y 2.E *antes* del cutover significa días adicionales de
+  mantenimiento paralelo de dos repos (cambios del cliente Shanklish
+  Caracas tienen que aplicarse en ambos o arriesgarse a divergencia).
+  Hacerlas *después* del cutover significa trabajo una sola vez en
+  el repo único.
+
+Decisión: adelantar Fase 4 y Fase 5.a. Postponer 2.D y 2.E. Mantener
+Fase 5.b (migración DB) postpuesta hasta que un tenant nuevo lo
+justifique.
+
+La BD de producción AWS RDS NO se toca en este reorden. El cutover
+es solo de código y configuración Vercel.
 
 ---
 
